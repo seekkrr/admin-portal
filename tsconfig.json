@@ -1,0 +1,75 @@
+{
+    "compilerOptions": {
+        "target": "ES2020",
+        "useDefineForClassFields": true,
+        "lib": [
+            "ES2020",
+            "DOM",
+            "DOM.Iterable"
+        ],
+        "module": "ESNext",
+        "skipLibCheck": true,
+        "moduleResolution": "bundler",
+        "allowImportingTsExtensions": true,
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "moduleDetection": "force",
+        "noEmit": true,
+        "jsx": "react-jsx",
+        "strict": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "noFallthroughCasesInSwitch": true,
+        "noUncheckedIndexedAccess": true,
+        "noImplicitReturns": true,
+        "noImplicitOverride": true,
+        "exactOptionalPropertyTypes": false,
+        "forceConsistentCasingInFileNames": true,
+        "baseUrl": ".",
+        "paths": {
+            "@/*": [
+                "src/*"
+            ],
+            "@app/*": [
+                "src/app/*"
+            ],
+            "@features/*": [
+                "src/features/*"
+            ],
+            "@components/*": [
+                "src/components/*"
+            ],
+            "@layouts/*": [
+                "src/layouts/*"
+            ],
+            "@hooks/*": [
+                "src/hooks/*"
+            ],
+            "@services/*": [
+                "src/services/*"
+            ],
+            "@store/*": [
+                "src/store/*"
+            ],
+            "@routes/*": [
+                "src/routes/*"
+            ],
+            "@config/*": [
+                "src/config/*"
+            ],
+            "@types/*": [
+                "src/types/*"
+            ],
+            "@utils/*": [
+                "src/utils/*"
+            ],
+            "@styles/*": [
+                "src/styles/*"
+            ]
+        }
+    },
+    "include": [
+        "src",
+        "vite-env.d.ts"
+    ]
+}
