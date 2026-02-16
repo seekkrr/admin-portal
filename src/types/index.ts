@@ -1,4 +1,6 @@
 // User & Auth Types
+export const ALLOWED_ADMIN_ROLES = ["admin", "super_admin", "moderator", "finance"] as const;
+
 export interface User {
     _id: string;
     first_name: string;
