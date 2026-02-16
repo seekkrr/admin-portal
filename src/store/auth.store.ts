@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { User, AuthTokens } from "@/types";
+import { ALLOWED_ADMIN_ROLES, type User, type AuthTokens } from "@/types";
 import { authService } from "@services/auth.service";
 import { authStorage } from "@services/api";
 

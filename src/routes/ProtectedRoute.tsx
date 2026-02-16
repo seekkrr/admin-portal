@@ -7,6 +7,8 @@ interface ProtectedRouteProps {
     children: ReactNode;
 }
 
+import { ALLOWED_ADMIN_ROLES } from "@/types";
+
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
     const { isAuthenticated, isLoading } = useAuthStore();
     const location = useLocation();
@@ -21,9 +23,8 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     }
 
     const { user } = useAuthStore.getState();
-    const allowedRoles = ["admin", "super_admin", "moderator", "finance"];
 
-    if (user && !allowedRoles.includes(user.role)) {
+    if (user && !ALLOWED_ADMIN_ROLES.includes(user.role as any)) {
         return <Navigate to="/access-denied" replace />;
     }
 

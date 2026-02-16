@@ -4,6 +4,7 @@ import { authService } from "@services/auth.service";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { useAuthStore } from "@store/auth.store";
+import { ALLOWED_ADMIN_ROLES } from "@/types";
 
 const PROCESSED_CODE_KEY = "seekkrr_admin_auth_code_processed";
 
@@ -56,8 +57,7 @@ export function AuthCallbackPage() {
                 } else {
                     // Check if failure is due to role
                     const state = useAuthStore.getState();
-                    const allowedRoles = ["admin", "super_admin", "moderator", "finance"];
-                    if (state.user && !allowedRoles.includes(state.user.role)) {
+                    if (state.user && !ALLOWED_ADMIN_ROLES.includes(state.user.role as any)) {
                         navigate("/access-denied", { replace: true });
                         return;
                     }
