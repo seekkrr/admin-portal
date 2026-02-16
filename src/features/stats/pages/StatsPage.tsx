@@ -1,11 +1,13 @@
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@components/ui";
 
+const STAT_ITEMS = ['Total Users', 'Active Creators', 'Quests Published', 'Total Revenue'];
+
 export function StatsPage() {
     return (
         <div className="animate-fade-in">
             <h1 className="text-2xl font-bold text-neutral-900 mb-6">Dashboard & Stats</h1>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                {['Total Users', 'Active Creators', 'Quests Published', 'Total Revenue'].map((item) => (
+                {STAT_ITEMS.map((item) => (
                     <Card key={item} padding="sm">
                         <CardHeader>
                             <CardTitle className="text-sm font-medium text-neutral-500">{item}</CardTitle>

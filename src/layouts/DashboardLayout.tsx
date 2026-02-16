@@ -3,6 +3,7 @@ import { useAuthStore } from "@store/auth.store";
 import { LogOut, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { Footer, Sidebar } from "@components/ui";
+import { NAV_ITEMS } from "@/config/navigation";
 
 export function DashboardLayout() {
     const { logout } = useAuthStore();
@@ -29,15 +30,6 @@ export function DashboardLayout() {
             <header className="bg-white border-b border-neutral-200 sticky top-0 z-40 font-sans h-16">
                 <div className="w-full px-4 sm:px-6 lg:px-8 h-full">
                     <div className="flex items-center h-full gap-4">
-                        {/* Desktop Sidebar Toggle */}
-                        <button
-                            onClick={toggleSidebar}
-                            className="hidden md:flex p-2 text-neutral-500 hover:bg-neutral-100 rounded-lg transition-colors"
-                            aria-label="Toggle sidebar"
-                        >
-                            <Menu className="w-5 h-5" />
-                        </button>
-
                         {/* Logo */}
                         <Link to="/" className="flex items-center gap-2">
                             <img src="/seekkrr-logo.svg" alt="SeekKrr" className="h-8" />
@@ -73,10 +65,16 @@ export function DashboardLayout() {
                 {isMobileMenuOpen && (
                     <div className="md:hidden border-t border-neutral-200 bg-white absolute w-full left-0 top-16 shadow-lg z-50">
                         <div className="px-4 py-4 space-y-4">
-                            <Link to="/stats" className="block py-2 text-neutral-600 hover:text-neutral-900" onClick={() => setIsMobileMenuOpen(false)}>Dashboard</Link>
-                            <Link to="/users" className="block py-2 text-neutral-600 hover:text-neutral-900" onClick={() => setIsMobileMenuOpen(false)}>Users</Link>
-                            <Link to="/creators" className="block py-2 text-neutral-600 hover:text-neutral-900" onClick={() => setIsMobileMenuOpen(false)}>Creators</Link>
-                            <Link to="/quests" className="block py-2 text-neutral-600 hover:text-neutral-900" onClick={() => setIsMobileMenuOpen(false)}>Quests</Link>
+                            {NAV_ITEMS.map((item) => (
+                                <Link
+                                    key={item.to}
+                                    to={item.to}
+                                    className="block py-2 text-neutral-600 hover:text-neutral-900"
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                >
+                                    {item.label}
+                                </Link>
+                            ))}
                             <div className="pt-4 border-t border-neutral-100">
                                 <button
                                     onClick={handleLogout}
@@ -93,7 +91,7 @@ export function DashboardLayout() {
 
             <div className="flex flex-1 max-w-[1920px] mx-auto w-full overflow-hidden">
                 {/* Sidebar - Controlled by parent state */}
-                <Sidebar collapsed={sidebarCollapsed} />
+                <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
 
                 {/* Main Content */}
                 <div className="flex-1 flex flex-col min-w-0 overflow-hidden">

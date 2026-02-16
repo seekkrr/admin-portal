@@ -1,23 +1,13 @@
 import { NavLink } from "react-router-dom";
-import {
-    Users,
-    Video,
-    Map,
-    LayoutDashboard
-} from "lucide-react";
+import { ChevronLeft, Menu } from "lucide-react";
+import { NAV_ITEMS } from "@/config/navigation";
 
 interface SidebarProps {
     collapsed: boolean;
+    onToggle: () => void;
 }
 
-export function Sidebar({ collapsed }: SidebarProps) {
-    const navItems = [
-        { icon: LayoutDashboard, label: "Dashboard", to: "/stats" },
-        { icon: Users, label: "Users", to: "/users" },
-        { icon: Video, label: "Creators", to: "/creators" },
-        { icon: Map, label: "Quests", to: "/quests" },
-    ];
-
+export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     return (
         <aside
             className={`
@@ -27,8 +17,17 @@ export function Sidebar({ collapsed }: SidebarProps) {
                 hidden md:flex
             `}
         >
+            <div className="flex items-center p-4 h-16 border-b border-neutral-100">
+                <button
+                    onClick={onToggle}
+                    className="p-2 rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 transition-colors"
+                >
+                    {collapsed ? <Menu className="w-6 h-6" /> : <ChevronLeft className="w-5 h-5" />}
+                </button>
+            </div>
+
             <div className="flex-1 py-6 px-3 space-y-2">
-                {navItems.map((item) => (
+                {NAV_ITEMS.map((item) => (
                     <NavLink
                         key={item.to}
                         to={item.to}
