@@ -1,5 +1,4 @@
 import { StrictMode } from "react";
-import { Analytics } from "@vercel/analytics/react"
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import "@styles/index.css";
@@ -13,6 +12,5 @@ if (!rootElement) {
 createRoot(rootElement).render(
     <StrictMode>
         <App />
-        <Analytics />
     </StrictMode>
 );
