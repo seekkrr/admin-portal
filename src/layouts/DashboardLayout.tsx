@@ -8,6 +8,16 @@ export function DashboardLayout() {
     const { logout } = useAuthStore();
     const navigate = useNavigate();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+        const stored = localStorage.getItem("sidebar_collapsed");
+        return stored ? JSON.parse(stored) : false;
+    });
+
+    const toggleSidebar = () => {
+        const newState = !sidebarCollapsed;
+        setSidebarCollapsed(newState);
+        localStorage.setItem("sidebar_collapsed", JSON.stringify(newState));
+    };
 
     const handleLogout = async () => {
         await logout();
@@ -16,9 +26,18 @@ export function DashboardLayout() {
 
     return (
         <div className="min-h-screen bg-neutral-50 flex flex-col">
-            <header className="bg-white border-b border-neutral-200 sticky top-0 z-40 font-sans h-20">
-                <div className="w-full px-4 sm:px-6 lg:px-8">
-                    <div className="flex items-center h-20">
+            <header className="bg-white border-b border-neutral-200 sticky top-0 z-40 font-sans h-16">
+                <div className="w-full px-4 sm:px-6 lg:px-8 h-full">
+                    <div className="flex items-center h-full gap-4">
+                        {/* Desktop Sidebar Toggle */}
+                        <button
+                            onClick={toggleSidebar}
+                            className="hidden md:flex p-2 text-neutral-500 hover:bg-neutral-100 rounded-lg transition-colors"
+                            aria-label="Toggle sidebar"
+                        >
+                            <Menu className="w-5 h-5" />
+                        </button>
+
                         {/* Logo */}
                         <Link to="/" className="flex items-center gap-2">
                             <img src="/seekkrr-logo.svg" alt="SeekKrr" className="h-8" />
@@ -52,7 +71,7 @@ export function DashboardLayout() {
 
                 {/* Mobile Menu */}
                 {isMobileMenuOpen && (
-                    <div className="md:hidden border-t border-neutral-200 bg-white absolute w-full left-0 top-20 shadow-lg">
+                    <div className="md:hidden border-t border-neutral-200 bg-white absolute w-full left-0 top-16 shadow-lg z-50">
                         <div className="px-4 py-4 space-y-4">
                             <Link to="/stats" className="block py-2 text-neutral-600 hover:text-neutral-900" onClick={() => setIsMobileMenuOpen(false)}>Dashboard</Link>
                             <Link to="/users" className="block py-2 text-neutral-600 hover:text-neutral-900" onClick={() => setIsMobileMenuOpen(false)}>Users</Link>
@@ -72,12 +91,12 @@ export function DashboardLayout() {
                 )}
             </header>
 
-            <div className="flex flex-1 max-w-[1920px] mx-auto w-full">
-                {/* Sidebar - Hidden on mobile, handled by mobile menu */}
-                <Sidebar />
+            <div className="flex flex-1 max-w-[1920px] mx-auto w-full overflow-hidden">
+                {/* Sidebar - Controlled by parent state */}
+                <Sidebar collapsed={sidebarCollapsed} />
 
                 {/* Main Content */}
-                <div className="flex-1 flex flex-col min-w-0">
+                <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
                     <main className="flex-1 p-6 overflow-y-auto">
                         <Outlet />
                     </main>

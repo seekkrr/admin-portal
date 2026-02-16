@@ -3,26 +3,25 @@ import {
     Users,
     Video,
     Map,
-    ChevronLeft,
-    ChevronRight,
     LayoutDashboard
 } from "lucide-react";
-import { useState } from "react";
 
-const navItems = [
-    { icon: LayoutDashboard, label: "Dashboard", to: "/stats" },
-    { icon: Users, label: "Users", to: "/users" },
-    { icon: Video, label: "Creators", to: "/creators" },
-    { icon: Map, label: "Quests", to: "/quests" },
-];
+interface SidebarProps {
+    collapsed: boolean;
+}
 
-export function Sidebar() {
-    const [collapsed, setCollapsed] = useState(false);
+export function Sidebar({ collapsed }: SidebarProps) {
+    const navItems = [
+        { icon: LayoutDashboard, label: "Dashboard", to: "/stats" },
+        { icon: Users, label: "Users", to: "/users" },
+        { icon: Video, label: "Creators", to: "/creators" },
+        { icon: Map, label: "Quests", to: "/quests" },
+    ];
 
     return (
         <aside
             className={`
-                bg-white border-r border-neutral-200 h-[calc(100vh-5rem)] sticky top-20
+                bg-white border-r border-neutral-200 h-[calc(100vh-4rem)]
                 flex flex-col transition-all duration-300 ease-in-out z-30
                 ${collapsed ? "w-20" : "w-64"}
                 hidden md:flex
@@ -34,7 +33,7 @@ export function Sidebar() {
                         key={item.to}
                         to={item.to}
                         className={({ isActive }) => `
-                            flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group
+                            flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group relative
                             ${isActive
                                 ? "bg-neutral-900 text-white shadow-md shadow-neutral-200"
                                 : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
@@ -42,11 +41,11 @@ export function Sidebar() {
                             ${collapsed ? "justify-center" : ""}
                         `}
                     >
-                        <item.icon className={`w-5 h-5 ${collapsed ? "w-6 h-6" : ""}`} />
+                        <item.icon className={`w-5 h-5 shrink-0 ${collapsed ? "w-6 h-6" : ""}`} />
                         <span
                             className={`
                                 font-medium whitespace-nowrap overflow-hidden transition-all duration-300 origin-left
-                                ${collapsed ? "w-0 opacity-0" : "w-auto opacity-100"}
+                                ${collapsed ? "w-0 opacity-0 absolute" : "w-auto opacity-100 relative"}
                             `}
                         >
                             {item.label}
@@ -54,21 +53,12 @@ export function Sidebar() {
 
                         {/* Tooltip for collapsed state */}
                         {collapsed && (
-                            <div className="absolute left-16 bg-neutral-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                            <div className="absolute left-14 bg-neutral-900 text-white text-xs px-2 py-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-lg">
                                 {item.label}
                             </div>
                         )}
                     </NavLink>
                 ))}
-            </div>
-
-            <div className="p-4 border-t border-neutral-100">
-                <button
-                    onClick={() => setCollapsed(!collapsed)}
-                    className="w-full flex items-center justify-center p-2 rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 transition-colors"
-                >
-                    {collapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
-                </button>
             </div>
         </aside>
     );
