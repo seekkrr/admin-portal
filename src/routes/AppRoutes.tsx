@@ -1,15 +1,32 @@
 import { Routes, Route } from "react-router-dom";
-import { MainLayout } from "@/layouts/MainLayout";
+import { DashboardLayout } from "@/layouts/DashboardLayout";
+import { AuthLayout } from "@/layouts/AuthLayout";
+import { LoginPage } from "@/features/auth/pages/LoginPage";
+import { AuthCallbackPage } from "@/features/auth/pages/AuthCallbackPage";
+import { AccessDeniedPage } from "@/features/auth/pages/AccessDeniedPage";
+import { ProtectedRoute } from "./ProtectedRoute";
 
 export const AppRoutes = () => {
     return (
         <Routes>
-            <Route element={<MainLayout />}>
+            {/* Public Auth Routes */}
+            <Route element={<AuthLayout />}>
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/auth/callback" element={<AuthCallbackPage />} />
+                <Route path="/access-denied" element={<AccessDeniedPage />} />
+            </Route>
+
+            {/* Protected Routes */}
+            <Route element={
+                <ProtectedRoute>
+                    <DashboardLayout />
+                </ProtectedRoute>
+            }>
                 <Route path="/" element={
                     <div className="space-y-6">
                         <div className="bg-white p-6 rounded-lg shadow-sm border border-neutral-200">
                             <h2 className="text-lg font-medium text-gray-900">Welcome to Admin Portal</h2>
-                            <p className="mt-1 text-sm text-gray-500">This is the initial setup of the admin portal.</p>
+                            <p className="mt-1 text-sm text-gray-500">This is the dashboard of the admin portal.</p>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             {[1, 2, 3].map((i) => (
