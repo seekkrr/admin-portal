@@ -11,7 +11,7 @@ export default defineConfig({
     plugins: [react(), tailwindcss()],
     server: {
         host: true,
-        port: 5174,
+        port: 5173,
         proxy: {
             "/api": {
                 target: "https://api.seekkrr.com",
