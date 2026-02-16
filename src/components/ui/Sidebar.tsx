@@ -9,15 +9,15 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
+const navItems = [
+    { icon: LayoutDashboard, label: "Dashboard", to: "/stats" },
+    { icon: Users, label: "Users", to: "/users" },
+    { icon: Video, label: "Creators", to: "/creators" },
+    { icon: Map, label: "Quests", to: "/quests" },
+];
+
 export function Sidebar() {
     const [collapsed, setCollapsed] = useState(false);
-
-    const navItems = [
-        { icon: LayoutDashboard, label: "Dashboard", to: "/stats" },
-        { icon: Users, label: "Users", to: "/users" },
-        { icon: Video, label: "Creators", to: "/creators" },
-        { icon: Map, label: "Quests", to: "/quests" },
-    ];
 
     return (
         <aside
