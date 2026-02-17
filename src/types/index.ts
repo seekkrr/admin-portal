@@ -35,6 +35,36 @@ export interface Creator {
     updated_at: string;
 }
 
+export interface CreatorStats {
+    _id: string;
+    total_quests: number;
+    total_earnings: number;
+    impressions: number;
+    is_verified: boolean;
+    last_updated: string;
+}
+
+export interface PayoutAccount {
+    _id: string;
+    method: "bank" | "upi" | "wallet";
+    bank_details?: {
+        account_number: number;
+        ifsc_code: string;
+        account_holder: string;
+    };
+    upi_id?: string;
+    currency: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface CreatorDetailResponse {
+    creator_profile: Creator;
+    user_profile: User | null;
+    stats: CreatorStats | null;
+    payout_account: PayoutAccount | null;
+}
+
 export interface AuthTokens {
     access_token: string;
     refresh_token: string;
