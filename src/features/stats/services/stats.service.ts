@@ -52,4 +52,16 @@ export const statsService = {
         link.remove();
         window.URL.revokeObjectURL(url);
     },
+
+    getUserCount: async (params: Record<string, string | boolean>): Promise<number> => {
+        const searchParams = new URLSearchParams();
+        Object.entries(params).forEach(([key, value]) => {
+            searchParams.append(key, String(value));
+        });
+        // We only need the count, so limit=1 is enough
+        searchParams.append("limit", "1");
+
+        const response = await api.get<{ pagination: { total: number } }>(`${API_ENDPOINTS.CORE.USERS}?${searchParams.toString()}`);
+        return response.data.pagination.total;
+    }
 };
