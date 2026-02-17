@@ -7,7 +7,7 @@ import type { PayoutAccountRequest } from "../services/creators.service";
 const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;      // 11 chars, 5th is always 0
 const UPI_RE = /^[\w.+-]+@[\w.-]+$/;                // name@provider
 const ACCT_MIN = 6;
-const ACCT_MAX = 18;
+const ACCT_MAX = 16;
 
 interface PayoutFormProps {
     existingPayout: PayoutAccount | null;
