@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/features/users/components/Badge";
 import { questsService } from "../services/quests.service";
+import { formatDuration } from "../utils/formatters";
 import type { QuestStatus } from "@/types";
 
 // ---- Status styles ----
@@ -20,15 +21,7 @@ const questStatusConfig: Record<string, { label: string; dot: string; bg: string
     Archived: { label: "Archived", dot: "bg-red-500", bg: "bg-red-50 text-red-700 border-red-200" },
 };
 
-// ---- Duration Helper ----
-function formatDuration(minutes: number | null | undefined): string {
-    if (!minutes) return "—";
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    if (h === 0) return `${m}m`;
-    if (m === 0) return `${h}h`;
-    return `${h}h ${m}m`;
-}
+// formatDuration imported from ../utils/formatters
 
 // ---- Quick-action button config ----
 const quickActionConfig: Record<string, {
@@ -118,7 +111,7 @@ export function QuestDetailModal({
     const sc = questStatusConfig[questStatus] ?? defaultSc;
 
     // Status transition buttons
-    const availableStatuses: QuestStatus[] = (["Draft", "Published", "Paused", "Archived"] as QuestStatus[]).filter(s => s !== questStatus);
+    const availableStatuses = (Object.keys(questStatusConfig) as QuestStatus[]).filter(s => s !== questStatus);
 
     return (
         <div
@@ -279,11 +272,11 @@ export function QuestDetailModal({
                                 <div>
                                     <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider mb-2">Media ({media.cloudinary_assets.length})</h4>
                                     <div className="flex gap-2 overflow-x-auto pb-1">
-                                        {media.cloudinary_assets.slice(0, 5).map((asset, i) => (
+                                        {media.cloudinary_assets.slice(0, 5).map((asset) => (
                                             <img
-                                                key={i}
+                                                key={asset.public_id}
                                                 src={asset.secure_url}
-                                                alt={asset.public_id}
+                                                alt={asset.alt_text || ""}
                                                 className="w-16 h-16 rounded-lg object-cover border border-neutral-200 flex-shrink-0"
                                             />
                                         ))}

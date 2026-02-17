@@ -5,12 +5,13 @@ import {
     ArrowLeft, RefreshCw, AlertTriangle,
     Clock, MapPin, Eye, Tag, Star, Layers,
     Compass, Hash, Lightbulb, Trophy,
-    DollarSign, Trash2, Image as ImageIcon,
+    DollarSign, Trash2, Image as ImageIcon, UserCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@store/auth.store";
 import { AccessDenied } from "@components/AccessDenied";
 import { questsService } from "../services/quests.service";
+import { formatDuration, isValidObjectId } from "../utils/formatters";
 import { ConfirmModal } from "@/features/users/components/ConfirmModal";
 import { Badge } from "@/features/users/components/Badge";
 import type { QuestStatus } from "@/types";
@@ -27,15 +28,7 @@ const questStatusConfig: Record<string, { label: string; dot: string; bg: string
     Archived: { label: "Archived", dot: "bg-red-500", bg: "bg-red-50 text-red-700 border-red-200", active: "bg-red-600 text-white border-red-600" },
 };
 
-// ---- Duration Helper ----
-function formatDuration(minutes: number | null | undefined): string {
-    if (!minutes) return "—";
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    if (h === 0) return `${m}m`;
-    if (m === 0) return `${h}h`;
-    return `${h}h ${m}m`;
-}
+// formatDuration and isValidObjectId imported from ../utils/formatters
 
 // ---- Confirm action type ----
 type ConfirmAction =
@@ -51,6 +44,7 @@ export function QuestDetailPage() {
 
     const hasAccess = !!currentUser && ALLOWED_ROLES.includes(currentUser.role);
     const canDelete = !!currentUser && CAN_DELETE_ROLES.includes(currentUser.role);
+    const validQuestId = isValidObjectId(questId);
 
     const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
     const [hardDelete, setHardDelete] = useState(false);
@@ -63,7 +57,7 @@ export function QuestDetailPage() {
     const { data, isLoading, error } = useQuery({
         queryKey: ["quest-detail", questId],
         queryFn: () => questsService.getQuestDetail(questId!),
-        enabled: !!questId,
+        enabled: !!questId && validQuestId,
     });
 
     // ---- Mutations ----
@@ -173,7 +167,7 @@ export function QuestDetailPage() {
             {/* Status Management */}
             <Section title="Status Management" icon={<Compass className="w-4 h-4" />}>
                 <div className="flex flex-wrap gap-2">
-                    {(["Draft", "Published", "Paused", "Archived"] as QuestStatus[]).map((status) => {
+                    {(Object.keys(questStatusConfig) as QuestStatus[]).map((status) => {
                         const sConf = questStatusConfig[status];
                         const isActive = currentStatus === status;
                         return (
@@ -290,9 +284,9 @@ export function QuestDetailPage() {
             <Section title={`Media (${media?.cloudinary_assets.length ?? 0})`} icon={<ImageIcon className="w-4 h-4" />}>
                 {media && media.cloudinary_assets.length > 0 ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                        {media.cloudinary_assets.map((asset, i) => (
+                        {media.cloudinary_assets.map((asset) => (
                             <a
-                                key={i}
+                                key={asset.public_id}
                                 href={asset.secure_url}
                                 target="_blank"
                                 rel="noreferrer"
@@ -300,7 +294,7 @@ export function QuestDetailPage() {
                             >
                                 <img
                                     src={asset.secure_url}
-                                    alt={asset.public_id}
+                                    alt={asset.alt_text || ""}
                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                 />
                                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-end p-2">
@@ -317,7 +311,7 @@ export function QuestDetailPage() {
             </Section>
 
             {/* Creator Info */}
-            <Section title="Creator" icon={<MapPin className="w-4 h-4" />}>
+            <Section title="Creator" icon={<UserCircle className="w-4 h-4" />}>
                 {creator ? (
                     <div className="grid grid-cols-2 gap-3">
                         <InfoRow label="Name" value={`${creator.first_name} ${creator.last_name}`} />
@@ -384,7 +378,9 @@ export function QuestDetailPage() {
             <ConfirmModal
                 open={confirmAction?.type === "status-change"}
                 title="Change Quest Status"
-                message={`Change "${metadata?.title || quest.quest_title || "this quest"}" to "${confirmAction?.type === "status-change" ? confirmAction.payload.status : ""}". This will take effect immediately.`}
+                message={confirmAction?.type === "status-change"
+                    ? `Change "${metadata?.title || quest.quest_title || "this quest"}" to "${confirmAction.payload.status}". This will take effect immediately.`
+                    : ""}
                 confirmLabel="Change Status"
                 confirmStyle="bg-violet-600 hover:bg-violet-700"
                 onConfirm={executeConfirmedAction}

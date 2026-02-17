@@ -2,13 +2,14 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     Search, Compass, Trash2, ChevronLeft, ChevronRight,
-    RefreshCw, AlertTriangle, X, Filter, Eye,
+    RefreshCw, X, Filter, Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@store/auth.store";
 import { AccessDenied } from "@components/AccessDenied";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { questsService } from "../services/quests.service";
+import { formatDuration } from "../utils/formatters";
 import { ConfirmModal } from "@/features/users/components/ConfirmModal";
 import { FilterDropdown } from "@/features/users/components/FilterDropdown";
 import { usePaginationRange } from "@/features/users/hooks/usePagination";
@@ -30,15 +31,7 @@ const questStatusConfig: Record<string, { label: string; dot: string; bg: string
     Archived: { label: "Archived", dot: "bg-red-500", bg: "bg-red-50 text-red-700 border-red-200" },
 };
 
-// ---- Duration Helper ----
-function formatDuration(minutes: number | null): string {
-    if (minutes === null || minutes === 0) return "—";
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    if (h === 0) return `${m}m`;
-    if (m === 0) return `${h}h`;
-    return `${h}h ${m}m`;
-}
+
 
 // ---- Discriminated Union for Confirm Actions ----
 type ConfirmAction =
