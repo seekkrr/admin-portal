@@ -9,6 +9,8 @@ import {
 import { toast } from "sonner";
 import { Badge } from "@/features/users/components/Badge";
 import { ConfirmModal } from "@/features/users/components/ConfirmModal";
+import { AccessDenied } from "@components/AccessDenied";
+import { useAuthStore } from "@store/auth.store";
 import { creatorsService } from "../services/creators.service";
 import { PayoutForm } from "../components/PayoutForm";
 import type { PayoutAccountRequest } from "../services/creators.service";
@@ -28,10 +30,14 @@ const statusConfig: Record<string, { label: string; dot: string; bg: string }> =
 type ConfirmAction =
     | { type: "status-change"; payload: { status: "pending" | "approved" | "rejected" | "suspended" } };
 
+const ALLOWED_ROLES = ["admin", "super_admin", "finance"];
+
 export function CreatorEditPage() {
     const { userId } = useParams<{ userId: string }>();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
+    const { user: currentUser } = useAuthStore();
+    const hasAccess = !!currentUser && ALLOWED_ROLES.includes(currentUser.role);
 
     const [editingPayout, setEditingPayout] = useState(false);
     const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
@@ -109,6 +115,10 @@ export function CreatorEditPage() {
     const payoutPending = addPayoutMutation.isPending || updatePayoutMutation.isPending;
 
     // ---- Render ----
+    if (!hasAccess) {
+        return <AccessDenied message="Only admins and finance can access this page." />;
+    }
+
     if (isLoading) {
         return (
             <div className="flex items-center justify-center py-32">
@@ -284,6 +294,7 @@ export function CreatorEditPage() {
                 onConfirm={executeConfirmedAction}
                 onCancel={() => setConfirmAction(null)}
                 isPending={statusMutation.isPending}
+                theme="warning"
             />
 
             {/* Loading overlay for mutations */}

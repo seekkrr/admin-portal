@@ -11,6 +11,7 @@ export interface ConfirmModalProps {
     onCancel: () => void;
     isPending?: boolean;
     children?: ReactNode;
+    theme?: "danger" | "warning" | "info";
 }
 
 /**
@@ -19,10 +20,19 @@ export interface ConfirmModalProps {
  */
 export function ConfirmModal({
     open, title, message, confirmLabel, confirmStyle,
-    onConfirm, onCancel, isPending, children,
+    onConfirm, onCancel, isPending, children, theme = "danger",
 }: ConfirmModalProps) {
     const [typed, setTyped] = useState("");
     const confirmWord = "CONFIRM";
+
+    // Theme configuration
+    const themeConfig = {
+        danger: { icon: AlertTriangle, bg: "bg-red-100", text: "text-red-600", border: "focus:ring-red-400" },
+        warning: { icon: AlertTriangle, bg: "bg-amber-100", text: "text-amber-600", border: "focus:ring-amber-400" },
+        info: { icon: RefreshCw, bg: "bg-blue-100", text: "text-blue-600", border: "focus:ring-blue-400" },
+    };
+    const currentTheme = themeConfig[theme];
+    const Icon = currentTheme.icon;
 
     // Reset typed input when modal opens
     useEffect(() => { if (open) setTyped(""); }, [open]);
@@ -43,8 +53,8 @@ export function ConfirmModal({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in" onClick={onCancel}>
             <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4 animate-slide-up" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                        <AlertTriangle className="w-5 h-5 text-red-600" />
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${currentTheme.bg}`}>
+                        <Icon className={`w-5 h-5 ${currentTheme.text}`} />
                     </div>
                     <h3 className="text-lg font-bold text-neutral-900">{title}</h3>
                 </div>
@@ -59,7 +69,7 @@ export function ConfirmModal({
                         value={typed}
                         onChange={(e) => setTyped(e.target.value)}
                         placeholder={confirmWord}
-                        className="w-full px-3 py-2 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent"
+                        className={`w-full px-3 py-2 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 ${currentTheme.border} focus:border-transparent`}
                         autoFocus
                     />
                 </div>

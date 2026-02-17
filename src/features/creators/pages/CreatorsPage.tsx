@@ -479,6 +479,7 @@ export function CreatorsPage() {
                 onConfirm={executeConfirmedAction}
                 onCancel={() => setConfirmAction(null)}
                 isPending={bulkActionMutation.isPending}
+                theme="warning"
             />
 
             {/* Loading overlay for mutations */}

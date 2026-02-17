@@ -26,7 +26,7 @@ export function PayoutForm({ existingPayout, isPending, onSubmit, onCancel }: Pa
     const [method, setMethod] = useState<"bank" | "upi" | "wallet">(existingPayout?.method ?? "upi");
     const [upiId, setUpiId] = useState(existingPayout?.upi_id ?? "");
     const [accountNumber, setAccountNumber] = useState(
-        existingPayout?.bank_details?.account_number != null
+        existingPayout?.bank_details?.account_number !== undefined && existingPayout?.bank_details?.account_number !== null
             ? String(existingPayout.bank_details.account_number)
             : ""
     );
