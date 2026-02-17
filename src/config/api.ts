@@ -20,5 +20,9 @@ export const API_ENDPOINTS = {
     },
     QUERIES: {
         SUBMIT: "/api/queries",
+    },
+    INTEREST: {
+        STATS: "/api/interest/admin/stats",
+        EXPORT: "/api/interest/admin/export",
     }
 } as const;
