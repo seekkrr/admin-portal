@@ -9,20 +9,23 @@ import { toast } from 'sonner';
 import { useAuthStore } from "@store/auth.store";
 import { Navigate } from "react-router-dom";
 
+// Roles configuration moved outside component to prevent recreation on render
+const ALLOWED_ROLES = ['admin', 'super_admin', 'moderator', 'finance'];
+const ADMIN_ROLES = ['admin', 'super_admin'];
+
 export function StatsPage() {
     const { user } = useAuthStore();
 
-    // 1. RBAC Check: Allow admin, super_admin, moderator, finance
-    const ALLOWED_ROLES = ['admin', 'super_admin', 'moderator', 'finance'];
+    // 1. RBAC Check
     if (user && !ALLOWED_ROLES.includes(user.role)) {
         return <Navigate to="/access-denied" replace />;
     }
 
-    const isAdmin = user && ['admin', 'super_admin'].includes(user.role);
+    const isAdmin = user && ADMIN_ROLES.includes(user.role);
 
     // 2. Query Stats - Only if Admin/Super Admin
     // If not admin, we skip the query (enabled: false) or ignore the result
-    const { data: stats, isLoading, error } = useQuery({
+    const { data: stats, isLoading, error, dataUpdatedAt } = useQuery({
         queryKey: ["admin-stats"],
         queryFn: statsService.getStats,
         enabled: !!isAdmin, // Only fetch if admin
@@ -66,7 +69,7 @@ export function StatsPage() {
             <div className="flex justify-between items-center">
                 <h1 className="text-2xl font-bold text-neutral-900">Dashboard & Stats</h1>
                 <div className="text-sm text-neutral-500">
-                    Last updated: {new Date().toLocaleTimeString()}
+                    Last updated: {isAdmin && stats ? new Date(dataUpdatedAt).toLocaleTimeString() : "—"}
                 </div>
             </div>
 

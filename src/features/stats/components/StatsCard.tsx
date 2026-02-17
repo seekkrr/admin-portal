@@ -1,16 +1,13 @@
+
 import { Card, CardContent, CardHeader, CardTitle } from "@components/ui";
 import type { LucideIcon } from "lucide-react";
 
 interface StatsCardProps {
     title: string;
-    value: number | string;
+    value: string | number;
     icon: LucideIcon;
     description?: string;
     className?: string;
-    trend?: {
-        value: number;
-        isPositive: boolean;
-    };
 }
 
 export function StatsCard({ title, value, icon: Icon, description, className }: StatsCardProps) {
