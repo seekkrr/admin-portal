@@ -5,7 +5,7 @@ import type { PayoutAccountRequest } from "../services/creators.service";
 
 // ---- Validation patterns (derived from backend schema) ----
 const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;      // 11 chars, 5th is always 0
-const UPI_RE = /^[\w.+-]+@[\w]+$/;                // name@provider
+const UPI_RE = /^[\w.+-]+@[\w.-]+$/;                // name@provider
 const ACCT_MIN = 6;
 const ACCT_MAX = 18;
 
