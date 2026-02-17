@@ -48,7 +48,7 @@ export interface PayoutAccount {
     _id: string;
     method: "bank" | "upi" | "wallet";
     bank_details?: {
-        account_number: string;
+        account_number: number;
         ifsc_code: string;
         account_holder: string;
     };
