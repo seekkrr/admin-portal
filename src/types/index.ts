@@ -100,7 +100,7 @@ export interface CloudinaryUploadResponse {
 
 // Quest Types
 export type QuestDifficulty = "Easy" | "Medium" | "Hard" | "Expert";
-export type QuestStatus = "Draft" | "Published" | "Archived";
+export type QuestStatus = "Draft" | "Published" | "Paused" | "Archived";
 export type QuestTheme = "Adventure" | "Romance" | "Culture" | "Food" | "History" | "Nature" | "Custom";
 
 export interface QuestLocation {
@@ -161,6 +161,108 @@ export interface QuestWithDetails extends Quest {
     location?: QuestLocation;
     media?: QuestMedia;
     steps?: QuestStep[];
+}
+
+// ---- Enriched Quest (from list endpoint) ----
+export interface QuestListItem {
+    _id: string;
+    metadata_id: string;
+    location_id: string;
+    media_id: string;
+    created_by: string;
+    status: QuestStatus;
+    price: number;
+    currency: string | null;
+    booking_enabled: boolean;
+    view_count: number;
+    is_deleted: boolean;
+    deleted_at: string | null;
+    schema_version: number;
+    version: number;
+    created_at: string;
+    updated_at: string;
+    // Enriched fields from list endpoint
+    quest_title: string | null;
+    quest_duration_minutes: number | null;
+    quest_region: string | null;
+    quest_image: string | null;
+}
+
+// ---- Full Quest Detail Response (from GET /api/quests/:id) ----
+export interface QuestDetailLocation {
+    _id: string;
+    region: string;
+    start_location: { type: "Point"; coordinates: [number, number] };
+    end_location: { type: "Point"; coordinates: [number, number] };
+    route_waypoints: {
+        order: number;
+        location: { type: "Point"; coordinates: [number, number] };
+        estimated_time_minutes: number | null;
+        distance_from_previous_km: number | null;
+    }[];
+    map_data: {
+        zoom_level: number;
+        map_style: string;
+    };
+    route_geometry: { type: "LineString"; coordinates: number[][] } | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface QuestDetailMetadata {
+    _id: string;
+    title: string;
+    description: string[] | null;
+    keywords: string[] | null;
+    theme: QuestTheme;
+    difficulty: QuestDifficulty;
+    price: number;
+    max_points: number;
+    duration_minutes: number;
+    hints_allowed: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface QuestDetailMedia {
+    _id: string;
+    cloudinary_assets: CloudinaryAsset[];
+    mapbox_reference: Record<string, string>;
+    reel_url?: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface QuestDetailStep {
+    _id: string;
+    quest_id: string;
+    order: number;
+    title: string;
+    description: string;
+    cloudinary_assets: CloudinaryAsset[];
+    waypoint_order?: number | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface QuestDetailCreator {
+    _id: string;
+    first_name: string;
+    last_name: string;
+    role: string;
+    status: string;
+    is_creator: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface QuestDetailResponse {
+    quest: QuestListItem;
+    metadata: QuestDetailMetadata | null;
+    location: QuestDetailLocation | null;
+    media: QuestDetailMedia | null;
+    steps: QuestDetailStep[];
+    creator: QuestDetailCreator | null;
 }
 
 // API Response Types
