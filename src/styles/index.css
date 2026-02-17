@@ -185,3 +185,13 @@ body {
 .animate-pulse {
   animation: pulse 2s ease-in-out infinite;
 }
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-50%);
+  }
+
+  100% {
+    transform: translateX(0%);
+  }
+}
