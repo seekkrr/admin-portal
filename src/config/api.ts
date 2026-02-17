@@ -17,6 +17,7 @@ export const API_ENDPOINTS = {
     CORE: {
         USERS: "/api/core/users",
         USER_BY_ID: (id: string) => `/api/core/users/${id}`,
+        BULK_ACTION: "/api/core/users/bulk-action",
     },
     QUERIES: {
         SUBMIT: "/api/queries",
