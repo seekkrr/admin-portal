@@ -41,7 +41,7 @@ export function StatsPage() {
 
             await statsService.exportInterests(start, end);
             toast.success("Export completed successfully");
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Export failed:", err);
             toast.error("Failed to export data. Please try again.");
         } finally {
