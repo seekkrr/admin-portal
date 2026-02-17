@@ -11,8 +11,12 @@ export const API_ENDPOINTS = {
         STEPS: (questId: string) => `/api/quests/${questId}/steps`,
     },
     CREATORS: {
+        LIST: "/api/core/creators",
         BY_USER_ID: (userId: string) => `/api/core/creators/${userId}`,
         STATS: (userId: string) => `/api/core/creators/${userId}/stats`,
+        STATUS: (userId: string) => `/api/core/creators/${userId}/status`,
+        PAYOUT: (userId: string) => `/api/core/creators/${userId}/payout-account`,
+        UPDATE_PAYOUT: (userId: string) => `/api/core/payout-accounts/${userId}`,
     },
     CORE: {
         USERS: "/api/core/users",
