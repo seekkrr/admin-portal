@@ -183,9 +183,14 @@ export function UsersPage() {
 
     const deleteMutation = useMutation({
         mutationFn: ({ userId, hard }: { userId: string; hard: boolean }) => usersService.deleteUser(userId, hard),
-        onSuccess: () => {
+        onSuccess: (_, { userId }) => {
             toast.success("User deleted");
             queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+            setSelectedIds((prev) => {
+                const next = new Set(prev);
+                next.delete(userId);
+                return next;
+            });
             setConfirmAction(null);
         },
         onError: (err: Error) => { toast.error(err.message); setConfirmAction(null); },
