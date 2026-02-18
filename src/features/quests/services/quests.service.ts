@@ -29,6 +29,7 @@ export interface ListQuestsParams {
     status?: string;
     difficulty?: string;
     theme?: string;
+    region?: string;
     page?: number;
     per_page?: number;
 }

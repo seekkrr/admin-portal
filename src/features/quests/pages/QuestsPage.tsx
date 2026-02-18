@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     Search, Compass, Trash2, ChevronLeft, ChevronRight,
-    RefreshCw, X, Filter, Eye,
+    RefreshCw, X, Filter, Eye, MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@store/auth.store";
@@ -79,6 +79,8 @@ export function QuestsPage() {
     const [statusFilter, setStatusFilter] = useState("");
     const [difficultyFilter, setDifficultyFilter] = useState("");
     const [themeFilter, setThemeFilter] = useState("");
+    const [regionFilter, setRegionFilter] = useState("");
+    const [debouncedRegion, setDebouncedRegion] = useState("");
     const [page, setPage] = useState(1);
     const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
     const [hardDelete, setHardDelete] = useState(false);
@@ -95,6 +97,15 @@ export function QuestsPage() {
         return () => clearTimeout(timer);
     }, [searchInput]);
 
+    // ---- Debounced region ----
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedRegion(regionFilter.trim());
+            setPage(1);
+        }, SEARCH_DEBOUNCE_MS);
+        return () => clearTimeout(timer);
+    }, [regionFilter]);
+
     // Reset hard delete toggle when modal closes
     useEffect(() => { if (!confirmAction) setHardDelete(false); }, [confirmAction]);
 
@@ -104,9 +115,10 @@ export function QuestsPage() {
         status: statusFilter || undefined,
         difficulty: difficultyFilter || undefined,
         theme: themeFilter || undefined,
+        region: debouncedRegion || undefined,
         page,
         per_page: PER_PAGE,
-    }), [debouncedQuery, statusFilter, difficultyFilter, themeFilter, page]);
+    }), [debouncedQuery, statusFilter, difficultyFilter, themeFilter, debouncedRegion, page]);
 
     const { data, isLoading, error } = useQuery({
         queryKey: ["admin-quests", queryParams],
@@ -119,14 +131,23 @@ export function QuestsPage() {
 
     // ---- Client-side instant filter ----
     const filteredQuests = useMemo(() => {
-        if (!searchInput.trim() || searchInput.trim() === debouncedQuery) return quests;
-        const q = searchInput.trim().toLowerCase();
-        return quests.filter((quest) =>
-            (quest.quest_title ?? "").toLowerCase().includes(q) ||
-            (quest.quest_region ?? "").toLowerCase().includes(q) ||
-            quest._id.toLowerCase().includes(q)
-        );
-    }, [quests, searchInput, debouncedQuery]);
+        let result = quests;
+        // Client-side instant title filter for responsiveness while debounce is pending
+        if (searchInput.trim() && searchInput.trim() !== debouncedQuery) {
+            const q = searchInput.trim().toLowerCase();
+            result = result.filter((quest) =>
+                (quest.quest_title ?? "").toLowerCase().includes(q)
+            );
+        }
+        // Client-side instant region filter for responsiveness while debounce is pending
+        if (regionFilter.trim() && regionFilter.trim() !== debouncedRegion) {
+            const r = regionFilter.trim().toLowerCase();
+            result = result.filter((quest) =>
+                (quest.quest_region ?? "").toLowerCase().includes(r)
+            );
+        }
+        return result;
+    }, [quests, searchInput, debouncedQuery, regionFilter, debouncedRegion]);
 
     // ---- Mutations ----
     const deleteMutation = useMutation({
@@ -158,11 +179,13 @@ export function QuestsPage() {
         setStatusFilter("");
         setDifficultyFilter("");
         setThemeFilter("");
+        setRegionFilter("");
+        setDebouncedRegion("");
         setPage(1);
     }, []);
 
     const isBusy = deleteMutation.isPending || statusMutation.isPending;
-    const hasActiveFilters = searchInput || statusFilter || difficultyFilter || themeFilter;
+    const hasActiveFilters = searchInput || statusFilter || difficultyFilter || themeFilter || regionFilter;
 
     // ---- Confirm handler ----
     const executeConfirmedAction = useCallback(() => {
@@ -211,7 +234,7 @@ export function QuestsPage() {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
                         <input
                             type="text"
-                            placeholder="Search by title, region, or ID..."
+                            placeholder="Search by title..."
                             value={searchInput}
                             onChange={(e) => setSearchInput(e.target.value)}
                             className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
@@ -222,6 +245,29 @@ export function QuestsPage() {
                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
                             >
                                 <X className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Region text filter */}
+                    <div className="relative min-w-[180px]">
+                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
+                        <input
+                            type="text"
+                            placeholder="Filter by region..."
+                            value={regionFilter}
+                            onChange={(e) => setRegionFilter(e.target.value)}
+                            className={`w-full pl-9 pr-8 py-2.5 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent ${regionFilter
+                                    ? "border-indigo-300 bg-indigo-50/50 text-indigo-700"
+                                    : "border-neutral-200 bg-neutral-50 text-neutral-600"
+                                }`}
+                        />
+                        {regionFilter && (
+                            <button
+                                onClick={() => { setRegionFilter(""); setDebouncedRegion(""); setPage(1); }}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                            >
+                                <X className="w-3.5 h-3.5" />
                             </button>
                         )}
                     </div>
