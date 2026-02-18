@@ -6,15 +6,19 @@ import {
     Clock, MapPin, Eye, Tag, Star, Layers,
     Compass, Hash, Lightbulb, Trophy,
     DollarSign, Trash2, Image as ImageIcon, UserCircle,
-    Pencil, Check, X, Upload, Plus,
+    Pencil, Check, X, Upload, Plus, Navigation,
 } from "lucide-react";
+import type { QuestDifficulty, QuestTheme } from "@/types";
+
+const DIFFICULTY_OPTIONS: QuestDifficulty[] = ["Easy", "Medium", "Hard", "Expert"];
+const THEME_OPTIONS: QuestTheme[] = ["Adventure", "Romance", "Culture", "Food", "History", "Nature", "Custom"];
 import { toast } from "sonner";
 import { useAuthStore } from "@store/auth.store";
 import { AccessDenied } from "@components/AccessDenied";
 import { questsService } from "../services/quests.service";
 import { formatDuration, isValidObjectId } from "../utils/formatters";
 import { ConfirmModal } from "@/features/users/components/ConfirmModal";
-import { Badge } from "@/features/users/components/Badge";
+
 import { QuestRouteMap } from "../components/QuestRouteMap";
 import { config } from "@/config/env";
 import type { QuestStatus, CloudinaryAsset } from "@/types";
@@ -256,9 +260,31 @@ export function QuestDetailPage() {
                     <ArrowLeft className="w-5 h-5" />
                 </button>
                 <div className="flex-1 min-w-0">
-                    <h1 className="text-2xl font-bold text-neutral-900 truncate">
-                        {metadata?.title || quest.quest_title || "Untitled Quest"}
-                    </h1>
+                    {/* Editable Quest Name */}
+                    {editingField === "metadata-title" ? (
+                        <div className="flex items-center gap-2">
+                            <input
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                className="text-2xl font-bold text-neutral-900 bg-neutral-50 rounded-lg border border-neutral-200 px-2 py-0.5 w-full focus:outline-none focus:ring-2 focus:ring-violet-200"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") saveMetadataField("title", editValue);
+                                    if (e.key === "Escape") cancelEdit();
+                                }}
+                            />
+                            <button onClick={() => saveMetadataField("title", editValue)} className="p-1 rounded-md hover:bg-emerald-50 text-emerald-600"><Check className="w-4 h-4" /></button>
+                            <button onClick={cancelEdit} className="p-1 rounded-md hover:bg-red-50 text-red-500"><X className="w-4 h-4" /></button>
+                        </div>
+                    ) : (
+                        <h1
+                            className={`text-2xl font-bold text-neutral-900 truncate flex items-center gap-2 group/name ${canEdit ? "cursor-pointer" : ""}`}
+                            onClick={() => canEdit && startEdit("metadata-title", metadata?.title || quest.quest_title || "")}
+                        >
+                            {metadata?.title || quest.quest_title || "Untitled Quest"}
+                            {canEdit && <Pencil className="w-4 h-4 text-neutral-300 group-hover/name:text-violet-500 transition-colors flex-shrink-0" />}
+                        </h1>
+                    )}
                     <div className="flex items-center gap-2 mt-1">
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${sc.bg}`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
@@ -270,8 +296,7 @@ export function QuestDetailPage() {
             </div>
 
             {/* Overview Grid (Stat Cards) */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                <StatCard icon={<Eye className="w-4 h-4 text-indigo-500" />} label="Views" value={(quest.view_count ?? 0).toLocaleString()} />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
 
                 {/* Editable Price */}
                 {editingField === "price" ? (
@@ -308,10 +333,97 @@ export function QuestDetailPage() {
                     </button>
                 )}
 
-                <StatCard icon={<Clock className="w-4 h-4 text-blue-500" />} label="Duration" value={formatDuration(metadata?.duration_minutes)} />
-                <StatCard icon={<Layers className="w-4 h-4 text-teal-500" />} label="Steps" value={steps.length} />
-                <StatCard icon={<Star className="w-4 h-4 text-amber-500" />} label="Difficulty" value={metadata?.difficulty ?? "—"} />
-                <StatCard icon={<Tag className="w-4 h-4 text-violet-500" />} label="Theme" value={metadata?.theme ?? "—"} />
+                {/* Editable Duration */}
+                {editingField === "metadata-duration" ? (
+                    <div className="bg-white rounded-2xl border border-violet-300 shadow-sm p-4 text-center ring-2 ring-violet-200">
+                        <div className="flex items-center justify-center mb-2"><Clock className="w-4 h-4 text-blue-500" /></div>
+                        <input
+                            type="number"
+                            min={1}
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            className="w-full text-center text-lg font-bold text-neutral-900 bg-neutral-50 rounded-lg border border-neutral-200 py-1 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                            autoFocus
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") saveMetadataField("duration_minutes", Number(editValue));
+                                if (e.key === "Escape") cancelEdit();
+                            }}
+                        />
+                        <div className="text-[10px] text-neutral-400 mt-1">minutes</div>
+                        <div className="flex items-center justify-center gap-1 mt-1">
+                            <button onClick={() => saveMetadataField("duration_minutes", Number(editValue))} className="p-1 rounded-md hover:bg-emerald-50 text-emerald-600"><Check className="w-3.5 h-3.5" /></button>
+                            <button onClick={cancelEdit} className="p-1 rounded-md hover:bg-red-50 text-red-500"><X className="w-3.5 h-3.5" /></button>
+                        </div>
+                    </div>
+                ) : (
+                    <button
+                        onClick={() => canEdit && startEdit("metadata-duration", metadata?.duration_minutes ?? 0)}
+                        className={`bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 text-center group transition-all ${canEdit ? "hover:border-violet-300 hover:shadow-md cursor-pointer" : ""}`}
+                    >
+                        <div className="flex items-center justify-center mb-2">
+                            <Clock className="w-4 h-4 text-blue-500" />
+                            {canEdit && <Pencil className="w-3 h-3 text-neutral-300 group-hover:text-violet-500 ml-1 transition-colors" />}
+                        </div>
+                        <div className="text-xl font-bold text-neutral-900">{formatDuration(metadata?.duration_minutes)}</div>
+                        <div className="text-[11px] text-neutral-500 uppercase tracking-wider mt-1">Duration</div>
+                    </button>
+                )}
+
+                {/* Editable Difficulty */}
+                {editingField === "metadata-difficulty" ? (
+                    <div className="bg-white rounded-2xl border border-violet-300 shadow-sm p-4 text-center ring-2 ring-violet-200">
+                        <div className="flex items-center justify-center mb-2"><Star className="w-4 h-4 text-amber-500" /></div>
+                        <select
+                            value={editValue}
+                            onChange={(e) => { setEditValue(e.target.value); saveMetadataField("difficulty", e.target.value); }}
+                            className="w-full text-center text-sm font-bold text-neutral-900 bg-neutral-50 rounded-lg border border-neutral-200 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-200 cursor-pointer"
+                            autoFocus
+                        >
+                            {DIFFICULTY_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
+                        </select>
+                        <button onClick={cancelEdit} className="p-1 rounded-md hover:bg-red-50 text-red-500 mt-1"><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                ) : (
+                    <button
+                        onClick={() => canEdit && startEdit("metadata-difficulty", metadata?.difficulty ?? "Easy")}
+                        className={`bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 text-center group transition-all ${canEdit ? "hover:border-violet-300 hover:shadow-md cursor-pointer" : ""}`}
+                    >
+                        <div className="flex items-center justify-center mb-2">
+                            <Star className="w-4 h-4 text-amber-500" />
+                            {canEdit && <Pencil className="w-3 h-3 text-neutral-300 group-hover:text-violet-500 ml-1 transition-colors" />}
+                        </div>
+                        <div className="text-xl font-bold text-neutral-900">{metadata?.difficulty ?? "—"}</div>
+                        <div className="text-[11px] text-neutral-500 uppercase tracking-wider mt-1">Difficulty</div>
+                    </button>
+                )}
+
+                {/* Editable Theme */}
+                {editingField === "metadata-theme" ? (
+                    <div className="bg-white rounded-2xl border border-violet-300 shadow-sm p-4 text-center ring-2 ring-violet-200">
+                        <div className="flex items-center justify-center mb-2"><Tag className="w-4 h-4 text-violet-500" /></div>
+                        <select
+                            value={editValue}
+                            onChange={(e) => { setEditValue(e.target.value); saveMetadataField("theme", e.target.value); }}
+                            className="w-full text-center text-sm font-bold text-neutral-900 bg-neutral-50 rounded-lg border border-neutral-200 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-200 cursor-pointer"
+                            autoFocus
+                        >
+                            {THEME_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                        <button onClick={cancelEdit} className="p-1 rounded-md hover:bg-red-50 text-red-500 mt-1"><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                ) : (
+                    <button
+                        onClick={() => canEdit && startEdit("metadata-theme", metadata?.theme ?? "Adventure")}
+                        className={`bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 text-center group transition-all ${canEdit ? "hover:border-violet-300 hover:shadow-md cursor-pointer" : ""}`}
+                    >
+                        <div className="flex items-center justify-center mb-2">
+                            <Tag className="w-4 h-4 text-violet-500" />
+                            {canEdit && <Pencil className="w-3 h-3 text-neutral-300 group-hover:text-violet-500 ml-1 transition-colors" />}
+                        </div>
+                        <div className="text-xl font-bold text-neutral-900">{metadata?.theme ?? "—"}</div>
+                        <div className="text-[11px] text-neutral-500 uppercase tracking-wider mt-1">Theme</div>
+                    </button>
+                )}
             </div>
 
             {/* Status Management */}
@@ -383,17 +495,56 @@ export function QuestDetailPage() {
                             )}
                         </div>
 
-                        {/* Keywords */}
-                        {metadata?.keywords && metadata.keywords.length > 0 && (
-                            <div>
-                                <Label>Keywords</Label>
-                                <div className="flex flex-wrap gap-1.5 mt-1">
-                                    {metadata.keywords.map((kw, i) => (
-                                        <Badge key={i} label={kw} styles="bg-violet-50 text-violet-700 border-violet-200" />
-                                    ))}
-                                </div>
+                        {/* Keywords with delete */}
+                        <div>
+                            <Label>Keywords</Label>
+                            <div className="flex flex-wrap gap-1.5 mt-1">
+                                {(metadata?.keywords ?? []).map((kw, i) => (
+                                    <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-violet-50 text-violet-700 border-violet-200">
+                                        {kw}
+                                        {canEdit && (
+                                            <button
+                                                onClick={() => {
+                                                    const updated = (metadata?.keywords ?? []).filter((_, idx) => idx !== i);
+                                                    saveMetadataField("keywords", updated);
+                                                }}
+                                                className="text-violet-400 hover:text-red-500 transition-colors ml-0.5"
+                                                title="Remove keyword"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        )}
+                                    </span>
+                                ))}
+                                {canEdit && (
+                                    editingField === "metadata-keyword-add" ? (
+                                        <span className="inline-flex items-center gap-1">
+                                            <input
+                                                value={editValue}
+                                                onChange={(e) => setEditValue(e.target.value)}
+                                                className="text-xs bg-neutral-50 rounded-full border border-neutral-200 px-2.5 py-1 w-24 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                                                autoFocus
+                                                placeholder="keyword"
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter" && editValue.trim()) {
+                                                        saveMetadataField("keywords", [...(metadata?.keywords ?? []), editValue.trim()]);
+                                                    }
+                                                    if (e.key === "Escape") cancelEdit();
+                                                }}
+                                            />
+                                            <button onClick={cancelEdit} className="text-neutral-400 hover:text-red-500"><X className="w-3 h-3" /></button>
+                                        </span>
+                                    ) : (
+                                        <button
+                                            onClick={() => startEdit("metadata-keyword-add", "")}
+                                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border border-dashed border-neutral-300 text-neutral-500 hover:border-violet-400 hover:text-violet-600 transition-colors"
+                                        >
+                                            <Plus className="w-3 h-3" /> Add
+                                        </button>
+                                    )
+                                )}
                             </div>
-                        )}
+                        </div>
 
                         {/* Editable Points & Hints */}
                         <div className="grid grid-cols-2 gap-3">
@@ -527,6 +678,68 @@ export function QuestDetailPage() {
                                                     <button
                                                         onClick={() => startEdit(`step-desc-${step._id}`, step.description)}
                                                         className="text-neutral-300 hover:text-violet-500 transition-colors flex-shrink-0"
+                                                    >
+                                                        <Pencil className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Coordinates badge */}
+                                        {(() => {
+                                            const wp = (location?.route_waypoints ?? []).find(w => w.order === step.waypoint_order);
+                                            const coords = wp?.location?.coordinates;
+                                            if (!coords) return null;
+                                            return (
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-neutral-100 text-neutral-600 text-[11px] font-mono border border-neutral-200">
+                                                        <MapPin className="w-3 h-3 text-violet-500" />
+                                                        {coords[1].toFixed(6)}, {coords[0].toFixed(6)}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })()}
+
+                                        {/* How to reach */}
+                                        {editingField === `step-reach-${step._id}` ? (
+                                            <div className="space-y-2">
+                                                <div className="flex items-center gap-1.5 text-neutral-500 text-xs font-semibold uppercase tracking-wider">
+                                                    <Navigation className="w-3 h-3" /> How to Reach
+                                                </div>
+                                                <textarea
+                                                    value={editValue}
+                                                    onChange={(e) => setEditValue(e.target.value)}
+                                                    rows={2}
+                                                    className="w-full text-sm text-neutral-700 bg-neutral-50 rounded-lg border border-neutral-200 p-3 focus:outline-none focus:ring-2 focus:ring-violet-200 resize-y"
+                                                    autoFocus
+                                                    placeholder="Describe how to reach this step..."
+                                                />
+                                                <div className="flex gap-1">
+                                                    <button
+                                                        onClick={() => saveStepField(step._id, "how_to_reach", editValue)}
+                                                        className="px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium hover:bg-violet-700 transition-colors flex items-center gap-1"
+                                                    >
+                                                        <Check className="w-3 h-3" /> Save
+                                                    </button>
+                                                    <button onClick={cancelEdit} className="px-3 py-1.5 rounded-lg border border-neutral-200 text-neutral-600 text-xs font-medium hover:bg-neutral-50 transition-colors flex items-center gap-1">
+                                                        <X className="w-3 h-3" /> Cancel
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="group/reach flex items-start gap-2">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-1.5 text-neutral-500 text-xs font-semibold uppercase tracking-wider mb-1">
+                                                        <Navigation className="w-3 h-3" /> How to Reach
+                                                    </div>
+                                                    <p className="text-sm text-neutral-600 leading-relaxed">
+                                                        {step.how_to_reach || <span className="text-neutral-400 italic">Not specified</span>}
+                                                    </p>
+                                                </div>
+                                                {canEdit && (
+                                                    <button
+                                                        onClick={() => startEdit(`step-reach-${step._id}`, step.how_to_reach ?? "")}
+                                                        className="text-neutral-300 hover:text-violet-500 transition-colors flex-shrink-0 mt-4"
                                                     >
                                                         <Pencil className="w-3.5 h-3.5" />
                                                     </button>
@@ -750,16 +963,6 @@ function InfoRow({ icon, label, value }: { icon?: React.ReactNode; label: string
                 <span>{label}</span>
             </div>
             <span className="text-sm font-medium text-neutral-800">{value}</span>
-        </div>
-    );
-}
-
-function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | number }) {
-    return (
-        <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 text-center">
-            <div className="flex items-center justify-center mb-2">{icon}</div>
-            <div className="text-xl font-bold text-neutral-900">{value}</div>
-            <div className="text-[11px] text-neutral-500 uppercase tracking-wider mt-1">{label}</div>
         </div>
     );
 }

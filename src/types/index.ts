@@ -239,6 +239,7 @@ export interface QuestDetailStep {
     order: number;
     title: string;
     description: string;
+    how_to_reach?: string | null;
     cloudinary_assets: CloudinaryAsset[];
     waypoint_order?: number | null;
     created_at: string;

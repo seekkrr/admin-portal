@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, memo } from "react";
+import { useEffect, useRef, useCallback, memo, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import { config } from "@/config/env";
 import type { QuestDetailLocation, QuestDetailStep } from "@/types";
@@ -99,6 +99,7 @@ export const QuestRouteMap = memo(function QuestRouteMap({
     const mapRef = useRef<mapboxgl.Map | null>(null);
     const markersRef = useRef<mapboxgl.Marker[]>([]);
     const abortRef = useRef<AbortController | null>(null);
+    const [cursorCoords, setCursorCoords] = useState<{ lng: number; lat: number } | null>(null);
 
     // Collect all coordinate points: waypoints + step locations
     const allCoords = useCallback((): [number, number][] => {
@@ -311,6 +312,12 @@ export const QuestRouteMap = memo(function QuestRouteMap({
 
         mapRef.current = map;
 
+        // Coordinate display on mouse move
+        map.on("mousemove", (e) => {
+            setCursorCoords({ lng: Number(e.lngLat.lng.toFixed(6)), lat: Number(e.lngLat.lat.toFixed(6)) });
+        });
+        map.on("mouseleave", () => setCursorCoords(null));
+
         return () => {
             abortRef.current?.abort();
             markersRef.current.forEach((m) => m.remove());
@@ -336,6 +343,12 @@ export const QuestRouteMap = memo(function QuestRouteMap({
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />Waypoint</span>
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-violet-500 rotate-45 scale-75" />Step</span>
             </div>
+            {/* Coordinate display */}
+            {cursorCoords && (
+                <div className="absolute bottom-3 right-3 z-10 bg-black/70 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-sm text-[11px] font-mono text-white/90">
+                    {cursorCoords.lat}, {cursorCoords.lng}
+                </div>
+            )}
             <style>{`
                 .mapboxgl-popup-content {
                     border-radius: 10px;
