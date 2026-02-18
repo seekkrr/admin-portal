@@ -326,7 +326,7 @@ export const QuestRouteMap = memo(function QuestRouteMap({
             mapRef.current = null;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [location, steps]);
 
     return (
         <div className="relative">
