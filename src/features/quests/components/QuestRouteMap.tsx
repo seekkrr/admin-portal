@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, memo, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import { config } from "@/config/env";
 import type { QuestDetailLocation, QuestDetailStep } from "@/types";
+import "./QuestRouteMap.css";
 
 mapboxgl.accessToken = config.mapbox.accessToken;
 
@@ -332,7 +333,7 @@ export const QuestRouteMap = memo(function QuestRouteMap({
         <div className="relative">
             <div
                 ref={containerRef}
-                className={`rounded-xl overflow-hidden shadow-lg ${className}`}
+                className={`quest-route-map rounded-xl overflow-hidden shadow-lg ${className}`}
                 style={{ height }}
                 aria-label="Quest route map"
             />
@@ -349,17 +350,6 @@ export const QuestRouteMap = memo(function QuestRouteMap({
                     {cursorCoords.lat}, {cursorCoords.lng}
                 </div>
             )}
-            <style>{`
-                .mapboxgl-popup-content {
-                    border-radius: 10px;
-                    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-                    padding: 0;
-                }
-                .mapboxgl-ctrl-group {
-                    border-radius: 12px !important;
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
-                }
-            `}</style>
         </div>
     );
 });

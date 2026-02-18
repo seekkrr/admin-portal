@@ -174,7 +174,7 @@ export function QuestDetailPage() {
         const newAssets: CloudinaryAsset[] = [...currentAssets];
 
         try {
-            for (const file of Array.from(files)) {
+            const uploadPromises = Array.from(files).map(async (file) => {
                 const formData = new FormData();
                 formData.append("file", file);
                 formData.append("upload_preset", config.cloudinary.uploadPreset);
@@ -183,16 +183,24 @@ export function QuestDetailPage() {
                     method: "POST",
                     body: formData,
                 });
-                if (!res.ok) throw new Error("Upload failed");
-                const result = await res.json();
-                newAssets.push({
-                    public_id: result.public_id,
-                    secure_url: result.secure_url,
-                    resource_type: result.resource_type ?? "image",
-                    format: result.format ?? "",
-                    alt_text: "",
-                });
-            }
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({}));
+                    throw new Error(`Upload failed for ${file.name}: ${errorData.error?.message || res.statusText}`);
+                }
+                return res.json();
+            });
+
+            const results = await Promise.all(uploadPromises);
+
+            const uploadedAssets = results.map((result) => ({
+                public_id: result.public_id,
+                secure_url: result.secure_url,
+                resource_type: result.resource_type ?? "image",
+                format: result.format ?? "",
+                alt_text: "",
+            }));
+
+            newAssets.push(...uploadedAssets);
 
             await questsService.updateQuest(questId!, {
                 media: { cloudinary_assets: newAssets },
@@ -200,7 +208,7 @@ export function QuestDetailPage() {
             queryClient.invalidateQueries({ queryKey: ["quest-detail", questId] });
             toast.success(`${files.length} file(s) uploaded`);
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Upload failed");
+            toast.error(err instanceof Error ? err.message : "An upload failed. Please try again.");
         } finally {
             setUploadingMedia(false);
             if (fileInputRef.current) fileInputRef.current.value = "";
@@ -295,135 +303,68 @@ export function QuestDetailPage() {
                 </div>
             </div>
 
-            {/* Overview Grid (Stat Cards) */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-
-                {/* Editable Price */}
-                {editingField === "price" ? (
-                    <div className="bg-white rounded-2xl border border-violet-300 shadow-sm p-4 text-center ring-2 ring-violet-200">
-                        <div className="flex items-center justify-center mb-2"><DollarSign className="w-4 h-4 text-emerald-500" /></div>
-                        <input
-                            type="number"
-                            min={0}
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            className="w-full text-center text-lg font-bold text-neutral-900 bg-neutral-50 rounded-lg border border-neutral-200 py-1 focus:outline-none focus:ring-2 focus:ring-violet-200"
-                            autoFocus
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter") saveQuestField("price", Number(editValue));
-                                if (e.key === "Escape") cancelEdit();
-                            }}
-                        />
-                        <div className="flex items-center justify-center gap-1 mt-2">
-                            <button onClick={() => saveQuestField("price", Number(editValue))} className="p-1 rounded-md hover:bg-emerald-50 text-emerald-600"><Check className="w-3.5 h-3.5" /></button>
-                            <button onClick={cancelEdit} className="p-1 rounded-md hover:bg-red-50 text-red-500"><X className="w-3.5 h-3.5" /></button>
-                        </div>
-                    </div>
-                ) : (
-                    <button
-                        onClick={() => canEdit && startEdit("price", quest.price)}
-                        className={`bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 text-center group transition-all ${canEdit ? "hover:border-violet-300 hover:shadow-md cursor-pointer" : ""}`}
-                    >
-                        <div className="flex items-center justify-center mb-2">
-                            <DollarSign className="w-4 h-4 text-emerald-500" />
-                            {canEdit && <Pencil className="w-3 h-3 text-neutral-300 group-hover:text-violet-500 ml-1 transition-colors" />}
-                        </div>
-                        <div className="text-xl font-bold text-neutral-900">{quest.price > 0 ? `₹${quest.price.toLocaleString("en-IN")}` : "Free"}</div>
-                        <div className="text-[11px] text-neutral-500 uppercase tracking-wider mt-1">Price</div>
-                    </button>
-                )}
-
-                {/* Editable Duration */}
-                {editingField === "metadata-duration" ? (
-                    <div className="bg-white rounded-2xl border border-violet-300 shadow-sm p-4 text-center ring-2 ring-violet-200">
-                        <div className="flex items-center justify-center mb-2"><Clock className="w-4 h-4 text-blue-500" /></div>
-                        <input
-                            type="number"
-                            min={1}
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            className="w-full text-center text-lg font-bold text-neutral-900 bg-neutral-50 rounded-lg border border-neutral-200 py-1 focus:outline-none focus:ring-2 focus:ring-violet-200"
-                            autoFocus
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter") saveMetadataField("duration_minutes", Number(editValue));
-                                if (e.key === "Escape") cancelEdit();
-                            }}
-                        />
-                        <div className="text-[10px] text-neutral-400 mt-1">minutes</div>
-                        <div className="flex items-center justify-center gap-1 mt-1">
-                            <button onClick={() => saveMetadataField("duration_minutes", Number(editValue))} className="p-1 rounded-md hover:bg-emerald-50 text-emerald-600"><Check className="w-3.5 h-3.5" /></button>
-                            <button onClick={cancelEdit} className="p-1 rounded-md hover:bg-red-50 text-red-500"><X className="w-3.5 h-3.5" /></button>
-                        </div>
-                    </div>
-                ) : (
-                    <button
-                        onClick={() => canEdit && startEdit("metadata-duration", metadata?.duration_minutes ?? 0)}
-                        className={`bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 text-center group transition-all ${canEdit ? "hover:border-violet-300 hover:shadow-md cursor-pointer" : ""}`}
-                    >
-                        <div className="flex items-center justify-center mb-2">
-                            <Clock className="w-4 h-4 text-blue-500" />
-                            {canEdit && <Pencil className="w-3 h-3 text-neutral-300 group-hover:text-violet-500 ml-1 transition-colors" />}
-                        </div>
-                        <div className="text-xl font-bold text-neutral-900">{formatDuration(metadata?.duration_minutes)}</div>
-                        <div className="text-[11px] text-neutral-500 uppercase tracking-wider mt-1">Duration</div>
-                    </button>
-                )}
-
-                {/* Editable Difficulty */}
-                {editingField === "metadata-difficulty" ? (
-                    <div className="bg-white rounded-2xl border border-violet-300 shadow-sm p-4 text-center ring-2 ring-violet-200">
-                        <div className="flex items-center justify-center mb-2"><Star className="w-4 h-4 text-amber-500" /></div>
-                        <select
-                            value={editValue}
-                            onChange={(e) => { setEditValue(e.target.value); saveMetadataField("difficulty", e.target.value); }}
-                            className="w-full text-center text-sm font-bold text-neutral-900 bg-neutral-50 rounded-lg border border-neutral-200 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-200 cursor-pointer"
-                            autoFocus
-                        >
-                            {DIFFICULTY_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
-                        </select>
-                        <button onClick={cancelEdit} className="p-1 rounded-md hover:bg-red-50 text-red-500 mt-1"><X className="w-3.5 h-3.5" /></button>
-                    </div>
-                ) : (
-                    <button
-                        onClick={() => canEdit && startEdit("metadata-difficulty", metadata?.difficulty ?? "Easy")}
-                        className={`bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 text-center group transition-all ${canEdit ? "hover:border-violet-300 hover:shadow-md cursor-pointer" : ""}`}
-                    >
-                        <div className="flex items-center justify-center mb-2">
-                            <Star className="w-4 h-4 text-amber-500" />
-                            {canEdit && <Pencil className="w-3 h-3 text-neutral-300 group-hover:text-violet-500 ml-1 transition-colors" />}
-                        </div>
-                        <div className="text-xl font-bold text-neutral-900">{metadata?.difficulty ?? "—"}</div>
-                        <div className="text-[11px] text-neutral-500 uppercase tracking-wider mt-1">Difficulty</div>
-                    </button>
-                )}
-
-                {/* Editable Theme */}
-                {editingField === "metadata-theme" ? (
-                    <div className="bg-white rounded-2xl border border-violet-300 shadow-sm p-4 text-center ring-2 ring-violet-200">
-                        <div className="flex items-center justify-center mb-2"><Tag className="w-4 h-4 text-violet-500" /></div>
-                        <select
-                            value={editValue}
-                            onChange={(e) => { setEditValue(e.target.value); saveMetadataField("theme", e.target.value); }}
-                            className="w-full text-center text-sm font-bold text-neutral-900 bg-neutral-50 rounded-lg border border-neutral-200 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-200 cursor-pointer"
-                            autoFocus
-                        >
-                            {THEME_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                        <button onClick={cancelEdit} className="p-1 rounded-md hover:bg-red-50 text-red-500 mt-1"><X className="w-3.5 h-3.5" /></button>
-                    </div>
-                ) : (
-                    <button
-                        onClick={() => canEdit && startEdit("metadata-theme", metadata?.theme ?? "Adventure")}
-                        className={`bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 text-center group transition-all ${canEdit ? "hover:border-violet-300 hover:shadow-md cursor-pointer" : ""}`}
-                    >
-                        <div className="flex items-center justify-center mb-2">
-                            <Tag className="w-4 h-4 text-violet-500" />
-                            {canEdit && <Pencil className="w-3 h-3 text-neutral-300 group-hover:text-violet-500 ml-1 transition-colors" />}
-                        </div>
-                        <div className="text-xl font-bold text-neutral-900">{metadata?.theme ?? "—"}</div>
-                        <div className="text-[11px] text-neutral-500 uppercase tracking-wider mt-1">Theme</div>
-                    </button>
-                )}
+                <EditableStatCard
+                    icon={<DollarSign className="w-4 h-4 text-emerald-500" />}
+                    label="Price"
+                    displayValue={quest.price > 0 ? `₹${quest.price.toLocaleString("en-IN")}` : "Free"}
+                    fieldKey="price"
+                    editingField={editingField}
+                    editValue={editValue}
+                    canEdit={canEdit}
+                    onStartEdit={() => startEdit("price", quest.price)}
+                    onChangeValue={setEditValue}
+                    onSave={() => saveQuestField("price", Number(editValue))}
+                    onCancel={cancelEdit}
+                    inputType="number"
+                    inputMin={0}
+                />
+                <EditableStatCard
+                    icon={<Clock className="w-4 h-4 text-blue-500" />}
+                    label="Duration"
+                    displayValue={formatDuration(metadata?.duration_minutes)}
+                    fieldKey="metadata-duration"
+                    editingField={editingField}
+                    editValue={editValue}
+                    canEdit={canEdit}
+                    onStartEdit={() => startEdit("metadata-duration", metadata?.duration_minutes ?? 0)}
+                    onChangeValue={setEditValue}
+                    onSave={() => saveMetadataField("duration_minutes", Number(editValue))}
+                    onCancel={cancelEdit}
+                    inputType="number"
+                    inputMin={1}
+                    subtitle="minutes"
+                />
+                <EditableStatCard
+                    icon={<Star className="w-4 h-4 text-amber-500" />}
+                    label="Difficulty"
+                    displayValue={metadata?.difficulty ?? "—"}
+                    fieldKey="metadata-difficulty"
+                    editingField={editingField}
+                    editValue={editValue}
+                    canEdit={canEdit}
+                    onStartEdit={() => startEdit("metadata-difficulty", metadata?.difficulty ?? "Easy")}
+                    onChangeValue={setEditValue}
+                    onSave={(v: string) => saveMetadataField("difficulty", v)}
+                    onCancel={cancelEdit}
+                    inputType="select"
+                    selectOptions={DIFFICULTY_OPTIONS}
+                />
+                <EditableStatCard
+                    icon={<Tag className="w-4 h-4 text-violet-500" />}
+                    label="Theme"
+                    displayValue={metadata?.theme ?? "—"}
+                    fieldKey="metadata-theme"
+                    editingField={editingField}
+                    editValue={editValue}
+                    canEdit={canEdit}
+                    onStartEdit={() => startEdit("metadata-theme", metadata?.theme ?? "Adventure")}
+                    onChangeValue={setEditValue}
+                    onSave={(v: string) => saveMetadataField("theme", v)}
+                    onCancel={cancelEdit}
+                    inputType="select"
+                    selectOptions={THEME_OPTIONS}
+                />
             </div>
 
             {/* Status Management */}
@@ -954,6 +895,86 @@ function Section({ title, icon, children }: { title: string; icon?: React.ReactN
 function Label({ children }: { children: React.ReactNode }) {
     return <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">{children}</span>;
 }
+
+function EditableStatCard({
+    icon, label, displayValue, fieldKey, editingField, editValue,
+    canEdit, onStartEdit, onChangeValue, onSave, onCancel,
+    inputType, inputMin, subtitle, selectOptions,
+}: {
+    icon: React.ReactNode;
+    label: string;
+    displayValue: string | number;
+    fieldKey: string;
+    editingField: string | null;
+    editValue: string;
+    canEdit: boolean;
+    onStartEdit: () => void;
+    onChangeValue: (v: string) => void;
+    onSave: (v: string) => void;
+    onCancel: () => void;
+    inputType: "number" | "select";
+    inputMin?: number;
+    subtitle?: string;
+    selectOptions?: string[];
+}) {
+    const isEditing = editingField === fieldKey;
+
+    if (isEditing) {
+        return (
+            <div className="bg-white rounded-2xl border border-violet-300 shadow-sm p-4 text-center ring-2 ring-violet-200">
+                <div className="flex items-center justify-center mb-2">{icon}</div>
+                {inputType === "select" && selectOptions ? (
+                    <>
+                        <select
+                            value={editValue}
+                            onChange={(e) => { onChangeValue(e.target.value); onSave(e.target.value); }}
+                            className="w-full text-center text-sm font-bold text-neutral-900 bg-neutral-50 rounded-lg border border-neutral-200 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-200 cursor-pointer"
+                            autoFocus
+                        >
+                            {selectOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                        </select>
+                        <button onClick={onCancel} className="p-1 rounded-md hover:bg-red-50 text-red-500 mt-1"><X className="w-3.5 h-3.5" /></button>
+                    </>
+                ) : (
+                    <>
+                        <input
+                            type="number"
+                            min={inputMin}
+                            value={editValue}
+                            onChange={(e) => onChangeValue(e.target.value)}
+                            className="w-full text-center text-lg font-bold text-neutral-900 bg-neutral-50 rounded-lg border border-neutral-200 py-1 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                            autoFocus
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") onSave(editValue);
+                                if (e.key === "Escape") onCancel();
+                            }}
+                        />
+                        {subtitle && <div className="text-[10px] text-neutral-400 mt-1">{subtitle}</div>}
+                        <div className="flex items-center justify-center gap-1 mt-1">
+                            <button onClick={() => onSave(editValue)} className="p-1 rounded-md hover:bg-emerald-50 text-emerald-600"><Check className="w-3.5 h-3.5" /></button>
+                            <button onClick={onCancel} className="p-1 rounded-md hover:bg-red-50 text-red-500"><X className="w-3.5 h-3.5" /></button>
+                        </div>
+                    </>
+                )}
+            </div>
+        );
+    }
+
+    return (
+        <button
+            onClick={() => canEdit && onStartEdit()}
+            className={`bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 text-center group transition-all ${canEdit ? "hover:border-violet-300 hover:shadow-md cursor-pointer" : ""}`}
+        >
+            <div className="flex items-center justify-center mb-2">
+                {icon}
+                {canEdit && <Pencil className="w-3 h-3 text-neutral-300 group-hover:text-violet-500 ml-1 transition-colors" />}
+            </div>
+            <div className="text-xl font-bold text-neutral-900">{displayValue}</div>
+            <div className="text-[11px] text-neutral-500 uppercase tracking-wider mt-1">{label}</div>
+        </button>
+    );
+}
+
 
 function InfoRow({ icon, label, value }: { icon?: React.ReactNode; label: string; value: React.ReactNode }) {
     return (
