@@ -94,4 +94,12 @@ export const questsService = {
             `${API_ENDPOINTS.QUESTS.BY_ID(questId)}${query}`
         );
     },
+
+    /** Update a quest step (title, description, etc.) */
+    updateStep: async (
+        stepId: string,
+        data: Record<string, unknown>
+    ): Promise<void> => {
+        await api.put(API_ENDPOINTS.QUESTS.STEP_BY_ID(stepId), data);
+    },
 };

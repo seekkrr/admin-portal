@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useCallback, useRef, type ChangeEvent } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     ArrowLeft, RefreshCw, AlertTriangle,
     Clock, MapPin, Eye, Tag, Star, Layers,
     Compass, Hash, Lightbulb, Trophy,
     DollarSign, Trash2, Image as ImageIcon, UserCircle,
+    Pencil, Check, X, Upload, Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@store/auth.store";
@@ -14,11 +15,14 @@ import { questsService } from "../services/quests.service";
 import { formatDuration, isValidObjectId } from "../utils/formatters";
 import { ConfirmModal } from "@/features/users/components/ConfirmModal";
 import { Badge } from "@/features/users/components/Badge";
-import type { QuestStatus } from "@/types";
+import { QuestRouteMap } from "../components/QuestRouteMap";
+import { config } from "@/config/env";
+import type { QuestStatus, CloudinaryAsset } from "@/types";
 
 // ---- Constants ----
 const ALLOWED_ROLES = ["admin", "super_admin", "moderator"];
 const CAN_DELETE_ROLES = ["admin", "super_admin"];
+const CAN_EDIT_ROLES = ["admin", "super_admin", "moderator"];
 
 // ---- Status Styles ----
 const questStatusConfig: Record<string, { label: string; dot: string; bg: string; active: string }> = {
@@ -27,8 +31,6 @@ const questStatusConfig: Record<string, { label: string; dot: string; bg: string
     Paused: { label: "Paused", dot: "bg-amber-500", bg: "bg-amber-50 text-amber-700 border-amber-200", active: "bg-amber-500 text-white border-amber-500" },
     Archived: { label: "Archived", dot: "bg-red-500", bg: "bg-red-50 text-red-700 border-red-200", active: "bg-red-600 text-white border-red-600" },
 };
-
-// formatDuration and isValidObjectId imported from ../utils/formatters
 
 // ---- Confirm action type ----
 type ConfirmAction =
@@ -44,11 +46,18 @@ export function QuestDetailPage() {
 
     const hasAccess = !!currentUser && ALLOWED_ROLES.includes(currentUser.role);
     const canDelete = !!currentUser && CAN_DELETE_ROLES.includes(currentUser.role);
+    const canEdit = !!currentUser && CAN_EDIT_ROLES.includes(currentUser.role);
     const validQuestId = isValidObjectId(questId);
 
     const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
     const [hardDelete, setHardDelete] = useState(false);
     const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
+
+    // Inline editing state
+    const [editingField, setEditingField] = useState<string | null>(null);
+    const [editValue, setEditValue] = useState<string>("");
+    const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+    const [uploadingMedia, setUploadingMedia] = useState(false);
 
     // Reset hard delete on modal close
     useEffect(() => { if (!confirmAction) setHardDelete(false); }, [confirmAction]);
@@ -82,6 +91,27 @@ export function QuestDetailPage() {
         onError: (err: Error) => { toast.error(err.message); setConfirmAction(null); },
     });
 
+    const questUpdateMutation = useMutation({
+        mutationFn: (payload: Record<string, unknown>) => questsService.updateQuest(questId!, payload),
+        onSuccess: () => {
+            toast.success("Quest updated");
+            queryClient.invalidateQueries({ queryKey: ["quest-detail", questId] });
+            setEditingField(null);
+        },
+        onError: (err: Error) => toast.error(err.message),
+    });
+
+    const stepUpdateMutation = useMutation({
+        mutationFn: ({ stepId, data: payload }: { stepId: string; data: Record<string, unknown> }) =>
+            questsService.updateStep(stepId, payload),
+        onSuccess: () => {
+            toast.success("Step updated");
+            queryClient.invalidateQueries({ queryKey: ["quest-detail", questId] });
+            setEditingField(null);
+        },
+        onError: (err: Error) => toast.error(err.message),
+    });
+
     // ---- Confirm handler ----
     const executeConfirmedAction = useCallback(() => {
         if (!confirmAction) return;
@@ -102,6 +132,91 @@ export function QuestDetailPage() {
             else next.add(stepId);
             return next;
         });
+    };
+
+    // ---- Inline edit helpers ----
+    const startEdit = (field: string, currentValue: string | number) => {
+        if (!canEdit) return;
+        setEditingField(field);
+        setEditValue(String(currentValue));
+    };
+
+    const cancelEdit = () => {
+        setEditingField(null);
+        setEditValue("");
+    };
+
+    const saveQuestField = (field: string, value: string | number) => {
+        questUpdateMutation.mutate({ [field]: value });
+    };
+
+    const saveMetadataField = (field: string, value: unknown) => {
+        questUpdateMutation.mutate({ metadata: { [field]: value } });
+    };
+
+    const saveStepField = (stepId: string, field: string, value: string) => {
+        stepUpdateMutation.mutate({ stepId, data: { [field]: value } });
+    };
+
+    // ---- Cloudinary upload ----
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleMediaUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0 || !data) return;
+
+        setUploadingMedia(true);
+        const currentAssets = data.media?.cloudinary_assets ?? [];
+        const newAssets: CloudinaryAsset[] = [...currentAssets];
+
+        try {
+            for (const file of Array.from(files)) {
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("upload_preset", config.cloudinary.uploadPreset);
+
+                const res = await fetch(config.cloudinary.uploadUrl, {
+                    method: "POST",
+                    body: formData,
+                });
+                if (!res.ok) throw new Error("Upload failed");
+                const result = await res.json();
+                newAssets.push({
+                    public_id: result.public_id,
+                    secure_url: result.secure_url,
+                    resource_type: result.resource_type ?? "image",
+                    format: result.format ?? "",
+                    alt_text: "",
+                });
+            }
+
+            await questsService.updateQuest(questId!, {
+                media: { cloudinary_assets: newAssets },
+            });
+            queryClient.invalidateQueries({ queryKey: ["quest-detail", questId] });
+            toast.success(`${files.length} file(s) uploaded`);
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Upload failed");
+        } finally {
+            setUploadingMedia(false);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+        }
+    };
+
+    const handleMediaRemove = async (publicId: string) => {
+        if (!data?.media) return;
+        const updated = data.media.cloudinary_assets.filter(
+            (a) => a.public_id !== publicId
+        );
+        try {
+            await questsService.updateQuest(questId!, {
+                media: { cloudinary_assets: updated },
+            });
+            queryClient.invalidateQueries({ queryKey: ["quest-detail", questId] });
+            toast.success("Media removed");
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Remove failed");
+        }
     };
 
     // ---- Guards ----
@@ -157,7 +272,42 @@ export function QuestDetailPage() {
             {/* Overview Grid (Stat Cards) */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 <StatCard icon={<Eye className="w-4 h-4 text-indigo-500" />} label="Views" value={(quest.view_count ?? 0).toLocaleString()} />
-                <StatCard icon={<DollarSign className="w-4 h-4 text-emerald-500" />} label="Price" value={quest.price > 0 ? `₹${quest.price.toLocaleString("en-IN")}` : "Free"} />
+
+                {/* Editable Price */}
+                {editingField === "price" ? (
+                    <div className="bg-white rounded-2xl border border-violet-300 shadow-sm p-4 text-center ring-2 ring-violet-200">
+                        <div className="flex items-center justify-center mb-2"><DollarSign className="w-4 h-4 text-emerald-500" /></div>
+                        <input
+                            type="number"
+                            min={0}
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            className="w-full text-center text-lg font-bold text-neutral-900 bg-neutral-50 rounded-lg border border-neutral-200 py-1 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                            autoFocus
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") saveQuestField("price", Number(editValue));
+                                if (e.key === "Escape") cancelEdit();
+                            }}
+                        />
+                        <div className="flex items-center justify-center gap-1 mt-2">
+                            <button onClick={() => saveQuestField("price", Number(editValue))} className="p-1 rounded-md hover:bg-emerald-50 text-emerald-600"><Check className="w-3.5 h-3.5" /></button>
+                            <button onClick={cancelEdit} className="p-1 rounded-md hover:bg-red-50 text-red-500"><X className="w-3.5 h-3.5" /></button>
+                        </div>
+                    </div>
+                ) : (
+                    <button
+                        onClick={() => canEdit && startEdit("price", quest.price)}
+                        className={`bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 text-center group transition-all ${canEdit ? "hover:border-violet-300 hover:shadow-md cursor-pointer" : ""}`}
+                    >
+                        <div className="flex items-center justify-center mb-2">
+                            <DollarSign className="w-4 h-4 text-emerald-500" />
+                            {canEdit && <Pencil className="w-3 h-3 text-neutral-300 group-hover:text-violet-500 ml-1 transition-colors" />}
+                        </div>
+                        <div className="text-xl font-bold text-neutral-900">{quest.price > 0 ? `₹${quest.price.toLocaleString("en-IN")}` : "Free"}</div>
+                        <div className="text-[11px] text-neutral-500 uppercase tracking-wider mt-1">Price</div>
+                    </button>
+                )}
+
                 <StatCard icon={<Clock className="w-4 h-4 text-blue-500" />} label="Duration" value={formatDuration(metadata?.duration_minutes)} />
                 <StatCard icon={<Layers className="w-4 h-4 text-teal-500" />} label="Steps" value={steps.length} />
                 <StatCard icon={<Star className="w-4 h-4 text-amber-500" />} label="Difficulty" value={metadata?.difficulty ?? "—"} />
@@ -189,15 +339,49 @@ export function QuestDetailPage() {
                 {/* Metadata */}
                 <Section title="Metadata" icon={<Hash className="w-4 h-4" />}>
                     <div className="space-y-4">
-                        {/* Description */}
-                        {metadata?.description && metadata.description.length > 0 && (
-                            <div>
+                        {/* Editable Description */}
+                        <div>
+                            <div className="flex items-center justify-between mb-1">
                                 <Label>Description</Label>
-                                <div className="text-sm text-neutral-700 leading-relaxed space-y-2 mt-1">
-                                    {metadata.description.map((para, i) => <p key={i}>{para}</p>)}
-                                </div>
+                                {canEdit && editingField !== "metadata-description" && (
+                                    <button
+                                        onClick={() => startEdit("metadata-description", (metadata?.description ?? []).join("\n\n"))}
+                                        className="text-neutral-400 hover:text-violet-600 transition-colors"
+                                    >
+                                        <Pencil className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
                             </div>
-                        )}
+                            {editingField === "metadata-description" ? (
+                                <div className="space-y-2">
+                                    <textarea
+                                        value={editValue}
+                                        onChange={(e) => setEditValue(e.target.value)}
+                                        rows={4}
+                                        className="w-full text-sm text-neutral-700 bg-neutral-50 rounded-lg border border-neutral-200 p-3 focus:outline-none focus:ring-2 focus:ring-violet-200 resize-y"
+                                        autoFocus
+                                        placeholder="Separate paragraphs with blank lines"
+                                    />
+                                    <div className="flex gap-1">
+                                        <button
+                                            onClick={() => saveMetadataField("description", editValue.split(/\n\s*\n/).filter(Boolean))}
+                                            className="px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium hover:bg-violet-700 transition-colors flex items-center gap-1"
+                                        >
+                                            <Check className="w-3 h-3" /> Save
+                                        </button>
+                                        <button onClick={cancelEdit} className="px-3 py-1.5 rounded-lg border border-neutral-200 text-neutral-600 text-xs font-medium hover:bg-neutral-50 transition-colors flex items-center gap-1">
+                                            <X className="w-3 h-3" /> Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-sm text-neutral-700 leading-relaxed space-y-2 mt-1">
+                                    {metadata?.description && metadata.description.length > 0
+                                        ? metadata.description.map((para, i) => <p key={i}>{para}</p>)
+                                        : <p className="text-neutral-400 italic">No description</p>}
+                                </div>
+                            )}
+                        </div>
 
                         {/* Keywords */}
                         {metadata?.keywords && metadata.keywords.length > 0 && (
@@ -211,30 +395,46 @@ export function QuestDetailPage() {
                             </div>
                         )}
 
-                        {/* Points & Hints */}
+                        {/* Editable Points & Hints */}
                         <div className="grid grid-cols-2 gap-3">
-                            <InfoRow icon={<Trophy className="w-3.5 h-3.5 text-amber-500" />} label="Max Points" value={metadata?.max_points ?? "—"} />
-                            <InfoRow icon={<Lightbulb className="w-3.5 h-3.5 text-yellow-500" />} label="Hints Allowed" value={metadata?.hints_allowed ?? "—"} />
+                            <EditableInfoRow
+                                icon={<Trophy className="w-3.5 h-3.5 text-amber-500" />}
+                                label="Max Points"
+                                value={metadata?.max_points ?? "—"}
+                                fieldKey="metadata-max_points"
+                                editingField={editingField}
+                                editValue={editValue}
+                                canEdit={canEdit}
+                                onStartEdit={() => startEdit("metadata-max_points", metadata?.max_points ?? 0)}
+                                onChangeValue={setEditValue}
+                                onSave={() => saveMetadataField("max_points", Number(editValue))}
+                                onCancel={cancelEdit}
+                                inputType="number"
+                            />
+                            <EditableInfoRow
+                                icon={<Lightbulb className="w-3.5 h-3.5 text-yellow-500" />}
+                                label="Max Hints"
+                                value={metadata?.hints_allowed ?? "—"}
+                                fieldKey="metadata-hints_allowed"
+                                editingField={editingField}
+                                editValue={editValue}
+                                canEdit={canEdit}
+                                onStartEdit={() => startEdit("metadata-hints_allowed", metadata?.hints_allowed ?? 0)}
+                                onChangeValue={setEditValue}
+                                onSave={() => saveMetadataField("hints_allowed", Number(editValue))}
+                                onCancel={cancelEdit}
+                                inputType="number"
+                            />
                         </div>
                     </div>
                 </Section>
 
-                {/* Location */}
+                {/* Location + Map */}
                 <Section title="Location" icon={<MapPin className="w-4 h-4" />}>
                     {location ? (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             <InfoRow label="Region" value={location.region} />
-                            <InfoRow
-                                label="Start"
-                                value={`${location.start_location.coordinates[1].toFixed(4)}, ${location.start_location.coordinates[0].toFixed(4)}`}
-                            />
-                            <InfoRow
-                                label="End"
-                                value={`${location.end_location.coordinates[1].toFixed(4)}, ${location.end_location.coordinates[0].toFixed(4)}`}
-                            />
-                            <InfoRow label="Waypoints" value={location.route_waypoints?.length ?? 0} />
-                            <InfoRow label="Map Style" value={location.map_data?.map_style ?? "—"} />
-                            <InfoRow label="Zoom Level" value={location.map_data?.zoom_level ?? "—"} />
+                            <QuestRouteMap location={location} steps={steps} height="340px" />
                         </div>
                     ) : (
                         <p className="text-sm text-neutral-400 italic">No location data</p>
@@ -257,18 +457,97 @@ export function QuestDetailPage() {
                                     <span className="w-7 h-7 rounded-full bg-violet-100 text-violet-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
                                         {step.order}
                                     </span>
-                                    <span className="font-medium text-neutral-800 text-sm flex-1">{step.title}</span>
-                                    <span className={`text-neutral-400 transition-transform ${expandedSteps.has(step._id) ? "rotate-90" : ""}`}>
-                                        ▸
-                                    </span>
+
+                                    {/* Inline editable title */}
+                                    {editingField === `step-title-${step._id}` ? (
+                                        <span className="flex-1" onClick={(e) => e.stopPropagation()}>
+                                            <input
+                                                value={editValue}
+                                                onChange={(e) => setEditValue(e.target.value)}
+                                                className="w-full font-medium text-neutral-800 text-sm bg-neutral-50 rounded-lg border border-neutral-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                                                autoFocus
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter") saveStepField(step._id, "title", editValue);
+                                                    if (e.key === "Escape") cancelEdit();
+                                                }}
+                                            />
+                                        </span>
+                                    ) : (
+                                        <span className="font-medium text-neutral-800 text-sm flex-1 group/title flex items-center gap-1.5">
+                                            {step.title}
+                                            {canEdit && (
+                                                <Pencil
+                                                    className="w-3 h-3 text-neutral-300 group-hover/title:text-violet-500 transition-colors cursor-pointer"
+                                                    onClick={(e) => { e.stopPropagation(); startEdit(`step-title-${step._id}`, step.title); }}
+                                                />
+                                            )}
+                                        </span>
+                                    )}
+
+                                    {editingField === `step-title-${step._id}` ? (
+                                        <span className="flex gap-0.5" onClick={(e) => e.stopPropagation()}>
+                                            <button onClick={() => saveStepField(step._id, "title", editValue)} className="p-1 rounded-md hover:bg-emerald-50 text-emerald-600"><Check className="w-3.5 h-3.5" /></button>
+                                            <button onClick={cancelEdit} className="p-1 rounded-md hover:bg-red-50 text-red-500"><X className="w-3.5 h-3.5" /></button>
+                                        </span>
+                                    ) : (
+                                        <span className={`text-neutral-400 transition-transform ${expandedSteps.has(step._id) ? "rotate-90" : ""}`}>
+                                            ▸
+                                        </span>
+                                    )}
                                 </button>
+
                                 {expandedSteps.has(step._id) && (
-                                    <div className="px-4 pb-3 pl-14 text-sm text-neutral-600 leading-relaxed animate-fade-in">
-                                        {step.description}
+                                    <div className="px-4 pb-4 pl-14 animate-fade-in space-y-3">
+                                        {/* Editable description */}
+                                        {editingField === `step-desc-${step._id}` ? (
+                                            <div className="space-y-2">
+                                                <textarea
+                                                    value={editValue}
+                                                    onChange={(e) => setEditValue(e.target.value)}
+                                                    rows={3}
+                                                    className="w-full text-sm text-neutral-700 bg-neutral-50 rounded-lg border border-neutral-200 p-3 focus:outline-none focus:ring-2 focus:ring-violet-200 resize-y"
+                                                    autoFocus
+                                                />
+                                                <div className="flex gap-1">
+                                                    <button
+                                                        onClick={() => saveStepField(step._id, "description", editValue)}
+                                                        className="px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium hover:bg-violet-700 transition-colors flex items-center gap-1"
+                                                    >
+                                                        <Check className="w-3 h-3" /> Save
+                                                    </button>
+                                                    <button onClick={cancelEdit} className="px-3 py-1.5 rounded-lg border border-neutral-200 text-neutral-600 text-xs font-medium hover:bg-neutral-50 transition-colors flex items-center gap-1">
+                                                        <X className="w-3 h-3" /> Cancel
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="group/desc flex items-start gap-2">
+                                                <p className="text-sm text-neutral-600 leading-relaxed flex-1">{step.description}</p>
+                                                {canEdit && (
+                                                    <button
+                                                        onClick={() => startEdit(`step-desc-${step._id}`, step.description)}
+                                                        className="text-neutral-300 hover:text-violet-500 transition-colors flex-shrink-0"
+                                                    >
+                                                        <Pencil className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Step images (clickable to enlarge) */}
                                         {step.cloudinary_assets && step.cloudinary_assets.length > 0 && (
-                                            <div className="flex gap-2 mt-2">
+                                            <div className="flex gap-2 flex-wrap">
                                                 {step.cloudinary_assets.map((asset, i) => (
-                                                    <img key={i} src={asset.secure_url} alt="" className="w-12 h-12 rounded-lg object-cover border border-neutral-200" />
+                                                    <button
+                                                        key={i}
+                                                        onClick={() => setLightboxUrl(asset.secure_url)}
+                                                        className="relative group/img overflow-hidden rounded-lg border border-neutral-200 w-16 h-16 flex-shrink-0 hover:shadow-md transition-shadow"
+                                                    >
+                                                        <img src={asset.secure_url} alt="" className="w-full h-full object-cover group-hover/img:scale-110 transition-transform duration-200" />
+                                                        <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/20 transition-colors flex items-center justify-center">
+                                                            <Eye className="w-4 h-4 text-white opacity-0 group-hover/img:opacity-100 transition-opacity" />
+                                                        </div>
+                                                    </button>
                                                 ))}
                                             </div>
                                         )}
@@ -280,34 +559,69 @@ export function QuestDetailPage() {
                 )}
             </Section>
 
-            {/* Media Gallery */}
+            {/* Media Gallery with add/remove */}
             <Section title={`Media (${media?.cloudinary_assets.length ?? 0})`} icon={<ImageIcon className="w-4 h-4" />}>
-                {media && media.cloudinary_assets.length > 0 ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                        {media.cloudinary_assets.map((asset) => (
-                            <a
-                                key={asset.public_id}
-                                href={asset.secure_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="group relative rounded-xl overflow-hidden border border-neutral-200 aspect-square"
-                            >
-                                <img
-                                    src={asset.secure_url}
-                                    alt={asset.alt_text || ""}
-                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                />
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-end p-2">
-                                    <span className="text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity truncate">
-                                        {asset.public_id}
-                                    </span>
+                <div className="space-y-4">
+                    {media && media.cloudinary_assets.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                            {media.cloudinary_assets.map((asset) => (
+                                <div
+                                    key={asset.public_id}
+                                    className="group relative rounded-xl overflow-hidden border border-neutral-200 aspect-square"
+                                >
+                                    <button
+                                        onClick={() => setLightboxUrl(asset.secure_url)}
+                                        className="w-full h-full"
+                                    >
+                                        <img
+                                            src={asset.secure_url}
+                                            alt={asset.alt_text || ""}
+                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                        />
+                                    </button>
+                                    {/* Remove button */}
+                                    {canEdit && (
+                                        <button
+                                            onClick={() => handleMediaRemove(asset.public_id)}
+                                            className="absolute top-2 right-2 p-1.5 rounded-lg bg-red-600/90 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700 shadow-lg"
+                                            title="Remove media"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    )}
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors pointer-events-none" />
                                 </div>
-                            </a>
-                        ))}
-                    </div>
-                ) : (
-                    <p className="text-sm text-neutral-400 italic">No media uploaded</p>
-                )}
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-sm text-neutral-400 italic">No media uploaded</p>
+                    )}
+
+                    {/* Upload button */}
+                    {canEdit && (
+                        <div>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={handleMediaUpload}
+                                className="hidden"
+                            />
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={uploadingMedia}
+                                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-neutral-300 text-neutral-600 text-sm font-medium hover:border-violet-400 hover:text-violet-600 hover:bg-violet-50/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {uploadingMedia ? (
+                                    <><RefreshCw className="w-4 h-4 animate-spin" /> Uploading...</>
+                                ) : (
+                                    <><Plus className="w-4 h-4" /> <Upload className="w-4 h-4" /> Add Media</>
+                                )}
+                            </button>
+                        </div>
+                    )}
+                </div>
             </Section>
 
             {/* Creator Info */}
@@ -317,23 +631,21 @@ export function QuestDetailPage() {
                         <InfoRow label="Name" value={`${creator.first_name} ${creator.last_name}`} />
                         <InfoRow label="Role" value={creator.role} />
                         <InfoRow label="Status" value={creator.status} />
-                        <InfoRow label="Creator ID" value={creator._id.slice(-12)} />
+                        <InfoRow
+                            label="Creator ID"
+                            value={
+                                <Link
+                                    to={`/creators/${quest.created_by}`}
+                                    className="text-violet-600 hover:text-violet-800 hover:underline transition-colors"
+                                >
+                                    {creator._id.slice(-12)}
+                                </Link>
+                            }
+                        />
                     </div>
                 ) : (
                     <p className="text-sm text-neutral-400 italic">Creator info unavailable</p>
                 )}
-            </Section>
-
-            {/* Quest Settings */}
-            <Section title="Quest Settings" icon={<Compass className="w-4 h-4" />}>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    <InfoRow label="Booking Enabled" value={quest.booking_enabled ? "Yes" : "No"} />
-                    <InfoRow label="Price" value={quest.price > 0 ? `₹${quest.price.toLocaleString("en-IN")}` : "Free"} />
-                    <InfoRow label="Currency" value={quest.currency ?? "INR"} />
-                    <InfoRow label="Schema Version" value={quest.schema_version} />
-                    <InfoRow label="Quest Version" value={quest.version} />
-                    <InfoRow label="Created" value={new Date(quest.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} />
-                </div>
             </Section>
 
             {/* Danger Zone (admin/super_admin only) */}
@@ -388,6 +700,27 @@ export function QuestDetailPage() {
                 isPending={statusMutation.isPending}
                 theme="warning"
             />
+
+            {/* Lightbox */}
+            {lightboxUrl && (
+                <div
+                    className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in cursor-zoom-out"
+                    onClick={() => setLightboxUrl(null)}
+                >
+                    <button
+                        onClick={() => setLightboxUrl(null)}
+                        className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors z-10"
+                    >
+                        <X className="w-6 h-6" />
+                    </button>
+                    <img
+                        src={lightboxUrl}
+                        alt=""
+                        className="max-w-full max-h-[90vh] rounded-xl shadow-2xl object-contain cursor-default"
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                </div>
+            )}
         </div>
     );
 }
@@ -427,6 +760,76 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
             <div className="flex items-center justify-center mb-2">{icon}</div>
             <div className="text-xl font-bold text-neutral-900">{value}</div>
             <div className="text-[11px] text-neutral-500 uppercase tracking-wider mt-1">{label}</div>
+        </div>
+    );
+}
+
+function EditableInfoRow({
+    icon,
+    label,
+    value,
+    fieldKey,
+    editingField,
+    editValue,
+    canEdit,
+    onStartEdit,
+    onChangeValue,
+    onSave,
+    onCancel,
+    inputType = "text",
+}: {
+    icon?: React.ReactNode;
+    label: string;
+    value: React.ReactNode;
+    fieldKey: string;
+    editingField: string | null;
+    editValue: string;
+    canEdit: boolean;
+    onStartEdit: () => void;
+    onChangeValue: (v: string) => void;
+    onSave: () => void;
+    onCancel: () => void;
+    inputType?: string;
+}) {
+    if (editingField === fieldKey) {
+        return (
+            <div className="bg-neutral-50 rounded-xl p-3 ring-2 ring-violet-200 space-y-2">
+                <div className="flex items-center gap-2 text-neutral-500 text-sm">
+                    {icon}
+                    <span>{label}</span>
+                </div>
+                <input
+                    type={inputType}
+                    value={editValue}
+                    onChange={(e) => onChangeValue(e.target.value)}
+                    className="w-full text-sm font-medium text-neutral-800 bg-white rounded-lg border border-neutral-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                    autoFocus
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter") onSave();
+                        if (e.key === "Escape") onCancel();
+                    }}
+                />
+                <div className="flex gap-1">
+                    <button onClick={onSave} className="p-1 rounded-md hover:bg-emerald-50 text-emerald-600"><Check className="w-3.5 h-3.5" /></button>
+                    <button onClick={onCancel} className="p-1 rounded-md hover:bg-red-50 text-red-500"><X className="w-3.5 h-3.5" /></button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div
+            className={`bg-neutral-50 rounded-xl p-3 flex items-center justify-between gap-2 group ${canEdit ? "cursor-pointer hover:ring-2 hover:ring-violet-100 transition-all" : ""}`}
+            onClick={canEdit ? onStartEdit : undefined}
+        >
+            <div className="flex items-center gap-2 text-neutral-500 text-sm">
+                {icon}
+                <span>{label}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+                <span className="text-sm font-medium text-neutral-800">{value}</span>
+                {canEdit && <Pencil className="w-3 h-3 text-neutral-300 group-hover:text-violet-500 transition-colors" />}
+            </div>
         </div>
     );
 }
