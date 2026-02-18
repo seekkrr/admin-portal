@@ -9,6 +9,7 @@ export const API_ENDPOINTS = {
         CREATE: "/api/quests",
         BY_ID: (id: string) => `/api/quests/${id}`,
         STEPS: (questId: string) => `/api/quests/${questId}/steps`,
+        STEP_BY_ID: (stepId: string) => `/api/quests/steps/${stepId}`,
     },
     CREATORS: {
         LIST: "/api/core/creators",

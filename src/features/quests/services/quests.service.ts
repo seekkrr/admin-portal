@@ -29,6 +29,7 @@ export interface ListQuestsParams {
     status?: string;
     difficulty?: string;
     theme?: string;
+    region?: string;
     page?: number;
     per_page?: number;
 }
@@ -92,5 +93,13 @@ export const questsService = {
         await api.delete(
             `${API_ENDPOINTS.QUESTS.BY_ID(questId)}${query}`
         );
+    },
+
+    /** Update a quest step (title, description, etc.) */
+    updateStep: async (
+        stepId: string,
+        data: Record<string, unknown>
+    ): Promise<void> => {
+        await api.put(API_ENDPOINTS.QUESTS.STEP_BY_ID(stepId), data);
     },
 };
