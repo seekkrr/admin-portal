@@ -30,5 +30,11 @@ export const API_ENDPOINTS = {
     INTEREST: {
         STATS: "/api/interest/admin/stats",
         EXPORT: "/api/interest/admin/export",
+    },
+    CREATOR_APPLICATIONS: {
+        LIST: "/api/admin/creator-applications",
+        BY_ID: (id: string) => `/api/admin/creator-applications/${id}`,
+        APPROVE: (id: string) => `/api/admin/creator-applications/${id}/approve`,
+        REJECT: (id: string) => `/api/admin/creator-applications/${id}/reject`,
     }
 } as const;
