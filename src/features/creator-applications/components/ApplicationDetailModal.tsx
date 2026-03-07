@@ -169,7 +169,7 @@ export function ApplicationDetailModal({
                         <div className="grid gap-2">
                             {application.social_links?.map((link, idx) => (
                                 <a
-                                    key={link}
+                                    key={idx}
                                     href={link.startsWith('http') ? link : 'https://' + link}
                                     target="_blank"
                                     rel="noopener noreferrer"
