@@ -7,6 +7,7 @@ import { AccessDeniedPage } from "@/features/auth/pages/AccessDeniedPage";
 import { UsersPage } from "@/features/users/pages/UsersPage";
 import { CreatorsPage } from "@/features/creators/pages/CreatorsPage";
 import { CreatorEditPage } from "@/features/creators/pages/CreatorEditPage";
+import { CreatorApplicationsPage } from "@/features/creator-applications/pages/CreatorApplicationsPage";
 import { QuestsPage } from "@/features/quests/pages/QuestsPage";
 import { QuestDetailPage } from "@/features/quests/pages/QuestDetailPage";
 import { StatsPage } from "@/features/stats/pages/StatsPage";
@@ -36,6 +37,7 @@ export const AppRoutes = () => {
                 <Route path="users" element={<UsersPage />} />
                 <Route path="creators" element={<CreatorsPage />} />
                 <Route path="creators/:userId" element={<CreatorEditPage />} />
+                <Route path="creator-applications" element={<CreatorApplicationsPage />} />
                 <Route path="quests" element={<QuestsPage />} />
                 <Route path="quests/:questId" element={<QuestDetailPage />} />
             </Route>

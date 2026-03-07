@@ -35,6 +35,20 @@ export interface Creator {
     updated_at: string;
 }
 
+export interface CreatorApplication {
+    _id: string;
+    name: string;
+    email: string;
+    phone: string | null;
+    social_links: string[];
+    status: "pending" | "approved" | "rejected";
+    admin_id: string | null;
+    applied_at: string;
+    actioned_at: string | null;
+    rejection_reason: string | null;
+    used_for_creator: boolean;
+}
+
 export interface CreatorStats {
     _id: string;
     total_quests: number;
