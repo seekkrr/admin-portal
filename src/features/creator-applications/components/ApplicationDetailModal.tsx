@@ -152,7 +152,7 @@ export function ApplicationDetailModal({
                             <div className="flex justify-between items-center">
                                 <span className="text-neutral-500 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Applied</span>
                                 <span className="font-medium text-neutral-900">
-                                    {new Date(application.applied_at).toLocaleDateString("en-IN", {
+                                    {new Date(application.applied_at).toLocaleString("en-IN", {
                                         day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
                                     })}
                                 </span>
