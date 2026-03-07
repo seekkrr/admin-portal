@@ -170,7 +170,7 @@ export function ApplicationDetailModal({
                             {application.social_links?.map((link, idx) => (
                                 <a
                                     key={idx}
-                                    href={link}
+                                    href={link.startsWith('http') ? link : 'https://' + link}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="flex items-center gap-2 p-3 bg-neutral-50 border border-neutral-200 rounded-xl hover:bg-neutral-100 hover:border-neutral-300 transition-colors group"
