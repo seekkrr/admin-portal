@@ -44,14 +44,14 @@ export function CreatorApplicationsPage() {
 
     // ---- Fetch Applications ----
     const queryParams = useMemo(() => ({
-        status: statusFilter || undefined,
+        status: statusFilter ? statusFilter : undefined,
         page,
         limit: PER_PAGE,
     }), [statusFilter, page]);
 
     const { data, isLoading, error } = useQuery({
         queryKey: ["admin-creator-applications", queryParams],
-        queryFn: () => creatorApplicationsService.listApplications(queryParams as any),
+        queryFn: () => creatorApplicationsService.listApplications(queryParams),
         placeholderData: (prev) => prev,
     });
 
