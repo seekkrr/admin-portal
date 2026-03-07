@@ -102,7 +102,7 @@ export function CreatorApplicationsPage() {
                 <FilterDropdown
                     options={STATUS_OPTIONS}
                     value={statusFilter}
-                    onChange={(v) => { setStatusFilter(v as any); setPage(1); }}
+                    onChange={(v) => { setStatusFilter(v as "pending" | "approved" | "rejected" | ""); setPage(1); }}
                     icon={<Filter className="w-3.5 h-3.5" />}
                     placeholder="Status"
                 />
