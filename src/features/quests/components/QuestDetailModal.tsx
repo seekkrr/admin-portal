@@ -264,7 +264,7 @@ export function QuestDetailModal({
                                     <div>
                                         <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider mb-2">Last Review</h4>
                                         <div className={`rounded-xl border p-3 text-sm space-y-1.5 ${
-                                            questStatusConfig[latestReview.status]?.bg ?? "bg-neutral-50 border-neutral-200"
+                                            questStatusConfig[latestReview.status || ""]?.bg ?? "bg-neutral-50 border-neutral-200"
                                         }`}>
                                             <div className="flex items-center justify-between flex-wrap gap-2">
                                                 <span className={`text-xs font-semibold ${
