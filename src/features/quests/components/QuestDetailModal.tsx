@@ -5,19 +5,23 @@ import {
     X, ExternalLink, RefreshCw,
     Clock, MapPin, Eye, Tag,
     Star, Layers, ChevronRight, Trash2,
-    Send, Pause, Archive, RotateCcw,
-    DollarSign,
+    Send, Pause, Archive,
+    DollarSign, XCircle, AlertCircle,
 } from "lucide-react";
 import { Badge } from "@/features/users/components/Badge";
 import { questsService } from "../services/quests.service";
 import { formatDuration } from "../utils/formatters";
-import type { QuestStatus } from "@/types";
+import type { QuestStatus, ReviewHistoryEntry } from "@/types";
 
 // ---- Status styles ----
 const questStatusConfig: Record<string, { label: string; dot: string; bg: string }> = {
     Draft: { label: "Draft", dot: "bg-neutral-400", bg: "bg-neutral-50 text-neutral-600 border-neutral-200" },
+    'Under Review': { label: "Under Review", dot: "bg-blue-500", bg: "bg-blue-50 text-blue-700 border-blue-200" },
+    'Changes Requested': { label: "Changes Requested", dot: "bg-orange-500", bg: "bg-orange-50 text-orange-700 border-orange-200" },
+    Approved: { label: "Approved", dot: "bg-indigo-500", bg: "bg-indigo-50 text-indigo-700 border-indigo-200" },
     Published: { label: "Published", dot: "bg-emerald-500", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
     Paused: { label: "Paused", dot: "bg-amber-500", bg: "bg-amber-50 text-amber-700 border-amber-200" },
+    Rejected: { label: "Rejected", dot: "bg-rose-500", bg: "bg-rose-50 text-rose-700 border-rose-200" },
     Archived: { label: "Archived", dot: "bg-red-500", bg: "bg-red-50 text-red-700 border-red-200" },
 };
 
@@ -29,6 +33,7 @@ const quickActionConfig: Record<string, {
     icon: React.ReactNode;
     base: string;
     hover: string;
+    isReviewAction?: boolean;
 }> = {
     Published: {
         label: "Publish",
@@ -48,11 +53,17 @@ const quickActionConfig: Record<string, {
         base: "border border-rose-200 bg-rose-50 text-rose-700",
         hover: "hover:bg-rose-100 hover:border-rose-300 hover:shadow-sm",
     },
-    Draft: {
-        label: "Revert to Draft",
-        icon: <RotateCcw className="w-4 h-4" />,
-        base: "border border-neutral-200 bg-neutral-50 text-neutral-600",
-        hover: "hover:bg-neutral-100 hover:border-neutral-300 hover:shadow-sm",
+    Rejected: {
+        label: "Reject",
+        icon: <XCircle className="w-4 h-4" />,
+        base: "border border-rose-200 bg-rose-50 text-rose-700",
+        hover: "hover:bg-rose-100 hover:border-rose-300 hover:shadow-sm",
+    },
+    'Changes Requested': {
+        label: "Request Changes",
+        icon: <AlertCircle className="w-4 h-4" />,
+        base: "border border-orange-200 bg-orange-50 text-orange-700",
+        hover: "hover:bg-orange-100 hover:border-orange-300 hover:shadow-sm",
     },
 };
 
@@ -110,8 +121,27 @@ export function QuestDetailModal({
     const defaultSc = { label: "Draft", dot: "bg-neutral-400", bg: "bg-neutral-50 text-neutral-600 border-neutral-200" };
     const sc = questStatusConfig[questStatus] ?? defaultSc;
 
-    // Status transition buttons
-    const availableStatuses = (Object.keys(questStatusConfig) as QuestStatus[]).filter(s => s !== questStatus);
+    // ---- State machine: valid admin transitions per current quest status ----
+    // Under Review → Publish, Request Changes, Reject
+    // Published    → Pause, Archive
+    // Paused       → Publish, Archive
+    // Rejected     → Publish, Archive
+    // Changes Req. → Publish, Reject, Archive
+    const statusTransitions: Partial<Record<QuestStatus, QuestStatus[]>> = {
+        "Under Review":      ["Published", "Changes Requested", "Rejected"],
+        "Published":         ["Paused", "Archived"],
+        "Paused":            ["Published", "Archived"],
+        "Rejected":          ["Published", "Archived"],
+        "Changes Requested": ["Published", "Rejected", "Archived"],
+        "Archived":          [],
+    };
+    const availableStatuses: QuestStatus[] = (statusTransitions[questStatus] ?? []);
+
+    // Most recent review history entry (for context in the modal body)
+    const reviewHistory = (data?.review_history ?? []) as ReviewHistoryEntry[];
+    const latestReview = reviewHistory.length > 0
+        ? [...reviewHistory].sort((a, b) => new Date(b.reviewed_at).getTime() - new Date(a.reviewed_at).getTime())[0]
+        : null;
 
     return (
         <div
@@ -223,6 +253,33 @@ export function QuestDetailModal({
                                     </div>
                                 </div>
                             )}
+
+                                {/* Latest Review Comment */}
+                                {latestReview && (
+                                    <div>
+                                        <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider mb-2">Last Review</h4>
+                                        <div className={`rounded-xl border p-3 text-sm space-y-1.5 ${
+                                            latestReview.status === "Approved" ? "bg-emerald-50 border-emerald-200" :
+                                            latestReview.status === "Rejected" ? "bg-rose-50 border-rose-200" :
+                                            latestReview.status === "Changes Requested" ? "bg-orange-50 border-orange-200" :
+                                            "bg-neutral-50 border-neutral-200"
+                                        }`}>
+                                            <div className="flex items-center justify-between flex-wrap gap-2">
+                                                <span className={`text-xs font-semibold ${
+                                                    latestReview.status === "Approved" ? "text-emerald-700" :
+                                                    latestReview.status === "Rejected" ? "text-rose-700" :
+                                                    "text-orange-700"
+                                                }`}>{latestReview.status}</span>
+                                                <span className="text-xs text-neutral-400">
+                                                    {latestReview.reviewed_by} · {new Date(latestReview.reviewed_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
+                                                </span>
+                                            </div>
+                                            {latestReview.comment && (
+                                                <p className="text-neutral-700 italic">"{latestReview.comment}"</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
 
                             {/* Location */}
                             {data?.location && (
