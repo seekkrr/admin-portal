@@ -115,11 +115,12 @@ export function QuestDetailModal({
     const reviewHistory = (data?.review_history ?? []) as ReviewHistoryEntry[];
     const latestReview = useMemo(() => {
         if (reviewHistory.length === 0) return null;
-        return reviewHistory.reduce((latest: ReviewHistoryEntry, current: ReviewHistoryEntry) => {
-            const dateCurrent = new Date(current.reviewed_at || current.timestamp || 0).getTime();
-            const dateLatest = new Date(latest.reviewed_at || latest.timestamp || 0).getTime();
-            return dateCurrent > dateLatest ? current : latest;
-        });
+
+        // Sort by date descending to get the latest review first.
+        const sorted = [...reviewHistory].sort(
+            (a, b) => new Date(b.reviewed_at || b.timestamp || 0).getTime() - new Date(a.reviewed_at || a.timestamp || 0).getTime()
+        );
+        return sorted[0];
     }, [reviewHistory]);
 
     if (!open || !questId) return null;
