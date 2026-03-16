@@ -111,6 +111,18 @@ export function QuestDetailModal({
         staleTime: 30_000,
     });
 
+    // Most recent review history entry (for context in the modal body)
+    const reviewHistory = (data?.review_history ?? []) as ReviewHistoryEntry[];
+    const latestReview = useMemo(() => {
+        if (reviewHistory.length === 0) return null;
+
+        // Sort by date descending to get the latest review first.
+        const sorted = [...reviewHistory].sort(
+            (a, b) => new Date(b.reviewed_at || b.timestamp || 0).getTime() - new Date(a.reviewed_at || a.timestamp || 0).getTime()
+        );
+        return sorted[0];
+    }, [reviewHistory]);
+
     if (!open || !questId) return null;
 
     const quest = data?.quest;
@@ -136,15 +148,6 @@ export function QuestDetailModal({
         "Archived":          [],
     };
     const availableStatuses: QuestStatus[] = (statusTransitions[questStatus] ?? []);
-
-    // Most recent review history entry (for context in the modal body)
-    const reviewHistory = (data?.review_history ?? []) as ReviewHistoryEntry[];
-    const latestReview = useMemo(() => {
-        if (reviewHistory.length === 0) return null;
-        return reviewHistory.reduce((latest, current) =>
-            new Date(current.reviewed_at) > new Date(latest.reviewed_at) ? current : latest
-        );
-    }, [reviewHistory]);
 
     return (
         <div
@@ -262,7 +265,7 @@ export function QuestDetailModal({
                                     <div>
                                         <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider mb-2">Last Review</h4>
                                         <div className={`rounded-xl border p-3 text-sm space-y-1.5 ${
-                                            questStatusConfig[latestReview.status]?.bg ?? "bg-neutral-50 border-neutral-200"
+                                            questStatusConfig[latestReview.status || ""]?.bg ?? "bg-neutral-50 border-neutral-200"
                                         }`}>
                                             <div className="flex items-center justify-between flex-wrap gap-2">
                                                 <span className={`text-xs font-semibold ${
@@ -270,9 +273,9 @@ export function QuestDetailModal({
                                                     latestReview.status === "Rejected" ? "text-rose-700" :
                                                     latestReview.status === "Changes Requested" ? "text-orange-700" :
                                                     "text-neutral-700"
-                                                }`}>{latestReview.status}</span>
+                                                }`}>{latestReview.status || "Comment"}</span>
                                                 <span className="text-xs text-neutral-400">
-                                                    {latestReview.reviewed_by} · {new Date(latestReview.reviewed_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
+                                                    {latestReview.reviewed_by || (latestReview.admin_id ? `Admin (${latestReview.admin_id.slice(-6)})` : "System")} · {new Date(latestReview.reviewed_at || latestReview.timestamp || 0).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
                                                 </span>
                                             </div>
                                             {latestReview.comment && (
