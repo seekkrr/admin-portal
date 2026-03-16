@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -139,9 +139,12 @@ export function QuestDetailModal({
 
     // Most recent review history entry (for context in the modal body)
     const reviewHistory = (data?.review_history ?? []) as ReviewHistoryEntry[];
-    const latestReview = reviewHistory.length > 0
-        ? [...reviewHistory].sort((a, b) => new Date(b.reviewed_at).getTime() - new Date(a.reviewed_at).getTime())[0]
-        : null;
+    const latestReview = useMemo(() => {
+        if (reviewHistory.length === 0) return null;
+        return reviewHistory.reduce((latest, current) =>
+            new Date(current.reviewed_at) > new Date(latest.reviewed_at) ? current : latest
+        );
+    }, [reviewHistory]);
 
     return (
         <div
@@ -259,16 +262,14 @@ export function QuestDetailModal({
                                     <div>
                                         <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider mb-2">Last Review</h4>
                                         <div className={`rounded-xl border p-3 text-sm space-y-1.5 ${
-                                            latestReview.status === "Approved" ? "bg-emerald-50 border-emerald-200" :
-                                            latestReview.status === "Rejected" ? "bg-rose-50 border-rose-200" :
-                                            latestReview.status === "Changes Requested" ? "bg-orange-50 border-orange-200" :
-                                            "bg-neutral-50 border-neutral-200"
+                                            questStatusConfig[latestReview.status]?.bg ?? "bg-neutral-50 border-neutral-200"
                                         }`}>
                                             <div className="flex items-center justify-between flex-wrap gap-2">
                                                 <span className={`text-xs font-semibold ${
-                                                    latestReview.status === "Approved" ? "text-emerald-700" :
+                                                    latestReview.status === "Approved" ? "text-indigo-700" :
                                                     latestReview.status === "Rejected" ? "text-rose-700" :
-                                                    "text-orange-700"
+                                                    latestReview.status === "Changes Requested" ? "text-orange-700" :
+                                                    "text-neutral-700"
                                                 }`}>{latestReview.status}</span>
                                                 <span className="text-xs text-neutral-400">
                                                     {latestReview.reviewed_by} · {new Date(latestReview.reviewed_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}

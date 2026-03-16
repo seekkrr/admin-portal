@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, type ChangeEvent } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo, type ChangeEvent } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -292,6 +292,12 @@ export function QuestDetailPage() {
     const currentStatus = quest.status;
     const defaultStatus = { label: "Draft", dot: "bg-neutral-400", bg: "bg-neutral-50 text-neutral-600 border-neutral-200", active: "bg-neutral-600 text-white border-neutral-600" };
     const sc = questStatusConfig[currentStatus] ?? defaultStatus;
+
+    const sortedReviewHistory = useMemo(() => {
+        return [...(data.review_history ?? [])].sort(
+            (a, b) => new Date(b.reviewed_at).getTime() - new Date(a.reviewed_at).getTime()
+        );
+    }, [data.review_history]);
 
     return (
         <div className="p-6 max-w-[1100px] mx-auto space-y-6 animate-fade-in">
@@ -869,9 +875,7 @@ export function QuestDetailPage() {
                     <p className="text-sm text-neutral-400 italic">No review actions yet for this quest.</p>
                 ) : (
                     <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
-                        {[...(data.review_history ?? [])].sort(
-                            (a, b) => new Date(b.reviewed_at).getTime() - new Date(a.reviewed_at).getTime()
-                        ).map((entry: ReviewHistoryEntry, i: number) => {
+                        {sortedReviewHistory.map((entry: ReviewHistoryEntry, i: number) => {
                             const isApproved = entry.status === "Approved";
                             const isRejected = entry.status === "Rejected";
                             const isChanges = entry.status === "Changes Requested";
@@ -884,10 +888,7 @@ export function QuestDetailPage() {
                                             {isChanges && <AlertCircle className="w-4 h-4 text-orange-500 flex-shrink-0" />}
                                             {!isApproved && !isRejected && !isChanges && <MessageSquare className="w-4 h-4 text-neutral-400 flex-shrink-0" />}
                                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
-                                                isApproved ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                                                isRejected ? "bg-rose-50 text-rose-700 border-rose-200" :
-                                                isChanges ? "bg-orange-50 text-orange-700 border-orange-200" :
-                                                "bg-neutral-100 text-neutral-600 border-neutral-200"
+                                                questStatusConfig[entry.status]?.bg ?? "bg-neutral-100 text-neutral-600 border-neutral-200"
                                             }`}>
                                                 {entry.status}
                                             </span>
