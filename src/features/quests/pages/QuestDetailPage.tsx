@@ -295,7 +295,7 @@ export function QuestDetailPage() {
 
     const sortedReviewHistory = useMemo(() => {
         return [...(data.review_history ?? [])].sort(
-            (a, b) => new Date(b.reviewed_at).getTime() - new Date(a.reviewed_at).getTime()
+            (a, b) => new Date(b.reviewed_at || b.timestamp || 0).getTime() - new Date(a.reviewed_at || a.timestamp || 0).getTime()
         );
     }, [data.review_history]);
 
@@ -888,15 +888,17 @@ export function QuestDetailPage() {
                                             {isChanges && <AlertCircle className="w-4 h-4 text-orange-500 flex-shrink-0" />}
                                             {!isApproved && !isRejected && !isChanges && <MessageSquare className="w-4 h-4 text-neutral-400 flex-shrink-0" />}
                                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
-                                                questStatusConfig[entry.status]?.bg ?? "bg-neutral-100 text-neutral-600 border-neutral-200"
+                                                questStatusConfig[entry.status || ""]?.bg ?? "bg-neutral-100 text-neutral-600 border-neutral-200"
                                             }`}>
-                                                {entry.status}
+                                                {entry.status || "Comment"}
                                             </span>
                                         </div>
                                         <div className="text-xs text-neutral-400 flex items-center gap-1.5 flex-shrink-0">
-                                            <span className="font-medium text-neutral-500">{entry.reviewed_by}</span>
+                                            <span className="font-medium text-neutral-500">
+                                                {entry.reviewed_by || (entry.admin_id ? `Admin (${entry.admin_id.slice(-6)})` : "System")}
+                                            </span>
                                             <span>·</span>
-                                            <span>{new Date(entry.reviewed_at).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}</span>
+                                            <span>{new Date(entry.reviewed_at || entry.timestamp || 0).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}</span>
                                         </div>
                                     </div>
                                     {entry.comment && (

@@ -128,9 +128,11 @@ export type QuestTheme = "Adventure" | "Romance" | "Culture" | "Food" | "History
 // Review history entry returned by the backend
 export interface ReviewHistoryEntry {
     comment: string;
-    reviewed_by: string;   // admin user display name or ID
-    status: QuestStatus;
-    reviewed_at: string;   // ISO datetime string
+    reviewed_by?: string;   // Frontend expectation
+    admin_id?: string;      // Backend raw data fallback
+    status?: QuestStatus;
+    reviewed_at?: string;   // Frontend expectation
+    timestamp?: string;     // Backend raw data fallback
 }
 
 export interface QuestLocation {

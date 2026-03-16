@@ -111,6 +111,17 @@ export function QuestDetailModal({
         staleTime: 30_000,
     });
 
+    // Most recent review history entry (for context in the modal body)
+    const reviewHistory = (data?.review_history ?? []) as ReviewHistoryEntry[];
+    const latestReview = useMemo(() => {
+        if (reviewHistory.length === 0) return null;
+        return reviewHistory.reduce((latest: ReviewHistoryEntry, current: ReviewHistoryEntry) => {
+            const dateCurrent = new Date(current.reviewed_at || current.timestamp || 0).getTime();
+            const dateLatest = new Date(latest.reviewed_at || latest.timestamp || 0).getTime();
+            return dateCurrent > dateLatest ? current : latest;
+        });
+    }, [reviewHistory]);
+
     if (!open || !questId) return null;
 
     const quest = data?.quest;
@@ -136,15 +147,6 @@ export function QuestDetailModal({
         "Archived":          [],
     };
     const availableStatuses: QuestStatus[] = (statusTransitions[questStatus] ?? []);
-
-    // Most recent review history entry (for context in the modal body)
-    const reviewHistory = (data?.review_history ?? []) as ReviewHistoryEntry[];
-    const latestReview = useMemo(() => {
-        if (reviewHistory.length === 0) return null;
-        return reviewHistory.reduce((latest, current) =>
-            new Date(current.reviewed_at) > new Date(latest.reviewed_at) ? current : latest
-        );
-    }, [reviewHistory]);
 
     return (
         <div
@@ -270,9 +272,9 @@ export function QuestDetailModal({
                                                     latestReview.status === "Rejected" ? "text-rose-700" :
                                                     latestReview.status === "Changes Requested" ? "text-orange-700" :
                                                     "text-neutral-700"
-                                                }`}>{latestReview.status}</span>
+                                                }`}>{latestReview.status || "Comment"}</span>
                                                 <span className="text-xs text-neutral-400">
-                                                    {latestReview.reviewed_by} · {new Date(latestReview.reviewed_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
+                                                    {latestReview.reviewed_by || (latestReview.admin_id ? `Admin (${latestReview.admin_id.slice(-6)})` : "System")} · {new Date(latestReview.reviewed_at || latestReview.timestamp || 0).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
                                                 </span>
                                             </div>
                                             {latestReview.comment && (
