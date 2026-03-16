@@ -8,6 +8,7 @@ export const API_ENDPOINTS = {
         BASE: "/api/quests",
         CREATE: "/api/quests",
         BY_ID: (id: string) => `/api/quests/${id}`,
+        REVIEW: (id: string) => `/api/admin/quests/${id}/review`,
         STEPS: (questId: string) => `/api/quests/${questId}/steps`,
         STEP_BY_ID: (stepId: string) => `/api/quests/steps/${stepId}`,
     },

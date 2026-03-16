@@ -26,8 +26,12 @@ const SEARCH_DEBOUNCE_MS = 400;
 // ---- Badge Styles ----
 const questStatusConfig: Record<string, { label: string; dot: string; bg: string }> = {
     Draft: { label: "Draft", dot: "bg-neutral-400", bg: "bg-neutral-50 text-neutral-600 border-neutral-200" },
+    'Under Review': { label: "Under Review", dot: "bg-blue-500", bg: "bg-blue-50 text-blue-700 border-blue-200" },
+    'Changes Requested': { label: "Changes Requested", dot: "bg-orange-500", bg: "bg-orange-50 text-orange-700 border-orange-200" },
+    Approved: { label: "Approved", dot: "bg-indigo-500", bg: "bg-indigo-50 text-indigo-700 border-indigo-200" },
     Published: { label: "Published", dot: "bg-emerald-500", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
     Paused: { label: "Paused", dot: "bg-amber-500", bg: "bg-amber-50 text-amber-700 border-amber-200" },
+    Rejected: { label: "Rejected", dot: "bg-rose-500", bg: "bg-rose-50 text-rose-700 border-rose-200" },
     Archived: { label: "Archived", dot: "bg-red-500", bg: "bg-red-50 text-red-700 border-red-200" },
 };
 
@@ -41,9 +45,11 @@ type ConfirmAction =
 // ---- Filter Dropdown Options ----
 const STATUS_OPTIONS: DropdownOption[] = [
     { value: "", label: "All Statuses" },
-    { value: "Draft", label: "Draft", dot: "bg-neutral-400" },
+    { value: "Under Review", label: "Under Review", dot: "bg-blue-500" },
+    { value: "Changes Requested", label: "Changes Requested", dot: "bg-orange-500" },
     { value: "Published", label: "Published", dot: "bg-emerald-500" },
     { value: "Paused", label: "Paused", dot: "bg-amber-500" },
+    { value: "Rejected", label: "Rejected", dot: "bg-rose-500" },
     { value: "Archived", label: "Archived", dot: "bg-red-500" },
 ];
 
@@ -109,10 +115,15 @@ export function QuestsPage() {
     // Reset hard delete toggle when modal closes
     useEffect(() => { if (!confirmAction) setHardDelete(false); }, [confirmAction]);
 
+    // Admin-relevant statuses — exclude Draft (creator-only) and Approved (not used in admin flow)
+    const ADMIN_STATUSES = "Under Review,Changes Requested,Published,Paused,Rejected,Archived";
+
     // ---- Fetch Quests ----
     const queryParams = useMemo(() => ({
         q: debouncedQuery || undefined,
+        // When a specific status is selected use single status param; otherwise restrict to admin-relevant statuses
         status: statusFilter || undefined,
+        statuses: statusFilter ? undefined : ADMIN_STATUSES,
         difficulty: difficultyFilter || undefined,
         theme: themeFilter || undefined,
         region: debouncedRegion || undefined,
@@ -258,8 +269,8 @@ export function QuestsPage() {
                             value={regionFilter}
                             onChange={(e) => setRegionFilter(e.target.value)}
                             className={`w-full pl-9 pr-8 py-2.5 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent ${regionFilter
-                                    ? "border-indigo-300 bg-indigo-50/50 text-indigo-700"
-                                    : "border-neutral-200 bg-neutral-50 text-neutral-600"
+                                ? "border-indigo-300 bg-indigo-50/50 text-indigo-700"
+                                : "border-neutral-200 bg-neutral-50 text-neutral-600"
                                 }`}
                         />
                         {regionFilter && (

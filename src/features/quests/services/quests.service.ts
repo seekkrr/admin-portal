@@ -27,6 +27,7 @@ export interface QuestsListResponse {
 export interface ListQuestsParams {
     q?: string;
     status?: string;
+    statuses?: string;   // Comma-separated list of statuses for multi-status filtering
     difficulty?: string;
     theme?: string;
     region?: string;
@@ -83,6 +84,18 @@ export const questsService = {
         const response = await api.put<QuestDetailResponse>(
             API_ENDPOINTS.QUESTS.BY_ID(questId),
             { status }
+        );
+        return response.data;
+    },
+
+    /** Review a quest - accept/reject/request changes with comment */
+    reviewQuest: async (
+        questId: string,
+        data: { status: 'Approved' | 'Rejected' | 'Changes Requested'; comment?: string }
+    ): Promise<QuestDetailResponse> => {
+        const response = await api.put<QuestDetailResponse>(
+            API_ENDPOINTS.QUESTS.REVIEW(questId),
+            data
         );
         return response.data;
     },

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, type ChangeEvent } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo, type ChangeEvent } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -7,6 +7,7 @@ import {
     Compass, Hash, Lightbulb, Trophy,
     DollarSign, Trash2, Image as ImageIcon, UserCircle,
     Pencil, Check, X, Upload, Plus, Navigation,
+    MessageSquare, History, CheckCircle, XCircle, AlertCircle,
 } from "lucide-react";
 import type { QuestDifficulty, QuestTheme } from "@/types";
 
@@ -21,7 +22,7 @@ import { ConfirmModal } from "@/features/users/components/ConfirmModal";
 
 import { QuestRouteMap } from "../components/QuestRouteMap";
 import { config } from "@/config/env";
-import type { QuestStatus, CloudinaryAsset } from "@/types";
+import type { QuestStatus, CloudinaryAsset, ReviewHistoryEntry } from "@/types";
 
 // ---- Constants ----
 const ALLOWED_ROLES = ["admin", "super_admin", "moderator"];
@@ -31,15 +32,33 @@ const CAN_EDIT_ROLES = ["admin", "super_admin", "moderator"];
 // ---- Status Styles ----
 const questStatusConfig: Record<string, { label: string; dot: string; bg: string; active: string }> = {
     Draft: { label: "Draft", dot: "bg-neutral-400", bg: "bg-neutral-50 text-neutral-600 border-neutral-200", active: "bg-neutral-600 text-white border-neutral-600" },
+    'Under Review': { label: "Under Review", dot: "bg-blue-500", bg: "bg-blue-50 text-blue-700 border-blue-200", active: "bg-blue-600 text-white border-blue-600" },
+    'Changes Requested': { label: "Changes Requested", dot: "bg-orange-500", bg: "bg-orange-50 text-orange-700 border-orange-200", active: "bg-orange-600 text-white border-orange-600" },
+    Approved: { label: "Approved", dot: "bg-indigo-500", bg: "bg-indigo-50 text-indigo-700 border-indigo-200", active: "bg-indigo-600 text-white border-indigo-600" },
     Published: { label: "Published", dot: "bg-emerald-500", bg: "bg-emerald-50 text-emerald-700 border-emerald-200", active: "bg-emerald-600 text-white border-emerald-600" },
     Paused: { label: "Paused", dot: "bg-amber-500", bg: "bg-amber-50 text-amber-700 border-amber-200", active: "bg-amber-500 text-white border-amber-500" },
+    Rejected: { label: "Rejected", dot: "bg-rose-500", bg: "bg-rose-50 text-rose-700 border-rose-200", active: "bg-rose-600 text-white border-rose-600" },
     Archived: { label: "Archived", dot: "bg-red-500", bg: "bg-red-50 text-red-700 border-red-200", active: "bg-red-600 text-white border-red-600" },
 };
 
 // ---- Confirm action type ----
 type ConfirmAction =
     | { type: "delete" }
-    | { type: "status-change"; payload: { status: QuestStatus } };
+    | { type: "status-change"; payload: { status: QuestStatus } }
+    | { type: "review-quest"; payload: { status: "Rejected" | "Changes Requested" } };
+
+// ---- Admin-settable statuses (what admin can manually transition a quest TO) ----
+// "Under Review" is set by creator only. "Draft" and "Approved" are removed from admin actions.
+const ADMIN_SETTABLE_STATUSES: QuestStatus[] = [
+    "Published",
+    "Changes Requested",
+    "Rejected",
+    "Paused",
+    "Archived",
+];
+
+// Review statuses go through the /review endpoint (records comment to review_history)
+const REVIEW_STATUSES: QuestStatus[] = ["Rejected", "Changes Requested"];
 
 // ---- Component ----
 export function QuestDetailPage() {
@@ -56,6 +75,7 @@ export function QuestDetailPage() {
     const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
     const [hardDelete, setHardDelete] = useState(false);
     const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
+    const [reviewComment, setReviewComment] = useState("");
 
     // Inline editing state
     const [editingField, setEditingField] = useState<string | null>(null);
@@ -83,6 +103,19 @@ export function QuestDetailPage() {
             setConfirmAction(null);
         },
         onError: (err: Error) => { toast.error(err.message); setConfirmAction(null); },
+    });
+
+    const reviewMutation = useMutation({
+        mutationFn: ({ status, comment }: { status: "Approved" | "Rejected" | "Changes Requested"; comment?: string }) =>
+            questsService.reviewQuest(questId!, { status, comment }),
+        onSuccess: () => {
+            toast.success("Quest review submitted");
+            queryClient.invalidateQueries({ queryKey: ["quest-detail", questId] });
+            queryClient.invalidateQueries({ queryKey: ["admin-quests"] });
+            setConfirmAction(null);
+            setReviewComment("");
+        },
+        onError: (err: Error) => { toast.error(err.message); setConfirmAction(null); setReviewComment(""); },
     });
 
     const deleteMutation = useMutation({
@@ -126,8 +159,11 @@ export function QuestDetailPage() {
             case "status-change":
                 statusMutation.mutate(confirmAction.payload.status);
                 break;
+            case "review-quest":
+                reviewMutation.mutate({ status: confirmAction.payload.status, comment: reviewComment });
+                break;
         }
-    }, [confirmAction, deleteMutation, statusMutation, hardDelete]);
+    }, [confirmAction, deleteMutation, statusMutation, reviewMutation, hardDelete, reviewComment]);
 
     const toggleStep = (stepId: string) => {
         setExpandedSteps(prev => {
@@ -257,6 +293,12 @@ export function QuestDetailPage() {
     const defaultStatus = { label: "Draft", dot: "bg-neutral-400", bg: "bg-neutral-50 text-neutral-600 border-neutral-200", active: "bg-neutral-600 text-white border-neutral-600" };
     const sc = questStatusConfig[currentStatus] ?? defaultStatus;
 
+    const sortedReviewHistory = useMemo(() => {
+        return [...(data.review_history ?? [])].sort(
+            (a, b) => new Date(b.reviewed_at).getTime() - new Date(a.reviewed_at).getTime()
+        );
+    }, [data.review_history]);
+
     return (
         <div className="p-6 max-w-[1100px] mx-auto space-y-6 animate-fade-in">
             {/* Back Button + Header */}
@@ -369,15 +411,37 @@ export function QuestDetailPage() {
 
             {/* Status Management */}
             <Section title="Status Management" icon={<Compass className="w-4 h-4" />}>
+                {/* Info pill if quest is Under Review — makes it clear this is a pending review */}
+                {currentStatus === "Under Review" && (
+                    <div className="mb-3 flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700">
+                        <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+                        This quest is pending admin review. Use the actions below to respond.
+                    </div>
+                )}
+                {currentStatus === "Changes Requested" && (
+                    <div className="mb-3 flex items-center gap-2 px-3 py-2 bg-orange-50 border border-orange-200 rounded-xl text-sm text-orange-700">
+                        <span className="w-2 h-2 rounded-full bg-orange-500 flex-shrink-0" />
+                        Changes requested — waiting for creator to resubmit.
+                    </div>
+                )}
                 <div className="flex flex-wrap gap-2">
-                    {(Object.keys(questStatusConfig) as QuestStatus[]).map((status) => {
+                    {ADMIN_SETTABLE_STATUSES.map((status) => {
                         const sConf = questStatusConfig[status];
                         const isActive = currentStatus === status;
+                        const isReview = REVIEW_STATUSES.includes(status);
+
                         return (
                             <button
                                 key={status}
-                                disabled={isActive || statusMutation.isPending}
-                                onClick={() => setConfirmAction({ type: "status-change", payload: { status } })}
+                                disabled={isActive || statusMutation.isPending || reviewMutation.isPending}
+                                onClick={() => {
+                                    setReviewComment("");
+                                    if (isReview) {
+                                        setConfirmAction({ type: "review-quest", payload: { status: status as "Rejected" | "Changes Requested" } });
+                                    } else {
+                                        setConfirmAction({ type: "status-change", payload: { status } });
+                                    }
+                                }}
                                 className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all ${isActive ? (sConf?.active ?? "") + " shadow-sm cursor-default" : (sConf?.bg ?? "") + " hover:shadow-sm"} disabled:cursor-default`}
                             >
                                 {isActive && <span className="mr-1.5">●</span>}
@@ -386,6 +450,9 @@ export function QuestDetailPage() {
                         );
                     })}
                 </div>
+                <p className="text-xs text-neutral-400 mt-3">
+                    Note: <span className="font-medium">Under Review</span> is set by creators only. <span className="font-medium">Draft</span> and <span className="font-medium">Approved</span> are not manually assignable.
+                </p>
             </Section>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -802,6 +869,48 @@ export function QuestDetailPage() {
                 )}
             </Section>
 
+            {/* Review History */}
+            <Section title="Review History" icon={<History className="w-4 h-4" />}>
+                {(data.review_history ?? []).length === 0 ? (
+                    <p className="text-sm text-neutral-400 italic">No review actions yet for this quest.</p>
+                ) : (
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+                        {sortedReviewHistory.map((entry: ReviewHistoryEntry, i: number) => {
+                            const isApproved = entry.status === "Approved";
+                            const isRejected = entry.status === "Rejected";
+                            const isChanges = entry.status === "Changes Requested";
+                            return (
+                                <div key={i} className="bg-neutral-50 rounded-xl border border-neutral-200 p-4 space-y-2">
+                                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                                        <div className="flex items-center gap-2">
+                                            {isApproved && <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />}
+                                            {isRejected && <XCircle className="w-4 h-4 text-rose-500 flex-shrink-0" />}
+                                            {isChanges && <AlertCircle className="w-4 h-4 text-orange-500 flex-shrink-0" />}
+                                            {!isApproved && !isRejected && !isChanges && <MessageSquare className="w-4 h-4 text-neutral-400 flex-shrink-0" />}
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
+                                                questStatusConfig[entry.status]?.bg ?? "bg-neutral-100 text-neutral-600 border-neutral-200"
+                                            }`}>
+                                                {entry.status}
+                                            </span>
+                                        </div>
+                                        <div className="text-xs text-neutral-400 flex items-center gap-1.5 flex-shrink-0">
+                                            <span className="font-medium text-neutral-500">{entry.reviewed_by}</span>
+                                            <span>·</span>
+                                            <span>{new Date(entry.reviewed_at).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true })}</span>
+                                        </div>
+                                    </div>
+                                    {entry.comment && (
+                                        <p className="text-sm text-neutral-700 leading-relaxed pl-6 italic">
+                                            "{entry.comment}"
+                                        </p>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </Section>
+
             {/* Danger Zone (admin/super_admin only) */}
             {canDelete && (
                 <div className="bg-red-50 rounded-2xl border border-red-200 p-5">
@@ -854,6 +963,38 @@ export function QuestDetailPage() {
                 isPending={statusMutation.isPending}
                 theme="warning"
             />
+
+            {/* Review Quest Confirm Modal */}
+            <ConfirmModal
+                open={confirmAction?.type === "review-quest"}
+                title={confirmAction?.type === "review-quest"
+                    ? (confirmAction.payload.status === "Rejected" ? "Reject Quest" : "Request Changes")
+                    : "Review Quest"}
+                message={confirmAction?.type === "review-quest"
+                    ? `Are you sure you want to ${confirmAction.payload.status === "Rejected" ? "reject" : "request changes for"} "${metadata?.title || quest.quest_title || "this quest"}"?`
+                    : ""}
+                confirmLabel={confirmAction?.type === "review-quest"
+                    ? (confirmAction.payload.status === "Rejected" ? "Reject" : "Request Changes")
+                    : "Confirm"}
+                confirmStyle={confirmAction?.type === "review-quest" && confirmAction.payload.status === "Rejected" ? "bg-red-600 hover:bg-red-700" : "bg-orange-600 hover:bg-orange-700"}
+                onConfirm={executeConfirmedAction}
+                onCancel={() => setConfirmAction(null)}
+                isPending={reviewMutation.isPending}
+                theme={confirmAction?.type === "review-quest" && confirmAction.payload.status === "Rejected" ? "danger" : "warning"}
+            >
+                <div className="mt-4">
+                    <label className="block text-sm font-medium text-neutral-700 mb-1">
+                        Review Comment (Optional)
+                    </label>
+                    <textarea
+                        value={reviewComment}
+                        onChange={(e) => setReviewComment(e.target.value)}
+                        placeholder="Add any notes or context for this decision..."
+                        className="w-full text-sm text-neutral-700 bg-white rounded-lg border border-neutral-300 p-3 focus:outline-none focus:ring-2 focus:ring-violet-200 resize-y"
+                        rows={3}
+                    />
+                </div>
+            </ConfirmModal>
 
             {/* Lightbox */}
             {lightboxUrl && (

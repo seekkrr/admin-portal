@@ -114,8 +114,24 @@ export interface CloudinaryUploadResponse {
 
 // Quest Types
 export type QuestDifficulty = "Easy" | "Medium" | "Hard" | "Expert";
-export type QuestStatus = "Draft" | "Published" | "Paused" | "Archived";
+export type QuestStatus =
+    | "Draft"
+    | "Under Review"
+    | "Changes Requested"
+    | "Approved"
+    | "Published"
+    | "Paused"
+    | "Rejected"
+    | "Archived";
 export type QuestTheme = "Adventure" | "Romance" | "Culture" | "Food" | "History" | "Nature" | "Custom";
+
+// Review history entry returned by the backend
+export interface ReviewHistoryEntry {
+    comment: string;
+    reviewed_by: string;   // admin user display name or ID
+    status: QuestStatus;
+    reviewed_at: string;   // ISO datetime string
+}
 
 export interface QuestLocation {
     _id?: string;
@@ -200,6 +216,9 @@ export interface QuestListItem {
     quest_duration_minutes: number | null;
     quest_region: string | null;
     quest_image: string | null;
+    quest_difficulty?: string | null;
+    quest_theme?: string | null;
+    creator_name?: string | null;
 }
 
 // ---- Full Quest Detail Response (from GET /api/quests/:id) ----
@@ -278,6 +297,7 @@ export interface QuestDetailResponse {
     media: QuestDetailMedia | null;
     steps: QuestDetailStep[];
     creator: QuestDetailCreator | null;
+    review_history: ReviewHistoryEntry[];
 }
 
 // API Response Types
