@@ -106,7 +106,7 @@ export function QuestDetailPage() {
     });
 
     const reviewMutation = useMutation({
-        mutationFn: ({ status, comment }: { status: "Approved" | "Published" | "Rejected" | "Changes Requested"; comment?: string }) =>
+        mutationFn: ({ status, comment }: { status: "Published" | "Rejected" | "Changes Requested"; comment?: string }) =>
             questsService.reviewQuest(questId!, { status, comment }),
         onSuccess: () => {
             toast.success("Quest review submitted");
