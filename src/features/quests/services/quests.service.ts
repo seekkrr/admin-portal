@@ -91,7 +91,7 @@ export const questsService = {
     /** Review a quest - accept/reject/request changes with comment */
     reviewQuest: async (
         questId: string,
-        data: { status: 'Approved' | 'Published' | 'Rejected' | 'Changes Requested'; comment?: string }
+        data: { status: 'Published' | 'Rejected' | 'Changes Requested'; comment?: string }
     ): Promise<QuestDetailResponse> => {
         const response = await api.put<QuestDetailResponse>(
             API_ENDPOINTS.QUESTS.REVIEW(questId),
