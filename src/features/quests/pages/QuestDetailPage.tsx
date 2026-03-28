@@ -45,7 +45,7 @@ const questStatusConfig: Record<string, { label: string; dot: string; bg: string
 type ConfirmAction =
     | { type: "delete" }
     | { type: "status-change"; payload: { status: QuestStatus } }
-    | { type: "review-quest"; payload: { status: "Rejected" | "Changes Requested" } };
+    | { type: "review-quest"; payload: { status: "Published" | "Rejected" | "Changes Requested" } };
 
 // ---- Admin-settable statuses (what admin can manually transition a quest TO) ----
 // "Under Review" is set by creator only. "Draft" and "Approved" are removed from admin actions.
@@ -58,7 +58,7 @@ const ADMIN_SETTABLE_STATUSES: QuestStatus[] = [
 ];
 
 // Review statuses go through the /review endpoint (records comment to review_history)
-const REVIEW_STATUSES: QuestStatus[] = ["Rejected", "Changes Requested"];
+const REVIEW_STATUSES: QuestStatus[] = ["Published", "Rejected", "Changes Requested"];
 
 // ---- Component ----
 export function QuestDetailPage() {
@@ -106,7 +106,7 @@ export function QuestDetailPage() {
     });
 
     const reviewMutation = useMutation({
-        mutationFn: ({ status, comment }: { status: "Approved" | "Rejected" | "Changes Requested"; comment?: string }) =>
+        mutationFn: ({ status, comment }: { status: "Published" | "Rejected" | "Changes Requested"; comment?: string }) =>
             questsService.reviewQuest(questId!, { status, comment }),
         onSuccess: () => {
             toast.success("Quest review submitted");
@@ -437,7 +437,7 @@ export function QuestDetailPage() {
                                 onClick={() => {
                                     setReviewComment("");
                                     if (isReview) {
-                                        setConfirmAction({ type: "review-quest", payload: { status: status as "Rejected" | "Changes Requested" } });
+                                        setConfirmAction({ type: "review-quest", payload: { status: status as "Published" | "Rejected" | "Changes Requested" } });
                                     } else {
                                         setConfirmAction({ type: "status-change", payload: { status } });
                                     }
@@ -970,19 +970,23 @@ export function QuestDetailPage() {
             <ConfirmModal
                 open={confirmAction?.type === "review-quest"}
                 title={confirmAction?.type === "review-quest"
-                    ? (confirmAction.payload.status === "Rejected" ? "Reject Quest" : "Request Changes")
+                    ? (confirmAction.payload.status === "Rejected" ? "Reject Quest" : confirmAction.payload.status === "Published" ? "Publish Quest" : "Request Changes")
                     : "Review Quest"}
                 message={confirmAction?.type === "review-quest"
-                    ? `Are you sure you want to ${confirmAction.payload.status === "Rejected" ? "reject" : "request changes for"} "${metadata?.title || quest.quest_title || "this quest"}"?`
+                    ? (confirmAction.payload.status === "Published"
+                        ? `Are you sure you want to approve and publish "${metadata?.title || quest.quest_title || "this quest"}"?`
+                        : `Are you sure you want to ${confirmAction.payload.status === "Rejected" ? "reject" : "request changes for"} "${metadata?.title || quest.quest_title || "this quest"}"?`)
                     : ""}
                 confirmLabel={confirmAction?.type === "review-quest"
-                    ? (confirmAction.payload.status === "Rejected" ? "Reject" : "Request Changes")
+                    ? (confirmAction.payload.status === "Rejected" ? "Reject" : confirmAction.payload.status === "Published" ? "Approve & Publish" : "Request Changes")
                     : "Confirm"}
-                confirmStyle={confirmAction?.type === "review-quest" && confirmAction.payload.status === "Rejected" ? "bg-red-600 hover:bg-red-700" : "bg-orange-600 hover:bg-orange-700"}
+                confirmStyle={confirmAction?.type === "review-quest"
+                    ? (confirmAction.payload.status === "Rejected" ? "bg-red-600 hover:bg-red-700" : confirmAction.payload.status === "Published" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-orange-600 hover:bg-orange-700")
+                    : ""}
                 onConfirm={executeConfirmedAction}
                 onCancel={() => setConfirmAction(null)}
                 isPending={reviewMutation.isPending}
-                theme={confirmAction?.type === "review-quest" && confirmAction.payload.status === "Rejected" ? "danger" : "warning"}
+                theme={confirmAction?.type === "review-quest" && confirmAction.payload.status === "Rejected" ? "danger" : confirmAction?.type === "review-quest" && confirmAction.payload.status === "Published" ? "info" : "warning"}
             >
                 <div className="mt-4">
                     <label className="block text-sm font-medium text-neutral-700 mb-1">
