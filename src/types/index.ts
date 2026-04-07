@@ -292,12 +292,33 @@ export interface QuestDetailCreator {
     updated_at: string;
 }
 
+// Narrative type for quest narrative management
+export interface Narrative {
+    _id: string;
+    quest_id: string;
+    from_step_id: string;
+    to_step_id: string;
+    from_step_order: number;
+    to_step_order: number;
+    title?: string;
+    content: string;
+    trigger_location?: { type: "Point"; coordinates: [number, number] };
+    trigger_radius_m: number;
+    media?: CloudinaryAsset[];
+    is_mandatory: boolean;
+    view_count: number;
+    created_by: string;
+    created_at: string;
+    updated_at: string;
+}
+
 export interface QuestDetailResponse {
     quest: QuestListItem;
     metadata: QuestDetailMetadata | null;
     location: QuestDetailLocation | null;
     media: QuestDetailMedia | null;
     steps: QuestDetailStep[];
+    narratives: Narrative[];
     creator: QuestDetailCreator | null;
     review_history: ReviewHistoryEntry[];
 }

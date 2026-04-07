@@ -8,8 +8,9 @@ import {
     DollarSign, Trash2, Image as ImageIcon, UserCircle,
     Pencil, Check, X, Upload, Plus, Navigation,
     MessageSquare, History, CheckCircle, XCircle, AlertCircle,
+    BookOpen, ShieldCheck, Radius, ChevronDown,
 } from "lucide-react";
-import type { QuestDifficulty, QuestTheme } from "@/types";
+import type { QuestDifficulty, QuestTheme, Narrative, QuestDetailStep } from "@/types";
 
 const DIFFICULTY_OPTIONS: QuestDifficulty[] = ["Easy", "Medium", "Hard", "Expert"];
 const THEME_OPTIONS: QuestTheme[] = ["Adventure", "Romance", "Culture", "Food", "History", "Nature", "Custom"];
@@ -23,6 +24,7 @@ import { ConfirmModal } from "@/features/users/components/ConfirmModal";
 import { QuestRouteMap } from "../components/QuestRouteMap";
 import { config } from "@/config/env";
 import type { QuestStatus, CloudinaryAsset, ReviewHistoryEntry } from "@/types";
+import { narrativeService } from "@/services/narrative.service";
 
 // ---- Constants ----
 const ALLOWED_ROLES = ["admin", "super_admin", "moderator"];
@@ -83,6 +85,13 @@ export function QuestDetailPage() {
     const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
     const [uploadingMedia, setUploadingMedia] = useState(false);
 
+    // Narrative management state
+    const [expandedNarratives, setExpandedNarratives] = useState<Set<string>>(new Set());
+    const [narrativeEditField, setNarrativeEditField] = useState<string | null>(null);
+    const [narrativeEditValue, setNarrativeEditValue] = useState<string>("");
+    const [addingNarrative, setAddingNarrative] = useState(false);
+    const [newNarrative, setNewNarrative] = useState({ fromStepIdx: 0, toStepIdx: 1, title: "", content: "", triggerRadiusM: 50, isMandatory: false });
+
     // Reset hard delete on modal close
     useEffect(() => { if (!confirmAction) setHardDelete(false); }, [confirmAction]);
 
@@ -90,6 +99,13 @@ export function QuestDetailPage() {
     const { data, isLoading, error } = useQuery({
         queryKey: ["quest-detail", questId],
         queryFn: () => questsService.getQuestDetail(questId!),
+        enabled: !!questId && validQuestId,
+    });
+
+    // Fetch narratives separately
+    const { data: narrativesData, refetch: refetchNarratives } = useQuery({
+        queryKey: ["quest-narratives", questId],
+        queryFn: () => narrativeService.getByQuest(questId!),
         enabled: !!questId && validQuestId,
     });
 
@@ -780,6 +796,80 @@ export function QuestDetailPage() {
                 )}
             </Section>
 
+            {/* Narratives Management */}
+            <NarrativesSection
+                narratives={narrativesData?.narratives ?? []}
+                steps={steps}
+                canEdit={canEdit}
+                questId={questId!}
+                expandedNarratives={expandedNarratives}
+                toggleNarrative={(id: string) => setExpandedNarratives(prev => {
+                    const next = new Set(prev);
+                    if (next.has(id)) next.delete(id); else next.add(id);
+                    return next;
+                })}
+                narrativeEditField={narrativeEditField}
+                narrativeEditValue={narrativeEditValue}
+                onStartNarrativeEdit={(field: string, value: string | number) => { setNarrativeEditField(field); setNarrativeEditValue(String(value)); }}
+                onChangeNarrativeEditValue={setNarrativeEditValue}
+                onCancelNarrativeEdit={() => { setNarrativeEditField(null); setNarrativeEditValue(""); }}
+                onSaveNarrativeField={async (narrativeId: string, field: string, value: unknown) => {
+                    try {
+                        await narrativeService.update(narrativeId, { [field]: value });
+                        toast.success("Narrative updated");
+                        refetchNarratives();
+                        setNarrativeEditField(null);
+                    } catch (err) { toast.error(err instanceof Error ? err.message : "Update failed"); }
+                }}
+                onDeleteNarrative={async (narrativeId: string) => {
+                    try {
+                        await narrativeService.delete(narrativeId);
+                        toast.success("Narrative deleted");
+                        refetchNarratives();
+                    } catch (err) { toast.error(err instanceof Error ? err.message : "Delete failed"); }
+                }}
+                addingNarrative={addingNarrative}
+                setAddingNarrative={setAddingNarrative}
+                newNarrative={newNarrative}
+                setNewNarrative={setNewNarrative}
+                onCreateNarrative={async () => {
+                    if (!newNarrative.content.trim()) { toast.error("Content is required"); return; }
+                    const fromStep = steps[newNarrative.fromStepIdx];
+                    const toStep = steps[newNarrative.toStepIdx];
+                    if (!fromStep || !toStep) { toast.error("Invalid step selection"); return; }
+                    
+                    const waypoints = data?.location?.route_waypoints ?? [];
+                    const fromWp = waypoints.find(w => w.order === fromStep.waypoint_order);
+                    const toWp = waypoints.find(w => w.order === toStep.waypoint_order);
+                    const fromCoords = fromWp?.location?.coordinates;
+                    const toCoords = toWp?.location?.coordinates;
+                    
+                    let triggerLocation;
+                    if (fromCoords && toCoords) {
+                        const midLng = (fromCoords[0] + toCoords[0]) / 2;
+                        const midLat = (fromCoords[1] + toCoords[1]) / 2;
+                        triggerLocation = { type: "Point", coordinates: [midLng, midLat] } as { type: "Point"; coordinates: [number, number] };
+                    }
+                    
+                    try {
+                        await narrativeService.create({
+                            quest_id: questId!,
+                            from_step_id: fromStep._id,
+                            to_step_id: toStep._id,
+                            trigger_location: triggerLocation,
+                            title: newNarrative.title || undefined,
+                            content: newNarrative.content,
+                            trigger_radius_m: newNarrative.triggerRadiusM,
+                            is_mandatory: newNarrative.isMandatory,
+                        });
+                        toast.success("Narrative created");
+                        refetchNarratives();
+                        setAddingNarrative(false);
+                        setNewNarrative({ fromStepIdx: 0, toStepIdx: 1, title: "", content: "", triggerRadiusM: 50, isMandatory: false });
+                    } catch (err) { toast.error(err instanceof Error ? err.message : "Create failed"); }
+                }}
+            />
+
             {/* Media Gallery with add/remove */}
             <Section title={`Media (${media?.cloudinary_assets.length ?? 0})`} icon={<ImageIcon className="w-4 h-4" />}>
                 <div className="space-y-4">
@@ -1202,5 +1292,354 @@ function EditableInfoRow({
                 {canEdit && <Pencil className="w-3 h-3 text-neutral-300 group-hover:text-violet-500 transition-colors" />}
             </div>
         </div>
+    );
+}
+
+// ---- Narratives Section Component ----
+
+interface NarrativesSectionProps {
+    narratives: Narrative[];
+    steps: QuestDetailStep[];
+    canEdit: boolean;
+    questId: string;
+    expandedNarratives: Set<string>;
+    toggleNarrative: (id: string) => void;
+    narrativeEditField: string | null;
+    narrativeEditValue: string;
+    onStartNarrativeEdit: (field: string, value: string | number) => void;
+    onChangeNarrativeEditValue: (v: string) => void;
+    onCancelNarrativeEdit: () => void;
+    onSaveNarrativeField: (narrativeId: string, field: string, value: unknown) => void;
+    onDeleteNarrative: (narrativeId: string) => void;
+    addingNarrative: boolean;
+    setAddingNarrative: (v: boolean) => void;
+    newNarrative: { fromStepIdx: number; toStepIdx: number; title: string; content: string; triggerRadiusM: number; isMandatory: boolean };
+    setNewNarrative: (v: { fromStepIdx: number; toStepIdx: number; title: string; content: string; triggerRadiusM: number; isMandatory: boolean }) => void;
+    onCreateNarrative: () => void;
+}
+
+function NarrativesSection({
+    narratives, steps, canEdit, expandedNarratives, toggleNarrative,
+    narrativeEditField, narrativeEditValue, onStartNarrativeEdit, onChangeNarrativeEditValue,
+    onCancelNarrativeEdit, onSaveNarrativeField, onDeleteNarrative,
+    addingNarrative, setAddingNarrative, newNarrative, setNewNarrative, onCreateNarrative,
+}: NarrativesSectionProps) {
+    const getStepLabel = (stepId: string) => {
+        const step = steps.find(s => s._id === stepId);
+        return step ? `Step ${step.order}: ${step.title}` : stepId.slice(-6);
+    };
+
+    const availableSegments = steps.length > 1
+        ? steps.slice(0, -1).map((fromStep, i) => {
+            const toStep = steps[i + 1];
+            if (!toStep) return null;
+            const exists = narratives.some(n => n.from_step_id === fromStep._id && n.to_step_id === toStep._id);
+            if (exists) return null;
+            return {
+                fromStepIdx: i,
+                toStepIdx: i + 1,
+                label: `Step ${fromStep.order}: ${fromStep.title} → Step ${toStep.order}: ${toStep.title}`
+            };
+        }).filter((s): s is NonNullable<typeof s> => Boolean(s))
+        : [];
+
+    const handleAddClick = () => {
+        const firstSegment = availableSegments[0];
+        if (firstSegment) {
+            setNewNarrative({ ...newNarrative, fromStepIdx: firstSegment.fromStepIdx, toStepIdx: firstSegment.toStepIdx });
+            setAddingNarrative(true);
+        }
+    };
+
+    return (
+        <Section title={`Narratives (${narratives.length})`} icon={<BookOpen className="w-4 h-4" />}>
+            {narratives.length === 0 && !addingNarrative ? (
+                <div className="text-center py-6">
+                    <BookOpen className="w-10 h-10 text-neutral-200 mx-auto mb-2" />
+                    <p className="text-sm text-neutral-400">No narratives for this quest</p>
+                    {canEdit && availableSegments.length > 0 && (
+                        <button
+                            onClick={handleAddClick}
+                            className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-dashed border-neutral-300 text-neutral-600 text-sm font-medium hover:border-violet-400 hover:text-violet-600 hover:bg-violet-50/50 transition-all"
+                        >
+                            <Plus className="w-4 h-4" /> Add Narrative
+                        </button>
+                    )}
+                </div>
+            ) : (
+                <div className="space-y-3">
+                    {narratives.map((n) => {
+                        const isExpanded = expandedNarratives.has(n._id);
+                        return (
+                            <div key={n._id} className={`rounded-xl border transition-all ${
+                                isExpanded ? "border-violet-300 ring-1 ring-violet-200 shadow-sm" : "border-neutral-200 hover:border-neutral-300"
+                            }`}>
+                                <button
+                                    onClick={() => toggleNarrative(n._id)}
+                                    className="w-full flex items-center justify-between p-4 text-left"
+                                >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                            isExpanded ? "bg-violet-100 text-violet-600" : "bg-neutral-100 text-neutral-400"
+                                        }`}>
+                                            <BookOpen className="w-4 h-4" />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <span className="font-medium text-sm text-neutral-800 block truncate">
+                                                {n.title || `${getStepLabel(n.from_step_id)} → ${getStepLabel(n.to_step_id)}`}
+                                            </span>
+                                            <span className="text-xs text-neutral-400 block">
+                                                {getStepLabel(n.from_step_id)} → {getStepLabel(n.to_step_id)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {n.is_mandatory && (
+                                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">Required</span>
+                                        )}
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-neutral-100 text-neutral-500 border border-neutral-200">
+                                            {n.trigger_radius_m}m radius
+                                        </span>
+                                        <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                                    </div>
+                                </button>
+
+                                {isExpanded && (
+                                    <div className="px-4 pb-4 border-t border-neutral-100 space-y-4 animate-fade-in">
+                                        {/* Title */}
+                                        <div className="pt-3">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Title</span>
+                                                {canEdit && narrativeEditField !== `n-title-${n._id}` && (
+                                                    <button onClick={() => onStartNarrativeEdit(`n-title-${n._id}`, n.title || "")} className="text-neutral-300 hover:text-violet-500 transition-colors">
+                                                        <Pencil className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                            {narrativeEditField === `n-title-${n._id}` ? (
+                                                <div className="space-y-2">
+                                                    <input
+                                                        value={narrativeEditValue}
+                                                        onChange={(e) => onChangeNarrativeEditValue(e.target.value)}
+                                                        className="w-full text-sm bg-white rounded-lg border border-neutral-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                                                        autoFocus
+                                                        placeholder="Narrative title..."
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === "Enter") onSaveNarrativeField(n._id, "title", narrativeEditValue);
+                                                            if (e.key === "Escape") onCancelNarrativeEdit();
+                                                        }}
+                                                    />
+                                                    <div className="flex gap-1">
+                                                        <button onClick={() => onSaveNarrativeField(n._id, "title", narrativeEditValue)} className="px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium hover:bg-violet-700 flex items-center gap-1"><Check className="w-3 h-3" /> Save</button>
+                                                        <button onClick={onCancelNarrativeEdit} className="px-3 py-1.5 rounded-lg border border-neutral-200 text-neutral-600 text-xs font-medium hover:bg-neutral-50 flex items-center gap-1"><X className="w-3 h-3" /> Cancel</button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-neutral-700">{n.title || <span className="text-neutral-400 italic">No title</span>}</p>
+                                            )}
+                                        </div>
+
+                                        {/* Content */}
+                                        <div>
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Story Content</span>
+                                                {canEdit && narrativeEditField !== `n-content-${n._id}` && (
+                                                    <button onClick={() => onStartNarrativeEdit(`n-content-${n._id}`, n.content)} className="text-neutral-300 hover:text-violet-500 transition-colors">
+                                                        <Pencil className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                            {narrativeEditField === `n-content-${n._id}` ? (
+                                                <div className="space-y-2">
+                                                    <textarea
+                                                        value={narrativeEditValue}
+                                                        onChange={(e) => onChangeNarrativeEditValue(e.target.value)}
+                                                        rows={4}
+                                                        className="w-full text-sm bg-white rounded-lg border border-neutral-200 p-3 focus:outline-none focus:ring-2 focus:ring-violet-200 resize-y"
+                                                        autoFocus
+                                                    />
+                                                    <div className="flex gap-1">
+                                                        <button onClick={() => onSaveNarrativeField(n._id, "content", narrativeEditValue)} className="px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium hover:bg-violet-700 flex items-center gap-1"><Check className="w-3 h-3" /> Save</button>
+                                                        <button onClick={onCancelNarrativeEdit} className="px-3 py-1.5 rounded-lg border border-neutral-200 text-neutral-600 text-xs font-medium hover:bg-neutral-50 flex items-center gap-1"><X className="w-3 h-3" /> Cancel</button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-neutral-700 leading-relaxed whitespace-pre-wrap">{n.content}</p>
+                                            )}
+                                        </div>
+
+                                        {/* Settings Row */}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="bg-neutral-50 rounded-xl p-3">
+                                                <div className="flex items-center gap-1.5 text-neutral-500 text-xs font-semibold uppercase tracking-wider mb-1">
+                                                    <Radius className="w-3.5 h-3.5" /> Trigger Radius
+                                                </div>
+                                                {narrativeEditField === `n-radius-${n._id}` ? (
+                                                    <div className="space-y-2">
+                                                        <input
+                                                            type="number" min={1} max={500}
+                                                            value={narrativeEditValue}
+                                                            onChange={(e) => onChangeNarrativeEditValue(e.target.value)}
+                                                            className="w-full text-sm bg-white rounded-lg border border-neutral-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                                                            autoFocus
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === "Enter") onSaveNarrativeField(n._id, "trigger_radius_m", Number(narrativeEditValue));
+                                                                if (e.key === "Escape") onCancelNarrativeEdit();
+                                                            }}
+                                                        />
+                                                        <div className="flex gap-1">
+                                                            <button onClick={() => onSaveNarrativeField(n._id, "trigger_radius_m", Number(narrativeEditValue))} className="p-1 rounded-md hover:bg-emerald-50 text-emerald-600"><Check className="w-3.5 h-3.5" /></button>
+                                                            <button onClick={onCancelNarrativeEdit} className="p-1 rounded-md hover:bg-red-50 text-red-500"><X className="w-3.5 h-3.5" /></button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div
+                                                        className={`text-sm font-medium text-neutral-800 ${canEdit ? "cursor-pointer group hover:text-violet-600" : ""}`}
+                                                        onClick={() => canEdit && onStartNarrativeEdit(`n-radius-${n._id}`, n.trigger_radius_m)}
+                                                    >
+                                                        {n.trigger_radius_m}m
+                                                        {canEdit && <Pencil className="w-3 h-3 inline ml-1 text-neutral-300 group-hover:text-violet-500 transition-colors" />}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="bg-neutral-50 rounded-xl p-3">
+                                                <div className="flex items-center gap-1.5 text-neutral-500 text-xs font-semibold uppercase tracking-wider mb-1">
+                                                    <ShieldCheck className="w-3.5 h-3.5" /> Mandatory
+                                                </div>
+                                                {canEdit ? (
+                                                    <label className="flex items-center gap-2 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={n.is_mandatory}
+                                                            onChange={(e) => onSaveNarrativeField(n._id, "is_mandatory", e.target.checked)}
+                                                            className="w-4 h-4 rounded border-neutral-300 text-violet-600 focus:ring-violet-500"
+                                                        />
+                                                        <span className="text-sm text-neutral-700">{n.is_mandatory ? "Yes" : "No"}</span>
+                                                    </label>
+                                                ) : (
+                                                    <span className="text-sm font-medium text-neutral-800">{n.is_mandatory ? "Yes" : "No"}</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Meta info */}
+                                        <div className="flex items-center gap-3 text-xs text-neutral-400 pt-2 border-t border-neutral-100">
+                                            <span>Views: {n.view_count}</span>
+                                            <span>·</span>
+                                            <span>Created: {new Date(n.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                                            {canEdit && (
+                                                <button
+                                                    onClick={() => onDeleteNarrative(n._id)}
+                                                    className="ml-auto text-neutral-400 hover:text-red-500 transition-colors flex items-center gap-1"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" /> Delete
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+
+                    {/* Add narrative */}
+                    {addingNarrative ? (
+                        <div className="rounded-xl border border-violet-300 ring-1 ring-violet-200 p-4 space-y-4 animate-fade-in">
+                            <h4 className="font-semibold text-sm text-neutral-800 flex items-center gap-2">
+                                <BookOpen className="w-4 h-4 text-violet-500" /> New Narrative
+                            </h4>
+                            <div className="grid gap-3">
+                                <div>
+                                    <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider block mb-1">Route Segment</label>
+                                    <select
+                                        value={`${newNarrative.fromStepIdx}-${newNarrative.toStepIdx}`}
+                                        onChange={(e) => {
+                                            const parts = e.target.value.split('-');
+                                            const fromIdx = Number(parts[0]) || 0;
+                                            const toIdx = Number(parts[1]) || 1;
+                                            setNewNarrative({ ...newNarrative, fromStepIdx: fromIdx, toStepIdx: toIdx });
+                                        }}
+                                        className="w-full text-sm bg-white border border-neutral-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                                    >
+                                        <option value="" disabled hidden>Select an available route segment...</option>
+                                        {availableSegments.map((seg) => (
+                                            <option key={`${seg.fromStepIdx}-${seg.toStepIdx}`} value={`${seg.fromStepIdx}-${seg.toStepIdx}`}>
+                                                {seg.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {availableSegments.length === 0 && (
+                                        <p className="text-xs text-red-500 mt-1">All route segments already have narratives.</p>
+                                    )}
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider block mb-1">Title (Optional)</label>
+                                <input
+                                    value={newNarrative.title}
+                                    onChange={(e) => setNewNarrative({ ...newNarrative, title: e.target.value })}
+                                    placeholder="e.g. The River Crossing"
+                                    className="w-full text-sm bg-white border border-neutral-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider block mb-1">Story Content <span className="text-red-500">*</span></label>
+                                <textarea
+                                    value={newNarrative.content}
+                                    onChange={(e) => setNewNarrative({ ...newNarrative, content: e.target.value })}
+                                    placeholder="Write the narrative story content..."
+                                    rows={4}
+                                    className="w-full text-sm bg-white border border-neutral-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-violet-200 resize-y"
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider block mb-1">Trigger Radius (m)</label>
+                                    <input
+                                        type="number" min={1} max={500}
+                                        value={newNarrative.triggerRadiusM}
+                                        onChange={(e) => setNewNarrative({ ...newNarrative, triggerRadiusM: Number(e.target.value) })}
+                                        className="w-full text-sm bg-white border border-neutral-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider block mb-1">Mandatory</label>
+                                    <label className="flex items-center gap-2 cursor-pointer pt-1">
+                                        <input
+                                            type="checkbox"
+                                            checked={newNarrative.isMandatory}
+                                            onChange={(e) => setNewNarrative({ ...newNarrative, isMandatory: e.target.checked })}
+                                            className="w-4 h-4 rounded border-neutral-300 text-violet-600 focus:ring-violet-500"
+                                        />
+                                        <span className="text-sm text-neutral-600">Required to view</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div className="flex gap-2 pt-2">
+                                <button
+                                    onClick={onCreateNarrative}
+                                    className="px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 transition-colors flex items-center gap-1.5"
+                                >
+                                    <Check className="w-4 h-4" /> Create Narrative
+                                </button>
+                                <button
+                                    onClick={() => setAddingNarrative(false)}
+                                    className="px-4 py-2 rounded-xl border border-neutral-200 text-neutral-600 text-sm font-medium hover:bg-neutral-50 transition-colors flex items-center gap-1.5"
+                                >
+                                    <X className="w-4 h-4" /> Cancel
+                                </button>
+                            </div>
+                        </div>
+                    ) : canEdit && availableSegments.length > 0 && (
+                        <button
+                            onClick={handleAddClick}
+                            className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl border border-dashed border-neutral-300 text-neutral-500 text-sm font-medium hover:border-violet-400 hover:text-violet-600 hover:bg-violet-50/50 transition-all"
+                        >
+                            <Plus className="w-4 h-4" /> Add Narrative
+                        </button>
+                    )}
+                </div>
+            )}
+        </Section>
     );
 }

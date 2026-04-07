@@ -37,5 +37,10 @@ export const API_ENDPOINTS = {
         BY_ID: (id: string) => `/api/admin/creator-applications/${id}`,
         APPROVE: (id: string) => `/api/admin/creator-applications/${id}/approve`,
         REJECT: (id: string) => `/api/admin/creator-applications/${id}/reject`,
-    }
+    },
+    NARRATIVES: {
+        CREATE: "/api/locations/narrative",
+        BY_ID: (id: string) => `/api/locations/narrative/${id}`,
+        BY_QUEST: (questId: string) => `/api/locations/quest/${questId}/narratives`,
+    },
 } as const;
