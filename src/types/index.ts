@@ -304,7 +304,7 @@ export interface Narrative {
     content: string;
     trigger_location?: { type: "Point"; coordinates: [number, number] };
     trigger_radius_m: number;
-    media?: any[];
+    media?: CloudinaryAsset[];
     is_mandatory: boolean;
     view_count: number;
     created_by: string;
