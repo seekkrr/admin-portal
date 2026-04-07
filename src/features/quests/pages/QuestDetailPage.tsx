@@ -1630,9 +1630,9 @@ function NarrativesSection({
                                 </button>
                             </div>
                         </div>
-                    ) : canEdit && steps.length >= 2 && (
+                    ) : canEdit && availableSegments.length > 0 && (
                         <button
-                            onClick={() => setAddingNarrative(true)}
+                            onClick={handleAddClick}
                             className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl border border-dashed border-neutral-300 text-neutral-500 text-sm font-medium hover:border-violet-400 hover:text-violet-600 hover:bg-violet-50/50 transition-all"
                         >
                             <Plus className="w-4 h-4" /> Add Narrative
