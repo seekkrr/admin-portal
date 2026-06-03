@@ -17,11 +17,11 @@ export function StatsPage() {
     const { user } = useAuthStore();
 
     // 1. RBAC Check
-    if (user && !ALLOWED_ROLES.includes(user.role)) {
+    if (user && !user.role?.some(r => ALLOWED_ROLES.includes(r as any))) {
         return <Navigate to="/access-denied" replace />;
     }
 
-    const isAdmin = user && ADMIN_ROLES.includes(user.role);
+    const isAdmin = user && user.role?.some(r => ADMIN_ROLES.includes(r as any));
 
     // 2. Query Stats - Only if Admin/Super Admin
     // If not admin, we skip the query (enabled: false) or ignore the result

@@ -69,9 +69,9 @@ export function QuestDetailPage() {
     const queryClient = useQueryClient();
     const { user: currentUser } = useAuthStore();
 
-    const hasAccess = !!currentUser && ALLOWED_ROLES.includes(currentUser.role);
-    const canDelete = !!currentUser && CAN_DELETE_ROLES.includes(currentUser.role);
-    const canEdit = !!currentUser && CAN_EDIT_ROLES.includes(currentUser.role);
+    const hasAccess = !!currentUser && currentUser.role?.some(r => ALLOWED_ROLES.includes(r as any));
+    const canDelete = !!currentUser && currentUser.role?.some(r => CAN_DELETE_ROLES.includes(r as any));
+    const canEdit = !!currentUser && currentUser.role?.some(r => CAN_EDIT_ROLES.includes(r as any));
     const validQuestId = isValidObjectId(questId);
 
     const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
@@ -940,7 +940,7 @@ export function QuestDetailPage() {
                 {creator ? (
                     <div className="grid grid-cols-2 gap-3">
                         <InfoRow label="Name" value={`${creator.first_name} ${creator.last_name}`} />
-                        <InfoRow label="Role" value={creator.role} />
+                        <InfoRow label="Role" value={creator.role?.join(', ')} />
                         <InfoRow label="Status" value={creator.status} />
                         <InfoRow
                             label="Creator ID"

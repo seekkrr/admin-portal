@@ -8,7 +8,7 @@ export interface User {
     contact_id: string;
     security_id: string;
     profile_id: string;
-    role: "user" | "admin" | "super_admin" | "creator" | "moderator" | "finance";
+    role: Array<"user" | "admin" | "super_admin" | "creator" | "moderator" | "finance">;
     status: "active" | "suspended" | "deleted";
     is_creator: boolean;
     created_at: string;
@@ -285,7 +285,7 @@ export interface QuestDetailCreator {
     _id: string;
     first_name: string;
     last_name: string;
-    role: string;
+    role: Array<string>;
     status: string;
     is_creator: boolean;
     created_at: string;
@@ -346,4 +346,221 @@ export interface PaginatedResponse<T> {
         has_next: boolean;
         has_prev: boolean;
     };
+}
+
+// ---- Support Query Types (Section 13) ----
+
+export interface SupportQuery {
+    id: string; // Updated from _id to id to match backend
+    name?: string;
+    email?: string;
+    phone?: string;
+    message?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface ListSupportQueriesParams {
+    page?: number;
+    page_size?: number;
+    email_filter?: string;
+}
+
+export interface SupportQueriesResponse {
+    queries: SupportQuery[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
+// ---- Analytics Types (Sections 1 & 15) ----
+export type AnalyticsPeriod = "7d" | "30d" | "60d" | "90d";
+
+export interface AnalyticsOverview {
+    data: {
+        period: { from: string, to: string };
+        total_users: number;
+        published_quests: number;
+        active_creators: number;
+        total_reviews: number;
+        revenue_in_period: number;
+        completions_in_period: number;
+        completion_rate: number;
+    }
+}
+
+export interface UserGrowthData {
+    data: Array<{
+        period: string;
+        count: number;
+    }>;
+}
+
+export interface ActiveUsersData {
+    data: {
+        active_users: number;
+        from: string;
+        to: string;
+    }
+}
+
+export interface UsersByRoleData {
+    data: Array<{
+        role: string;
+        count: number;
+    }>;
+}
+
+export interface RetentionCohortData {
+    data: Array<{
+        cohort_month: string;
+        user_count: number;
+    }>;
+}
+
+export interface RevenueData {
+    data: {
+        total_revenue: number;
+        transaction_count: number;
+        from: string;
+        to: string;
+    }
+}
+
+export interface RevenueOverTimeData {
+    data: Array<{
+        period: string;
+        revenue: number;
+        count: number;
+    }>;
+}
+
+export interface RevenueByQuestData {
+    data: Array<{
+        quest_id: string;
+        quest_title: string;
+        revenue: number;
+        count: number;
+    }>;
+}
+
+export interface RevenueFunnelData {
+    data: {
+        transactions: Record<string, number>;
+        refunds: Record<string, number>;
+    }
+}
+
+export interface QuestCompletionRateData {
+    data: {
+        total: number;
+        completed: number;
+        completion_rate: number;
+    }
+}
+
+export interface QuestsByStatusData {
+    data: Array<{
+        status: string;
+        count: number;
+    }>;
+}
+
+export interface TopPerformingQuestsData {
+    data: Array<{
+        quest_id: string;
+        title: string;
+        completions?: number;
+        revenue?: number;
+        average_rating?: number;
+    }>;
+}
+
+export interface QuestApprovalFunnelData {
+    data: Array<{
+        action: string;
+        count: number;
+    }>;
+}
+
+export interface ReviewSentimentData {
+    data: {
+        average_rating: number;
+        review_count: number;
+        distribution: Record<string, number>;
+    }
+}
+
+export interface ActiveCreatorsData {
+    data: {
+        active_creators: number;
+    }
+}
+
+export interface TopCreatorsData {
+    data: Array<{
+        creator_id: string;
+        name: string;
+        total_earnings: number;
+        total_quests: number;
+    }>;
+}
+
+export interface CreatorApplicationFunnelData {
+    data: Array<{
+        status: string;
+        count: number;
+    }>;
+}
+
+export interface TopRegionsData {
+    data: Array<{
+        region_id: string;
+        name: string;
+        quests?: number;
+        footfall?: number;
+        completions?: number;
+    }>;
+}
+
+export interface RegionCoverageData {
+    data: Array<{
+        type: string;
+        count: number;
+    }>;
+}
+
+export interface NarrativesByStatusData {
+    data: Array<{
+        status: string;
+        count: number;
+    }>;
+}
+
+export interface MarkersByCategoryData {
+    data: Array<{
+        status: string;
+        count: number;
+        period: string;
+    }>;
+}
+
+export interface SessionDurationData {
+    average_minutes: number;
+    median_minutes: number;
+    data: Array<{
+        date: string;
+        avg_duration: number;
+    }>;
+    period: AnalyticsPeriod;
+}
+
+export interface FeatureUsageData {
+    features: Array<{
+        feature: string;
+        usage_count: number;
+        unique_users: number;
+        percentage: number;
+    }>;
 }

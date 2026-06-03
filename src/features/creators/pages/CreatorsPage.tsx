@@ -61,7 +61,7 @@ const STATUS_OPTIONS: DropdownOption[] = [
 export function CreatorsPage() {
     const { user: currentUser } = useAuthStore();
     const queryClient = useQueryClient();
-    const hasAccess = !!currentUser && ALLOWED_ROLES.includes(currentUser.role);
+    const hasAccess = !!currentUser && currentUser.role?.some(r => ALLOWED_ROLES.includes(r as any));
 
     // ---- State ----
     const [searchInput, setSearchInput] = useState("");

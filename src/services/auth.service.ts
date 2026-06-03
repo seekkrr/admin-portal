@@ -1,6 +1,5 @@
 import { api, authStorage } from "./api";
 import { API_ENDPOINTS } from "@config/api";
-import { config } from "@config/env";
 import type { AuthTokens, User } from "@/types";
 
 export interface AuthMeResponse {
@@ -9,26 +8,13 @@ export interface AuthMeResponse {
 
 export const authService = {
     /**
-     * Initiate Google OAuth login for admins
-     * Uses state parameter for CSRF protection
+     * Login with Google Credential from GIS SDK
      */
-    initiateGoogleLogin(): void {
-        const redirectUri = `${window.location.origin}/auth/callback`;
-
-        // Use full backend URL for OAuth
-        // Note: Using is_creator=false or is_admin=true depending on backend logic. 
-        // Assuming backend treats non-creator logins as potentially admin logins if role matches, 
-        // or just standard user login which we then check role for.
-        // For now, mirroring creator portal but checking backend URL construction.
-        const authUrl = `${config.api.baseUrl}${API_ENDPOINTS.AUTH.GOOGLE}?platform=web&redirect_uri=${encodeURIComponent(redirectUri)}`;
-        window.location.href = authUrl;
-    },
-
-    /**
-     * Exchange auth code for tokens
-     */
-    async exchangeAuthCode(code: string): Promise<AuthTokens> {
-        const response = await api.post<AuthTokens>("/api/auth/mobile/exchange", { code });
+    async loginWithGoogleCredential(credential: string): Promise<AuthTokens> {
+        const response = await api.post<AuthTokens>(API_ENDPOINTS.AUTH.OAUTH_LOGIN, {
+            provider: "google",
+            token: credential,
+        });
         return response.data;
     },
 
@@ -40,20 +26,9 @@ export const authService = {
         const tokens = authStorage.getToken();
         if (!tokens) throw new Error("No token found");
 
-        // Parse JWT to get user_id (simplistic parsing)
-        const parts = tokens.split('.');
-        if (parts.length < 2) throw new Error("Invalid token format");
-        const base64Url = parts[1];
-        if (!base64Url) throw new Error("Invalid token format");
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function (c) {
-            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-        }).join(''));
-
-        const payload = JSON.parse(jsonPayload);
-        const userId = payload.sub || payload.user_id;
-
-        const response = await api.get<{ user: User }>(`/api/core/users/${userId}`);
+        // The /auth/verify endpoint uses to_self_dict() which includes 'role' and other private fields
+        // that are stripped from the public /users/:id endpoint.
+        const response = await api.get<{ user: User }>(API_ENDPOINTS.AUTH.VERIFY);
 
         return {
             user: response.data.user,

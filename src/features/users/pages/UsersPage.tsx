@@ -87,7 +87,7 @@ const CREATOR_OPTIONS: DropdownOption[] = [
 export function UsersPage() {
     const { user: currentUser } = useAuthStore();
     const queryClient = useQueryClient();
-    const isAdmin = !!currentUser && ADMIN_ROLES.includes(currentUser.role);
+    const isAdmin = !!currentUser && currentUser.role?.some(r => ADMIN_ROLES.includes(r as any));
 
     // ---- State ----
     const [searchInput, setSearchInput] = useState("");
@@ -406,7 +406,8 @@ export function UsersPage() {
                             <tbody className="divide-y divide-neutral-50">
                                 {filteredUsers.map((u) => {
                                     const sc = statusConfig[u.status] || { label: u.status, dot: "bg-neutral-400", bg: "bg-neutral-50 text-neutral-600 border-neutral-200" };
-                                    const rc = roleConfig[u.role] || { label: u.role, bg: "bg-neutral-50 text-neutral-600 border-neutral-200" };
+                                    const primaryRole = u.role?.[0] || "user";
+                                    const rc = roleConfig[primaryRole] || { label: primaryRole, bg: "bg-neutral-50 text-neutral-600 border-neutral-200" };
                                     return (
                                         <tr
                                             key={u._id}
@@ -521,23 +522,23 @@ export function UsersPage() {
                         <h3 className="text-lg font-bold text-neutral-900 mb-1">Change Role</h3>
                         <p className="text-sm text-neutral-500 mb-5 flex items-center gap-2">
                             {promotingUser.first_name} {promotingUser.last_name}
-                            <Badge label={promotingUser.role} styles={roleConfig[promotingUser.role]?.bg} />
+                            <Badge label={promotingUser.role?.join(", ")} styles={roleConfig[promotingUser.role?.[0] || 'user']?.bg} />
                         </p>
                         <div className="space-y-2">
                             {PROMOTABLE_ROLES.map((role) => (
                                 <button
                                     key={role}
-                                    disabled={promotingUser.role === role || roleMutation.isPending}
+                                    disabled={promotingUser.role?.includes(role as any) || roleMutation.isPending}
                                     onClick={() => setConfirmAction({ type: "promote", payload: { userId: promotingUser._id, role } })}
                                     className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all
-                                        ${promotingUser.role === role
+                                        ${promotingUser.role?.includes(role as any)
                                             ? "border-indigo-300 bg-indigo-50 text-indigo-700 cursor-default"
                                             : "border-neutral-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-neutral-700"
                                         }
                                         disabled:opacity-50`}
                                 >
                                     <span className="capitalize">{role.replace("_", " ")}</span>
-                                    {promotingUser.role === role && <span className="text-xs text-indigo-500">Current</span>}
+                                    {promotingUser.role?.includes(role as any) && <span className="text-xs text-indigo-500">Current</span>}
                                 </button>
                             ))}
                         </div>

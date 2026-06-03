@@ -37,7 +37,7 @@ export function CreatorEditPage() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { user: currentUser } = useAuthStore();
-    const hasAccess = !!currentUser && ALLOWED_ROLES.includes(currentUser.role);
+    const hasAccess = !!currentUser && currentUser.role?.some(r => ALLOWED_ROLES.includes(r as any));
 
     const [editingPayout, setEditingPayout] = useState(false);
     const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);

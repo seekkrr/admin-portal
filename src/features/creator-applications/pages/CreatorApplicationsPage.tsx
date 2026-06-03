@@ -33,7 +33,7 @@ const statusConfig: Record<CreatorApplication["status"], { label: string; dot: s
 
 export function CreatorApplicationsPage() {
     const { user: currentUser } = useAuthStore();
-    const hasAccess = !!currentUser && ALLOWED_ROLES.includes(currentUser.role);
+    const hasAccess = !!currentUser && currentUser.role?.some(r => ALLOWED_ROLES.includes(r as any));
 
     // ---- State ----
     const [statusFilter, setStatusFilter] = useState<"pending" | "approved" | "rejected" | "">("pending");

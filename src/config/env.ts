@@ -6,6 +6,7 @@ const envSchema = z.object({
     VITE_MAPBOX_ACCESS_TOKEN: z.string().min(1, "Mapbox access token is required"),
     VITE_CLOUDINARY_CLOUD_NAME: z.string().min(1, "Cloudinary cloud name is required"),
     VITE_CLOUDINARY_UPLOAD_PRESET: z.string().default("seekkrr_admin"),
+    VITE_GOOGLE_CLIENT_ID: z.string().min(1, "Google client ID is required"),
 });
 
 type EnvConfig = z.infer<typeof envSchema>;
@@ -17,6 +18,7 @@ function validateEnv(): EnvConfig {
         VITE_MAPBOX_ACCESS_TOKEN: import.meta.env.VITE_MAPBOX_ACCESS_TOKEN,
         VITE_CLOUDINARY_CLOUD_NAME: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME,
         VITE_CLOUDINARY_UPLOAD_PRESET: import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET,
+        VITE_GOOGLE_CLIENT_ID: import.meta.env.VITE_GOOGLE_CLIENT_ID,
     });
 
     if (!result.success) {
@@ -51,6 +53,7 @@ export const config = {
         uploadPreset: env.VITE_CLOUDINARY_UPLOAD_PRESET,
         uploadUrl: `https://api.cloudinary.com/v1_1/${env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`,
     },
+    googleClientId: env.VITE_GOOGLE_CLIENT_ID,
 } as const;
 
 export type Config = typeof config;
