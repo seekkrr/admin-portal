@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     X, ExternalLink, CheckCircle, XCircle, Link as LinkIcon,
-    Calendar, Phone, Mail, User
+    Calendar, Phone, Mail, User, Trash2
 } from "lucide-react";
 import { toast } from "sonner";
 import { creatorApplicationsService } from "../services/creator-applications.service";
@@ -22,6 +22,7 @@ export function ApplicationDetailModal({
     const queryClient = useQueryClient();
     const [rejectReason, setRejectReason] = useState("");
     const [showRejectInput, setShowRejectInput] = useState(false);
+    const [confirmDelete, setConfirmDelete] = useState(false);
 
     // Close on Escape key
     useEffect(() => {
@@ -38,14 +39,15 @@ export function ApplicationDetailModal({
         if (!open) {
             setShowRejectInput(false);
             setRejectReason("");
+            setConfirmDelete(false);
         }
     }, [open]);
 
     // ---- Mutations ----
     const approveMutation = useMutation({
         mutationFn: (id: string) => creatorApplicationsService.approveApplication(id),
-        onSuccess: (data) => {
-            toast.success(data.message || "Application approved!");
+        onSuccess: () => {
+            toast.success("Application approved!");
             queryClient.invalidateQueries({ queryKey: ["admin-creator-applications"] });
             onClose();
         },
@@ -55,10 +57,10 @@ export function ApplicationDetailModal({
     });
 
     const rejectMutation = useMutation({
-        mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+        mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
             creatorApplicationsService.rejectApplication(id, reason),
-        onSuccess: (data) => {
-            toast.success(data.message || "Application rejected.");
+        onSuccess: () => {
+            toast.success("Application rejected.");
             queryClient.invalidateQueries({ queryKey: ["admin-creator-applications"] });
             onClose();
         },
@@ -67,21 +69,29 @@ export function ApplicationDetailModal({
         },
     });
 
+    const deleteMutation = useMutation({
+        mutationFn: (id: string) => creatorApplicationsService.deleteApplication(id),
+        onSuccess: () => {
+            toast.success("Application deleted.");
+            queryClient.invalidateQueries({ queryKey: ["admin-creator-applications"] });
+            onClose();
+        },
+        onError: (err: Error) => {
+            toast.error(err.message || "Failed to delete application");
+        },
+    });
+
     if (!open || !application) return null;
 
-    const isPending = application.status === "pending";
-    const isBusy = approveMutation.isPending || rejectMutation.isPending;
+    const canAction = application.status === "pending" || application.status === "verifying";
+    const isBusy = approveMutation.isPending || rejectMutation.isPending || deleteMutation.isPending;
 
     const handleReject = () => {
         if (!showRejectInput) {
             setShowRejectInput(true);
             return;
         }
-        if (!rejectReason.trim()) {
-            toast.error("Please enter a reason for rejection");
-            return;
-        }
-        rejectMutation.mutate({ id: application._id, reason: rejectReason.trim() });
+        rejectMutation.mutate({ id: application.id, reason: rejectReason.trim() || undefined });
     };
 
     return (
@@ -97,15 +107,45 @@ export function ApplicationDetailModal({
                 <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 bg-gradient-to-r from-neutral-50 to-white shrink-0">
                     <div>
                         <h3 className="text-lg font-bold text-neutral-900 border-none m-0 p-0 leading-tight">Review Application</h3>
-                        <p className="text-xs text-neutral-500 mt-1 font-mono">{application._id}</p>
+                        <p className="text-xs text-neutral-500 mt-1 font-mono">{application.id}</p>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="p-2 rounded-lg text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-colors"
-                        disabled={isBusy}
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {!confirmDelete ? (
+                            <button
+                                onClick={() => setConfirmDelete(true)}
+                                title="Delete application"
+                                disabled={isBusy}
+                                className="p-2 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        ) : (
+                            <div className="flex items-center gap-2 animate-slide-up">
+                                <span className="text-xs text-red-600 font-medium">Delete?</span>
+                                <button
+                                    onClick={() => deleteMutation.mutate(application.id)}
+                                    disabled={isBusy}
+                                    className="px-2.5 py-1 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+                                >
+                                    {deleteMutation.isPending ? "..." : "Yes"}
+                                </button>
+                                <button
+                                    onClick={() => setConfirmDelete(false)}
+                                    disabled={isBusy}
+                                    className="px-2.5 py-1 rounded-lg border border-neutral-200 text-neutral-600 text-xs hover:bg-neutral-50 transition-colors"
+                                >
+                                    No
+                                </button>
+                            </div>
+                        )}
+                        <button
+                            onClick={onClose}
+                            className="p-2 rounded-lg text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-colors"
+                            disabled={isBusy}
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Body */}
@@ -161,40 +201,41 @@ export function ApplicationDetailModal({
                     </div>
 
                     {/* Social Links */}
-                    <div className="space-y-4">
-                        <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-2 border-b border-neutral-100 pb-2">
-                            <LinkIcon className="w-4 h-4" /> Social Links ({application.social_links?.length || 0})
-                        </h4>
+                    {application.social_links?.length > 0 && (
+                        <div className="space-y-4">
+                            <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-2 border-b border-neutral-100 pb-2">
+                                <LinkIcon className="w-4 h-4" /> Social Links ({application.social_links.length})
+                            </h4>
 
-                        <div className="grid gap-2">
-                            {application.social_links?.map((link, idx) => (
-                                <a
-                                    key={idx}
-                                    href={link.startsWith('http') ? link : 'https://' + link}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-2 p-3 bg-neutral-50 border border-neutral-200 rounded-xl hover:bg-neutral-100 hover:border-neutral-300 transition-colors group"
-                                >
-                                    <div className="w-8 h-8 rounded-full bg-white border border-neutral-200 flex items-center justify-center shrink-0">
-                                        <ExternalLink className="w-4 h-4 text-neutral-400 group-hover:text-neutral-600" />
-                                    </div>
-                                    <span className="text-sm text-neutral-700 truncate font-medium flex-1">
-                                        {link.replace(/^https?:\/\/(www\.)?/, '')}
-                                    </span>
-                                </a>
-                            ))}
+                            <div className="grid gap-2">
+                                {application.social_links.map((link, idx) => (
+                                    <a
+                                        key={idx}
+                                        href={link.startsWith('http') ? link : 'https://' + link}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-2 p-3 bg-neutral-50 border border-neutral-200 rounded-xl hover:bg-neutral-100 hover:border-neutral-300 transition-colors group"
+                                    >
+                                        <div className="w-8 h-8 rounded-full bg-white border border-neutral-200 flex items-center justify-center shrink-0">
+                                            <ExternalLink className="w-4 h-4 text-neutral-400 group-hover:text-neutral-600" />
+                                        </div>
+                                        <span className="text-sm text-neutral-700 truncate font-medium flex-1">
+                                            {link.replace(/^https?:\/\/(www\.)?/, '')}
+                                        </span>
+                                    </a>
+                                ))}
+                            </div>
                         </div>
-                    </div>
-
+                    )}
                 </div>
 
                 {/* Footer Actions */}
-                {isPending && (
+                {canAction && (
                     <div className="border-t border-neutral-100 bg-neutral-50/50 p-4 shrink-0">
                         {showRejectInput ? (
                             <div className="space-y-3 animate-slide-up">
                                 <label className="block text-sm font-medium text-neutral-700">
-                                    Reason for rejection <span className="text-red-500">*</span>
+                                    Reason for rejection <span className="text-neutral-400 text-xs">(optional)</span>
                                 </label>
                                 <textarea
                                     value={rejectReason}
@@ -216,7 +257,7 @@ export function ApplicationDetailModal({
                                     </button>
                                     <button
                                         onClick={handleReject}
-                                        disabled={isBusy || !rejectReason.trim()}
+                                        disabled={isBusy}
                                         className="flex-1 py-2 rounded-xl bg-red-600 text-white font-medium hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                                     >
                                         {rejectMutation.isPending ? "Rejecting..." : "Confirm Rejection"}
@@ -233,7 +274,7 @@ export function ApplicationDetailModal({
                                     <XCircle className="w-4 h-4" /> Reject
                                 </button>
                                 <button
-                                    onClick={() => approveMutation.mutate(application._id)}
+                                    onClick={() => approveMutation.mutate(application.id)}
                                     disabled={isBusy}
                                     className="flex-1 py-2.5 rounded-xl bg-teal-600 text-white font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
                                 >

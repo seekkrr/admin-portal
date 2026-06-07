@@ -1,7 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { RefreshCw } from "lucide-react";
 import type { PayoutAccount } from "@/types";
-import type { PayoutAccountRequest } from "../services/creators.service";
+
+export interface PayoutAccountRequest {
+    method: "bank" | "upi" | "wallet";
+    account_holder_name?: string;
+    bank_details?: { account_number: string; ifsc_code: string };
+    upi_id?: string;
+    currency?: string;
+}
 
 // ---- Validation patterns (derived from backend schema) ----
 const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;      // 11 chars, 5th is always 0
@@ -125,10 +132,10 @@ export function PayoutForm({ existingPayout, isPending, onSubmit, onCancel }: Pa
 
         const payload: PayoutAccountRequest = { method, currency };
         if (method === "bank") {
+            payload.account_holder_name = accountHolder.trim();
             payload.bank_details = {
-                account_number: Number(accountNumber.trim()),
+                account_number: accountNumber.trim(),
                 ifsc_code: ifscCode.trim().toUpperCase(),
-                account_holder: accountHolder.trim(),
             };
         } else if (method === "upi") {
             payload.upi_id = upiId.trim();

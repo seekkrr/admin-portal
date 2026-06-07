@@ -1,36 +1,31 @@
 import { type ReactNode, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-    X, ExternalLink, RefreshCw, TrendingUp,
-    DollarSign, Eye, Award, CreditCard,
+    X, RefreshCw, TrendingUp,
+    DollarSign, Award, CheckCircle2, Shield,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/features/users/components/Badge";
 import { creatorsService } from "../services/creators.service";
 
 // ---- Status/Verification styles ----
 const creatorStatusConfig: Record<string, { label: string; dot: string; bg: string }> = {
-    pending: { label: "Pending", dot: "bg-amber-500", bg: "bg-amber-50 text-amber-700 border-amber-200" },
-    approved: { label: "Approved", dot: "bg-emerald-500", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    active: { label: "Active", dot: "bg-emerald-500", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
     rejected: { label: "Rejected", dot: "bg-red-500", bg: "bg-red-50 text-red-700 border-red-200" },
     suspended: { label: "Suspended", dot: "bg-neutral-500", bg: "bg-neutral-100 text-neutral-700 border-neutral-300" },
 };
 
 interface CreatorDetailModalProps {
     open: boolean;
-    userId: string | null;
-    userName: string;
+    creatorId: string | null;
+    displayName: string;
     onClose: () => void;
 }
 
-/**
- * Read-only quick-view modal for a creator's stats and payout summary.
- * "Manage Creator" navigates to the full edit page.
- */
 export function CreatorDetailModal({
-    open, userId, userName, onClose,
+    open, creatorId, displayName, onClose,
 }: CreatorDetailModalProps) {
-    const navigate = useNavigate();
+    const queryClient = useQueryClient();
 
     // Close on Escape key
     useEffect(() => {
@@ -42,18 +37,26 @@ export function CreatorDetailModal({
         return () => window.removeEventListener("keydown", handleEsc);
     }, [open, onClose]);
 
-    const { data, isLoading, error } = useQuery({
-        queryKey: ["creator-detail", userId],
-        queryFn: () => creatorsService.getCreatorDetails(userId!),
-        enabled: open && !!userId,
+    const { data: creator, isLoading, error } = useQuery({
+        queryKey: ["creator-detail", creatorId],
+        queryFn: () => creatorsService.getCreator(creatorId!),
+        enabled: open && !!creatorId,
     });
 
-    if (!open || !userId) return null;
+    const updateMutation = useMutation({
+        mutationFn: ({ status, is_verified }: { status?: string; is_verified?: boolean }) =>
+            creatorsService.updateCreator(creatorId!, { status, is_verified }),
+        onSuccess: () => {
+            toast.success("Creator updated");
+            queryClient.invalidateQueries({ queryKey: ["creator-detail", creatorId] });
+            queryClient.invalidateQueries({ queryKey: ["admin-creators"] });
+        },
+        onError: (err: Error) => toast.error(err.message),
+    });
 
-    const creator = data?.creator_profile;
-    const stats = data?.stats;
-    const payout = data?.payout_account;
-    const sc = creator ? creatorStatusConfig[creator.status] ?? creatorStatusConfig.pending : null;
+    if (!open || !creatorId) return null;
+
+    const sc = creator ? creatorStatusConfig[creator.status] ?? creatorStatusConfig.active : null;
 
     return (
         <div
@@ -67,7 +70,7 @@ export function CreatorDetailModal({
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 bg-gradient-to-r from-teal-50/50 to-white">
                     <div>
-                        <h3 className="text-lg font-bold text-neutral-900">{userName}</h3>
+                        <h3 className="text-lg font-bold text-neutral-900">{displayName}</h3>
                         {creator && sc && (
                             <div className="flex items-center gap-2 mt-1">
                                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${sc.bg}`}>
@@ -96,7 +99,7 @@ export function CreatorDetailModal({
                         </div>
                     ) : error ? (
                         <div className="text-center py-8 text-red-500 text-sm">Failed to load creator details</div>
-                    ) : (
+                    ) : creator ? (
                         <>
                             {/* Stats */}
                             <div>
@@ -104,56 +107,56 @@ export function CreatorDetailModal({
                                     <TrendingUp className="w-4 h-4" /> Stats
                                 </h4>
                                 <div className="grid grid-cols-3 gap-3">
-                                    <StatCard icon={<Award className="w-4 h-4 text-indigo-500" />} label="Quests" value={stats?.total_quests ?? 0} />
-                                    <StatCard icon={<DollarSign className="w-4 h-4 text-emerald-500" />} label="Earnings" value={`₹${(stats?.total_earnings ?? 0).toLocaleString("en-IN")}`} />
-                                    <StatCard icon={<Eye className="w-4 h-4 text-violet-500" />} label="Impressions" value={(stats?.impressions ?? 0).toLocaleString()} />
+                                    <StatCard icon={<Award className="w-4 h-4 text-indigo-500" />} label="Quests" value={creator.total_quests ?? 0} />
+                                    <StatCard icon={<DollarSign className="w-4 h-4 text-emerald-500" />} label="Earnings" value={`₹${(creator.total_earnings ?? 0).toLocaleString("en-IN")}`} />
+                                    <StatCard icon={<Award className="w-4 h-4 text-violet-500" />} label="Rating" value={creator.rating ?? "—"} />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 mt-3">
+                                    <StatCard icon={<DollarSign className="w-4 h-4 text-orange-500" />} label="Pending Payout" value={`₹${(creator.pending_payouts ?? 0).toLocaleString("en-IN")}`} />
+                                    <StatCard icon={<Award className="w-4 h-4 text-teal-500" />} label="Travelers" value={creator.travelers_served ?? 0} />
                                 </div>
                             </div>
 
-                            {/* Payout Summary */}
+                            {/* Bio */}
+                            {creator.tagline && (
+                                <div>
+                                    <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider mb-2">Tagline</h4>
+                                    <p className="text-sm text-neutral-700 italic">"{creator.tagline}"</p>
+                                </div>
+                            )}
+
+                            {/* Admin Actions */}
                             <div>
                                 <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                    <CreditCard className="w-4 h-4" /> Payout
+                                    <Shield className="w-4 h-4" /> Admin Actions
                                 </h4>
-                                {payout ? (
-                                    <div className="bg-neutral-50 rounded-xl border border-neutral-200 p-4 text-sm space-y-1.5">
-                                        <div className="flex justify-between">
-                                            <span className="text-neutral-500">Method</span>
-                                            <span className="font-medium text-neutral-800 capitalize">{payout.method}</span>
-                                        </div>
-                                        {payout.method === "bank" && payout.bank_details && (
-                                            <>
-                                                <div className="flex justify-between">
-                                                    <span className="text-neutral-500">Account Holder</span>
-                                                    <span className="font-medium text-neutral-800">{payout.bank_details.account_holder}</span>
-                                                </div>
-                                                <div className="flex justify-between">
-                                                    <span className="text-neutral-500">IFSC</span>
-                                                    <span className="font-mono text-neutral-800">{payout.bank_details.ifsc_code}</span>
-                                                </div>
-                                                <div className="flex justify-between">
-                                                    <span className="text-neutral-500">Account</span>
-                                                    <span className="font-mono text-neutral-800">••{String(payout.bank_details.account_number).slice(-4)}</span>
-                                                </div>
-                                            </>
-                                        )}
-                                        {payout.method === "upi" && payout.upi_id && (
-                                            <div className="flex justify-between">
-                                                <span className="text-neutral-500">UPI ID</span>
-                                                <span className="font-mono text-neutral-800">{payout.upi_id}</span>
-                                            </div>
-                                        )}
-                                        <div className="flex justify-between">
-                                            <span className="text-neutral-500">Currency</span>
-                                            <span className="font-medium text-neutral-800">{payout.currency}</span>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <p className="text-sm text-neutral-400 italic">No payout account configured</p>
-                                )}
+                                <div className="flex flex-wrap gap-2">
+                                    {(["active", "suspended", "rejected"] as const).map((s) => (
+                                        <button
+                                            key={s}
+                                            disabled={creator.status === s || updateMutation.isPending}
+                                            onClick={() => updateMutation.mutate({ status: s })}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-40 ${
+                                                creator.status === s
+                                                    ? (creatorStatusConfig[s]?.bg ?? "") + " cursor-default"
+                                                    : "border-neutral-200 text-neutral-600 hover:bg-neutral-50"
+                                            }`}
+                                        >
+                                            {creator.status === s ? `✓ ${creatorStatusConfig[s]?.label ?? s}` : `Set ${creatorStatusConfig[s]?.label ?? s}`}
+                                        </button>
+                                    ))}
+                                    <button
+                                        disabled={updateMutation.isPending}
+                                        onClick={() => updateMutation.mutate({ is_verified: !creator.is_verified })}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-neutral-200 text-neutral-600 hover:bg-neutral-50 transition-colors disabled:opacity-40"
+                                    >
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                        {creator.is_verified ? "Unverify" : "Verify"}
+                                    </button>
+                                </div>
                             </div>
                         </>
-                    )}
+                    ) : null}
                 </div>
 
                 {/* Footer */}
@@ -163,15 +166,6 @@ export function CreatorDetailModal({
                         className="flex-1 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-600 hover:bg-neutral-100 transition-colors"
                     >
                         Close
-                    </button>
-                    <button
-                        onClick={() => {
-                            onClose();
-                            navigate(`/creators/${userId}`);
-                        }}
-                        className="flex-1 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 transition-colors inline-flex items-center justify-center gap-2"
-                    >
-                        <ExternalLink className="w-4 h-4" /> Manage Creator
                     </button>
                 </div>
             </div>

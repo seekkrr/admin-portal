@@ -48,10 +48,22 @@ export const questsService = {
                 searchParams.append(key, String(value));
             }
         });
-        const response = await api.get<QuestsListResponse>(
+        const raw = (await api.get<Record<string, unknown>>(
             `${API_ENDPOINTS.QUESTS.BASE}?${searchParams.toString()}`
-        );
-        return response.data;
+        )).data as any;
+        return {
+            quests: raw.quests ?? [],
+            pagination: {
+                total: raw.total ?? 0,
+                page: raw.page ?? 1,
+                per_page: raw.page_size ?? 20,
+                total_pages: raw.total_pages ?? 1,
+                has_next: (raw.page ?? 1) < (raw.total_pages ?? 1),
+                has_prev: (raw.page ?? 1) > 1,
+                next_page: (raw.page ?? 1) < (raw.total_pages ?? 1) ? (raw.page ?? 1) + 1 : null,
+                prev_page: (raw.page ?? 1) > 1 ? (raw.page ?? 1) - 1 : null,
+            },
+        };
     },
 
     /** Get full quest details (quest + metadata + location + media + steps + creator) */
@@ -102,7 +114,7 @@ export const questsService = {
 
     /** Delete a quest (soft by default, hard if specified) */
     deleteQuest: async (questId: string, hard: boolean = false): Promise<void> => {
-        const query = hard ? "?hard_delete=true" : "";
+        const query = hard ? "?hard=true" : "";
         await api.delete(
             `${API_ENDPOINTS.QUESTS.BY_ID(questId)}${query}`
         );

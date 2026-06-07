@@ -9,12 +9,40 @@ export interface UsersListResponse {
     pagination: {
         total: number;
         page: number;
-        per_page: number;
+        page_size: number;
         total_pages: number;
         has_next: boolean;
         has_prev: boolean;
         next_page: number | null;
         prev_page: number | null;
+    };
+}
+
+export interface UserStatsResponse {
+    total: number;
+    by_status: Record<string, number>;
+    creators: number;
+    by_role: Record<string, number>;
+    new_last_7_days: number;
+    recent_signups: Array<{ _id: string; email: string; first_name: string; last_name: string; created_at: string }>;
+}
+
+export interface ExplorationProfilesResponse {
+    profiles: Array<{
+        user_id: string;
+        preferred_pace?: string;
+        preferred_transport?: string;
+        preferred_categories?: Record<string, number>;
+        preferred_difficulty?: string;
+        total_visits: number;
+        total_quests: number;
+        current_streak: number;
+    }>;
+    pagination: {
+        total: number;
+        page: number;
+        page_size: number;
+        total_pages: number;
     };
 }
 
@@ -31,9 +59,16 @@ export interface ListUsersParams {
     q?: string;
     status?: string;
     role?: string;
-    is_creator?: string;
+    is_creator?: boolean | string;
     page?: number;
-    per_page?: number;
+    page_size?: number;
+    sort_by?: string;
+    sort_order?: number;
+}
+
+export interface ListExplorationProfilesParams {
+    page?: number;
+    page_size?: number;
 }
 
 // ---- Service ----
@@ -46,30 +81,103 @@ export const usersService = {
                 searchParams.append(key, String(value));
             }
         });
-        const response = await api.get<UsersListResponse>(
-            `${API_ENDPOINTS.CORE.USERS}?${searchParams.toString()}`
+        const response = await api.get<{
+            success: boolean;
+            users: User[];
+            total: number;
+            page: number;
+            page_size: number;
+            total_pages: number;
+        }>(`${API_ENDPOINTS.CORE.USERS}?${searchParams.toString()}`);
+        const raw = response.data;
+        return {
+            users: raw.users,
+            pagination: {
+                total: raw.total,
+                page: raw.page,
+                page_size: raw.page_size,
+                total_pages: raw.total_pages,
+                has_next: raw.page < raw.total_pages,
+                has_prev: raw.page > 1,
+                next_page: raw.page < raw.total_pages ? raw.page + 1 : null,
+                prev_page: raw.page > 1 ? raw.page - 1 : null,
+            },
+        };
+    },
+
+    getUserStats: async (): Promise<UserStatsResponse> => {
+        const response = await api.get<{ success: boolean } & UserStatsResponse>(
+            API_ENDPOINTS.CORE.USER_STATS
         );
         return response.data;
+    },
+
+    getExplorationProfiles: async (params: ListExplorationProfilesParams = {}): Promise<ExplorationProfilesResponse> => {
+        const searchParams = new URLSearchParams();
+        Object.entries(params).forEach(([key, value]) => {
+            if (value !== undefined) searchParams.append(key, String(value));
+        });
+        const response = await api.get<{ success: boolean } & ExplorationProfilesResponse>(
+            `${API_ENDPOINTS.CORE.USER_EXPLORATION_PROFILES}?${searchParams.toString()}`
+        );
+        return response.data;
+    },
+
+    getUser: async (userId: string): Promise<User> => {
+        const response = await api.get<{ success: boolean; user: User }>(
+            API_ENDPOINTS.CORE.USER_BY_ID(userId)
+        );
+        return response.data.user;
+    },
+
+    updateUser: async (userId: string, updates: Partial<User>): Promise<User> => {
+        const response = await api.put<{ success: boolean; user: User }>(
+            API_ENDPOINTS.CORE.USER_BY_ID(userId),
+            updates
+        );
+        return response.data.user;
     },
 
     updateUserRole: async (userId: string, role: string): Promise<User> => {
-        const response = await api.put<User>(
+        const response = await api.put<{ success: boolean; user: User }>(
             API_ENDPOINTS.CORE.USER_BY_ID(userId),
-            { role }
+            { role: [role] }
         );
-        return response.data;
+        return response.data.user;
     },
 
     deleteUser: async (userId: string, hard: boolean = false): Promise<void> => {
-        const query = hard ? "?soft=false" : "";
-        await api.delete(`${API_ENDPOINTS.CORE.USER_BY_ID(userId)}${query}`);
+        await api.delete(`${API_ENDPOINTS.CORE.USER_BY_ID(userId)}?soft=${!hard}`);
     },
 
     bulkAction: async (userIds: string[], action: "suspend" | "delete"): Promise<BulkActionResponse> => {
-        const response = await api.post<BulkActionResponse>(
+        const response = await api.post<{ success: boolean } & BulkActionResponse>(
             API_ENDPOINTS.CORE.BULK_ACTION,
             { user_ids: userIds, action }
         );
         return response.data;
+    },
+
+    addPoints: async (userId: string, amount: number): Promise<{ user_id: string; points_earned: number }> => {
+        const response = await api.post<{ success: boolean; user_id: string; points_earned: number }>(
+            API_ENDPOINTS.CORE.USER_POINTS_ADD(userId),
+            { amount }
+        );
+        return response.data;
+    },
+
+    deductPoints: async (userId: string, amount: number): Promise<{ user_id: string; points_earned: number }> => {
+        const response = await api.post<{ success: boolean; user_id: string; points_earned: number }>(
+            API_ENDPOINTS.CORE.USER_POINTS_DEDUCT(userId),
+            { amount }
+        );
+        return response.data;
+    },
+
+    promoteToCreator: async (userId: string): Promise<User> => {
+        const response = await api.post<{ success: boolean; user: User }>(
+            API_ENDPOINTS.CORE.USER_PROMOTE_CREATOR(userId)
+        );
+        return response.data.user;
     },
 };

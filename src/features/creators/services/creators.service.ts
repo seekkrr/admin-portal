@@ -1,140 +1,154 @@
 import { api } from "@/services/api";
 import { API_ENDPOINTS } from "@/config/api";
-import type {
-    User,
-    CreatorDetailResponse,
-    PayoutAccount,
-    Creator,
-} from "@/types";
+import type { Creator } from "@/types";
 
 // ---- Response Types ----
 
+export interface CreatorEnriched {
+    id: string;
+    user_id: string;
+    status: "active" | "suspended" | "rejected";
+    is_verified: boolean;
+    tagline?: string | null;
+    creator_bio?: string | null;
+    creator_badge?: Record<string, unknown> | null;
+    total_quests: number;
+    total_earnings: number;
+    pending_payouts: number;
+    travelers_served: number;
+    rating: number | null;
+    top_themes: string[] | null;
+    review_count: number;
+    quest_ids: string[];
+    stats_last_updated: string | null;
+    name?: string | null;
+    avatar_url?: string | null;
+    hobbies?: string[];
+    created_at: string;
+    updated_at: string;
+}
+
 export interface CreatorsListResponse {
-    users: User[];
+    creators: CreatorEnriched[];
     pagination: {
         total: number;
         page: number;
-        per_page: number;
+        page_size: number;
         total_pages: number;
         has_next: boolean;
         has_prev: boolean;
-        next_page: number | null;
-        prev_page: number | null;
     };
 }
 
-export interface BulkActionResponse {
-    action: string;
-    succeeded: string[];
-    failed: { user_id: string; reason: string }[];
-    summary: string;
+export interface CreatorPlatformStats {
+    total_creators: number;
+    total_earnings: number;
+    total_quests: number;
+    total_travelers: number;
+    avg_rating: number | null;
+    verified_creators: number;
+    by_status: Record<string, number>;
 }
 
 // ---- Query Params ----
 
 export interface ListCreatorsParams {
-    q?: string;
+    search?: string;
     status?: string;
-    role?: string;
+    is_verified?: boolean;
     page?: number;
-    per_page?: number;
+    page_size?: number;
 }
 
-// ---- Payout Request Types ----
+// ---- Creator Stats Update ----
 
-export interface PayoutAccountRequest {
-    method: "bank" | "upi" | "wallet";
-    bank_details?: {
-        account_number: number;
-        ifsc_code: string;
-        account_holder: string;
-    };
-    upi_id?: string;
-    currency?: string;
+export interface CreatorStatsUpdateRequest {
+    total_quests?: number;
+    total_earnings?: number;
+    pending_payouts?: number;
+    travelers_served?: number;
+    rating?: number;
+    top_themes?: string[];
 }
 
 // ---- Service ----
 
 export const creatorsService = {
-    /** Paginated list of creators (users with is_creator=true) */
-    listCreators: async (
-        params: ListCreatorsParams = {}
-    ): Promise<CreatorsListResponse> => {
+    /** Paginated list of creators */
+    listCreators: async (params: ListCreatorsParams = {}): Promise<CreatorsListResponse> => {
         const searchParams = new URLSearchParams();
         Object.entries(params).forEach(([key, value]) => {
             if (value !== undefined && value !== "") {
                 searchParams.append(key, String(value));
             }
         });
-        const response = await api.get<CreatorsListResponse>(
-            `${API_ENDPOINTS.CREATORS.LIST}?${searchParams.toString()}`
-        );
-        return response.data;
+        const response = await api.get<{
+            success: boolean;
+            creators: CreatorEnriched[];
+            total: number;
+            page: number;
+            page_size: number;
+            total_pages: number;
+        }>(`${API_ENDPOINTS.CREATORS.LIST}?${searchParams.toString()}`);
+        const raw = response.data;
+        return {
+            creators: raw.creators,
+            pagination: {
+                total: raw.total,
+                page: raw.page,
+                page_size: raw.page_size,
+                total_pages: raw.total_pages,
+                has_next: raw.page < raw.total_pages,
+                has_prev: raw.page > 1,
+            },
+        };
     },
 
-    /** Get detailed creator info (profile, stats, payout) */
-    getCreatorDetails: async (
-        userId: string
-    ): Promise<CreatorDetailResponse> => {
-        const response = await api.get<CreatorDetailResponse>(
-            `${API_ENDPOINTS.CREATORS.BY_USER_ID(userId)}?include_stats=true&include_payout=true`
+    /** Platform-wide creator statistics */
+    getPlatformStats: async (): Promise<CreatorPlatformStats> => {
+        const response = await api.get<{ success: boolean; stats: CreatorPlatformStats }>(
+            API_ENDPOINTS.CREATORS.PLATFORM_STATS
         );
-        return response.data;
+        return response.data.stats;
     },
 
-    /** Update creator verification status (admin only) */
-    updateCreatorStatus: async (
-        userId: string,
-        status: "pending" | "approved" | "rejected" | "suspended"
+    /** Get enriched creator profile by creator ID */
+    getCreator: async (creatorId: string): Promise<CreatorEnriched> => {
+        const response = await api.get<{ success: boolean; creator: CreatorEnriched }>(
+            API_ENDPOINTS.CREATORS.BY_ID(creatorId)
+        );
+        return response.data.creator;
+    },
+
+    /** Admin update creator (status, is_verified, profile fields) */
+    updateCreator: async (
+        creatorId: string,
+        updates: { status?: string; is_verified?: boolean; tagline?: string; creator_bio?: string }
     ): Promise<Creator> => {
-        const response = await api.patch<Creator>(
-            API_ENDPOINTS.CREATORS.STATUS(userId),
-            { status }
+        const response = await api.put<{ success: boolean; creator: Creator }>(
+            API_ENDPOINTS.CREATORS.UPDATE(creatorId),
+            updates
         );
-        return response.data;
+        return response.data.creator;
     },
 
-    /** Add a payout account for a creator */
-    addPayoutAccount: async (
-        userId: string,
-        data: PayoutAccountRequest
-    ): Promise<PayoutAccount> => {
-        const response = await api.post<PayoutAccount>(
-            API_ENDPOINTS.CREATORS.PAYOUT(userId),
-            data
+    /** Admin update creator stats (earnings, payout, rating, etc.) */
+    updateCreatorStats: async (
+        creatorId: string,
+        stats: CreatorStatsUpdateRequest
+    ): Promise<Creator> => {
+        const response = await api.post<{ success: boolean; creator: Creator }>(
+            API_ENDPOINTS.CREATORS.STATS_UPDATE(creatorId),
+            stats
         );
-        return response.data;
+        return response.data.creator;
     },
 
-    /** Update an existing payout account */
-    updatePayoutAccount: async (
-        userId: string,
-        data: PayoutAccountRequest
-    ): Promise<PayoutAccount> => {
-        const response = await api.put<PayoutAccount>(
-            API_ENDPOINTS.CREATORS.UPDATE_PAYOUT(userId),
-            data
+    /** Direct provision — bypass application workflow */
+    provisionCreator: async (userId: string): Promise<Creator> => {
+        const response = await api.post<{ success: boolean; creator: Creator }>(
+            API_ENDPOINTS.CREATORS.PROVISION(userId)
         );
-        return response.data;
-    },
-
-    /** Delete a user (shared with users) */
-    deleteUser: async (userId: string, hard: boolean = false): Promise<void> => {
-        const query = hard ? "?soft=false" : "";
-        await api.delete(
-            `${API_ENDPOINTS.CORE.USER_BY_ID(userId)}${query}`
-        );
-    },
-
-    /** Bulk suspend/delete (shared with users) */
-    bulkAction: async (
-        userIds: string[],
-        action: "suspend" | "delete"
-    ): Promise<BulkActionResponse> => {
-        const response = await api.post<BulkActionResponse>(
-            API_ENDPOINTS.CORE.BULK_ACTION,
-            { user_ids: userIds, action }
-        );
-        return response.data;
+        return response.data.creator;
     },
 };

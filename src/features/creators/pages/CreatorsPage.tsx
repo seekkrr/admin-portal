@@ -1,82 +1,122 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-    Search, Users, Trash2, Ban, ChevronLeft, ChevronRight,
-    RefreshCw, AlertTriangle,
-    X, Filter,
+    Search, Users, ChevronLeft, ChevronRight,
+    RefreshCw, AlertTriangle, CheckCircle2,
+    X, Filter, TrendingUp, Star, BadgeCheck, UserPlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@store/auth.store";
 import { AccessDenied } from "@components/AccessDenied";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { creatorsService } from "../services/creators.service";
-import { ConfirmModal } from "@/features/users/components/ConfirmModal";
 import { FilterDropdown } from "@/features/users/components/FilterDropdown";
 import { usePaginationRange } from "@/features/users/hooks/usePagination";
 import { CreatorDetailModal } from "../components/CreatorDetailModal";
 import type { DropdownOption } from "@/features/users/components/FilterDropdown";
-import type { User } from "@/types";
+import type { CreatorEnriched } from "../services/creators.service";
 
 // ---- Constants ----
 const ALLOWED_ROLES = ["admin", "super_admin", "finance"];
 const PER_PAGE = 10;
 const SEARCH_DEBOUNCE_MS = 400;
-const SESSION_KEY = "admin_creators_selected";
 
 // ---- Badge Styles ----
-const userStatusConfig: Record<string, { label: string; dot: string; bg: string }> = {
+const creatorStatusConfig: Record<string, { label: string; dot: string; bg: string }> = {
     active: { label: "Active", dot: "bg-emerald-500", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-    suspended: { label: "Suspended", dot: "bg-amber-500", bg: "bg-amber-50 text-amber-700 border-amber-200" },
-    deleted: { label: "Deleted", dot: "bg-red-500", bg: "bg-red-50 text-red-700 border-red-200" },
+    rejected: { label: "Rejected", dot: "bg-red-500", bg: "bg-red-50 text-red-700 border-red-200" },
+    suspended: { label: "Suspended", dot: "bg-neutral-400", bg: "bg-neutral-100 text-neutral-700 border-neutral-300" },
 };
-
-// ---- Session Helpers ----
-function loadSessionSelections(): Set<string> {
-    try {
-        const raw = sessionStorage.getItem(SESSION_KEY);
-        return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
-    } catch {
-        return new Set();
-    }
-}
-
-function saveSessionSelections(ids: Set<string>) {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify([...ids]));
-}
-
-// ---- Discriminated Union for Confirm Actions ----
-type ConfirmAction =
-    | { type: "suspend"; payload: { ids: string[] } }
-    | { type: "bulk-delete"; payload: { ids: string[] } }
-    | { type: "single-delete"; payload: { userId: string } };
 
 // ---- Filter Dropdown Options ----
 const STATUS_OPTIONS: DropdownOption[] = [
     { value: "", label: "All Statuses" },
     { value: "active", label: "Active", dot: "bg-emerald-500" },
-    { value: "suspended", label: "Suspended", dot: "bg-amber-500" },
+    { value: "rejected", label: "Rejected", dot: "bg-red-500" },
+    { value: "suspended", label: "Suspended", dot: "bg-neutral-400" },
 ];
+
+const VERIFIED_OPTIONS: DropdownOption[] = [
+    { value: "", label: "All" },
+    { value: "true", label: "Verified", dot: "bg-emerald-500" },
+    { value: "false", label: "Unverified", dot: "bg-neutral-400" },
+];
+
+// ---- Provision Creator Modal ----
+function ProvisionCreatorModal({ onClose }: { onClose: () => void }) {
+    const queryClient = useQueryClient();
+    const [userId, setUserId] = useState("");
+
+    const isValidObjectId = /^[0-9a-f]{24}$/i.test(userId.trim());
+
+    const provisionMutation = useMutation({
+        mutationFn: (uid: string) => creatorsService.provisionCreator(uid),
+        onSuccess: () => {
+            toast.success("Creator provisioned successfully");
+            queryClient.invalidateQueries({ queryKey: ["admin-creators"] });
+            queryClient.invalidateQueries({ queryKey: ["admin-creator-platform-stats"] });
+            queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+            queryClient.invalidateQueries({ queryKey: ["admin-user-stats"] });
+            onClose();
+        },
+        onError: (err: Error) => toast.error(err.message),
+    });
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4 animate-slide-up" onClick={(e) => e.stopPropagation()}>
+                <h3 className="text-lg font-bold text-neutral-900 mb-1 flex items-center gap-2">
+                    <UserPlus className="w-5 h-5 text-teal-600" /> Provision Creator
+                </h3>
+                <p className="text-sm text-neutral-500 mb-5">
+                    Directly grant creator status to a user, bypassing the application workflow.
+                </p>
+                <input
+                    type="text"
+                    placeholder="Paste User ID (24-char hex)..."
+                    value={userId}
+                    onChange={(e) => setUserId(e.target.value)}
+                    className={`w-full px-4 py-2.5 rounded-xl border font-mono text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 mb-1 transition-colors ${
+                        userId.trim() && !isValidObjectId ? "border-red-300 bg-red-50" : "border-neutral-200"
+                    }`}
+                    disabled={provisionMutation.isPending}
+                />
+                {userId.trim() && !isValidObjectId && (
+                    <p className="text-xs text-red-600 mb-3">Invalid format — must be a 24-character hex string</p>
+                )}
+                {(!userId.trim() || isValidObjectId) && <div className="mb-3" />}
+                <div className="flex gap-2">
+                    <button onClick={onClose} disabled={provisionMutation.isPending} className="flex-1 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-600 hover:bg-neutral-50 transition-colors disabled:opacity-50">
+                        Cancel
+                    </button>
+                    <button
+                        onClick={() => provisionMutation.mutate(userId.trim())}
+                        disabled={!isValidObjectId || provisionMutation.isPending}
+                        className="flex-1 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 transition-colors disabled:opacity-50"
+                    >
+                        {provisionMutation.isPending ? "Provisioning..." : "Provision"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 // ---- Main Component ----
 export function CreatorsPage() {
     const { user: currentUser } = useAuthStore();
     const queryClient = useQueryClient();
     const hasAccess = !!currentUser && currentUser.role?.some(r => ALLOWED_ROLES.includes(r as any));
+    const isAdmin = !!currentUser && currentUser.role?.some(r => ["admin", "super_admin"].includes(r as any));
 
     // ---- State ----
     const [searchInput, setSearchInput] = useState("");
     const [debouncedQuery, setDebouncedQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("");
+    const [verifiedFilter, setVerifiedFilter] = useState("");
     const [page, setPage] = useState(1);
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(() => loadSessionSelections());
-    const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
-    const [hardDelete, setHardDelete] = useState(false);
-
-    // Modal state
-    const [viewingUser, setViewingUser] = useState<User | null>(null);
-
-    // ---- Persist selections to session ----
-    useEffect(() => saveSessionSelections(selectedIds), [selectedIds]);
+    const [viewingCreator, setViewingCreator] = useState<CreatorEnriched | null>(null);
+    const [showProvision, setShowProvision] = useState(false);
 
     // ---- Debounced search ----
     useEffect(() => {
@@ -87,16 +127,22 @@ export function CreatorsPage() {
         return () => clearTimeout(timer);
     }, [searchInput]);
 
-    // Reset hard delete toggle when modal closes
-    useEffect(() => { if (!confirmAction) setHardDelete(false); }, [confirmAction]);
+    // ---- Fetch Platform Stats ----
+    const { data: platformStats } = useQuery({
+        queryKey: ["admin-creator-platform-stats"],
+        queryFn: () => creatorsService.getPlatformStats(),
+        staleTime: 60_000,
+        enabled: isAdmin,
+    });
 
     // ---- Fetch Creators ----
     const queryParams = useMemo(() => ({
-        q: debouncedQuery || undefined,
+        search: debouncedQuery || undefined,
         status: statusFilter || undefined,
+        is_verified: verifiedFilter !== "" ? verifiedFilter === "true" : undefined,
         page,
-        per_page: PER_PAGE,
-    }), [debouncedQuery, statusFilter, page]);
+        page_size: PER_PAGE,
+    }), [debouncedQuery, statusFilter, verifiedFilter, page]);
 
     const { data, isLoading, error } = useQuery({
         queryKey: ["admin-creators", queryParams],
@@ -104,106 +150,19 @@ export function CreatorsPage() {
         placeholderData: (prev) => prev,
     });
 
-    const users = useMemo(() => data?.users ?? [], [data]);
+    const creators = useMemo(() => data?.creators ?? [], [data]);
     const pagination = data?.pagination;
-
-    // ---- Client-side instant filter ----
-    const filteredUsers = useMemo(() => {
-        if (!searchInput.trim() || searchInput.trim() === debouncedQuery) return users;
-        const q = searchInput.trim().toLowerCase();
-        return users.filter((u) =>
-            `${u.first_name} ${u.last_name}`.toLowerCase().includes(q) ||
-            u._id.toLowerCase().includes(q)
-        );
-    }, [users, searchInput, debouncedQuery]);
-
-    // ---- Mutations ----
-    const bulkActionMutation = useMutation({
-        mutationFn: ({ ids, action }: { ids: string[]; action: "suspend" | "delete" }) =>
-            creatorsService.bulkAction(ids, action),
-        onSuccess: (result) => {
-            if (result.succeeded.length > 0) {
-                toast.success(result.summary);
-                queryClient.invalidateQueries({ queryKey: ["admin-creators"] });
-                setSelectedIds((prev) => {
-                    const next = new Set(prev);
-                    result.succeeded.forEach((id) => next.delete(id));
-                    return next;
-                });
-            }
-            if (result.failed.length > 0) {
-                result.failed.forEach((f) => toast.error(`${f.user_id}: ${f.reason}`));
-            }
-            setConfirmAction(null);
-        },
-        onError: (err: Error) => { toast.error(err.message); setConfirmAction(null); },
-    });
-
-    const deleteMutation = useMutation({
-        mutationFn: ({ userId, hard }: { userId: string; hard: boolean }) =>
-            creatorsService.deleteUser(userId, hard),
-        onSuccess: (_, { userId }) => {
-            toast.success("Creator deleted");
-            queryClient.invalidateQueries({ queryKey: ["admin-creators"] });
-            setSelectedIds((prev) => {
-                const next = new Set(prev);
-                next.delete(userId);
-                return next;
-            });
-            setConfirmAction(null);
-        },
-        onError: (err: Error) => { toast.error(err.message); setConfirmAction(null); },
-    });
-
-    // ---- Handlers ----
-    const toggleSelect = useCallback((id: string) => {
-        setSelectedIds((prev) => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-        });
-    }, []);
-
-    const toggleSelectAll = useCallback(() => {
-        setSelectedIds((prev) => {
-            const next = new Set(prev);
-            const allOnPage = filteredUsers.map((u) => u._id);
-            const allSelected = allOnPage.every((id) => next.has(id));
-            if (allSelected) {
-                allOnPage.forEach((id) => next.delete(id));
-            } else {
-                allOnPage.forEach((id) => next.add(id));
-            }
-            return next;
-        });
-    }, [filteredUsers]);
 
     const clearFilters = useCallback(() => {
         setSearchInput("");
         setDebouncedQuery("");
         setStatusFilter("");
+        setVerifiedFilter("");
         setPage(1);
     }, []);
 
-    const isBusy = bulkActionMutation.isPending || deleteMutation.isPending;
-    const allOnPageSelected = filteredUsers.length > 0 && filteredUsers.every((u) => selectedIds.has(u._id));
-
-    // ---- Confirm handler ----
-    const executeConfirmedAction = useCallback(() => {
-        if (!confirmAction) return;
-        switch (confirmAction.type) {
-            case "suspend":
-                bulkActionMutation.mutate({ ids: confirmAction.payload.ids, action: "suspend" });
-                break;
-            case "bulk-delete":
-                bulkActionMutation.mutate({ ids: confirmAction.payload.ids, action: "delete" });
-                break;
-            case "single-delete":
-                deleteMutation.mutate({ userId: confirmAction.payload.userId, hard: hardDelete });
-                break;
-        }
-    }, [confirmAction, bulkActionMutation, deleteMutation, hardDelete]);
+    // ---- Reload mutation (used in the retry button) ----
+    const hasFilters = !!(searchInput || statusFilter || verifiedFilter);
 
     // ---- Pagination ----
     const totalPages = pagination?.total_pages ?? 1;
@@ -229,17 +188,58 @@ export function CreatorsPage() {
                         </p>
                     </div>
                 </div>
+                {isAdmin && (
+                    <button
+                        onClick={() => setShowProvision(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 transition-colors shadow-sm"
+                    >
+                        <UserPlus className="w-4 h-4" /> Provision Creator
+                    </button>
+                )}
             </div>
+
+            {/* Platform Stats */}
+            {platformStats && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                            <Users className="w-4 h-4 text-teal-500" />
+                            <span className="text-xs text-neutral-500 uppercase tracking-wider font-semibold">Total</span>
+                        </div>
+                        <div className="text-2xl font-bold text-neutral-900">{platformStats.total_creators?.toLocaleString() ?? "—"}</div>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                            <TrendingUp className="w-4 h-4 text-emerald-500" />
+                            <span className="text-xs text-neutral-500 uppercase tracking-wider font-semibold">Active</span>
+                        </div>
+                        <div className="text-2xl font-bold text-emerald-700">{(platformStats.by_status?.active ?? 0).toLocaleString()}</div>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                            <BadgeCheck className="w-4 h-4 text-blue-500" />
+                            <span className="text-xs text-neutral-500 uppercase tracking-wider font-semibold">Verified</span>
+                        </div>
+                        <div className="text-2xl font-bold text-blue-700">{platformStats.verified_creators?.toLocaleString() ?? "—"}</div>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                            <Star className="w-4 h-4 text-amber-500" />
+                            <span className="text-xs text-neutral-500 uppercase tracking-wider font-semibold">Suspended</span>
+                        </div>
+                        <div className="text-2xl font-bold text-amber-700">{(platformStats.by_status?.suspended ?? 0).toLocaleString()}</div>
+                    </div>
+                </div>
+            )}
 
             {/* Toolbar */}
             <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 space-y-3">
-                {/* Search + Filters */}
                 <div className="flex flex-wrap items-center gap-3">
                     <div className="relative flex-1 min-w-[260px]">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
                         <input
                             type="text"
-                            placeholder="Search by name or ID..."
+                            placeholder="Search creators by name..."
                             value={searchInput}
                             onChange={(e) => setSearchInput(e.target.value)}
                             className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
@@ -262,7 +262,15 @@ export function CreatorsPage() {
                         placeholder="Status"
                     />
 
-                    {(searchInput || statusFilter) && (
+                    <FilterDropdown
+                        options={VERIFIED_OPTIONS}
+                        value={verifiedFilter}
+                        onChange={(v) => { setVerifiedFilter(v); setPage(1); }}
+                        icon={<BadgeCheck className="w-3.5 h-3.5" />}
+                        placeholder="Verified"
+                    />
+
+                    {hasFilters && (
                         <button
                             onClick={clearFilters}
                             className="px-3 py-2.5 rounded-xl text-sm text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
@@ -271,36 +279,6 @@ export function CreatorsPage() {
                         </button>
                     )}
                 </div>
-
-                {/* Bulk Actions Bar */}
-                {selectedIds.size > 0 && (
-                    <div className="flex items-center gap-3 px-4 py-2.5 bg-teal-50 rounded-xl border border-teal-100 animate-slide-up">
-                        <span className="text-sm font-semibold text-teal-700">
-                            {selectedIds.size} selected
-                        </span>
-                        <div className="h-4 w-px bg-teal-200" />
-                        <button
-                            onClick={() => setConfirmAction({ type: "suspend", payload: { ids: [...selectedIds] } })}
-                            disabled={isBusy}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-100 text-amber-700 text-sm font-medium hover:bg-amber-200 transition-colors disabled:opacity-50"
-                        >
-                            <Ban className="w-3.5 h-3.5" /> Suspend
-                        </button>
-                        <button
-                            onClick={() => setConfirmAction({ type: "bulk-delete", payload: { ids: [...selectedIds] } })}
-                            disabled={isBusy}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-100 text-red-700 text-sm font-medium hover:bg-red-200 transition-colors disabled:opacity-50"
-                        >
-                            <Trash2 className="w-3.5 h-3.5" /> Delete
-                        </button>
-                        <button
-                            onClick={() => { setSelectedIds(new Set()); sessionStorage.removeItem(SESSION_KEY); }}
-                            className="ml-auto text-xs text-neutral-500 hover:text-neutral-700"
-                        >
-                            Deselect all
-                        </button>
-                    </div>
-                )}
             </div>
 
             {/* Table */}
@@ -315,7 +293,7 @@ export function CreatorsPage() {
                             Retry
                         </button>
                     </div>
-                ) : filteredUsers.length === 0 ? (
+                ) : creators.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 text-neutral-400 gap-2">
                         <Users className="w-8 h-8" />
                         <p className="text-sm">No creators found</p>
@@ -325,62 +303,64 @@ export function CreatorsPage() {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-neutral-100 bg-neutral-50/60">
-                                    <th className="w-12 px-4 py-3.5">
-                                        <input
-                                            type="checkbox"
-                                            checked={allOnPageSelected}
-                                            onChange={toggleSelectAll}
-                                            className="w-4 h-4 rounded border-neutral-300 text-teal-600 focus:ring-teal-500 cursor-pointer accent-teal-600"
-                                        />
-                                    </th>
-                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Name</th>
-                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Account</th>
+                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Creator</th>
+                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Status</th>
+                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Verified</th>
+                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Quests</th>
+                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Earnings</th>
                                     <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Joined</th>
                                     <th className="text-right px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-neutral-50">
-                                {filteredUsers.map((u) => {
-                                    const sc = userStatusConfig[u.status] || { label: u.status, dot: "bg-neutral-400", bg: "bg-neutral-50 text-neutral-600 border-neutral-200" };
+                                {creators.map((c) => {
+                                    const sc = creatorStatusConfig[c.status] ?? creatorStatusConfig.active;
+                                    const displayName = c.name ?? c.id;
                                     return (
                                         <tr
-                                            key={u._id}
-                                            className={`transition-colors group hover:bg-neutral-50/80 cursor-pointer ${selectedIds.has(u._id) ? "bg-teal-50/30" : ""}`}
-                                            onClick={() => setViewingUser(u)}
+                                            key={c.id}
+                                            className="transition-colors group hover:bg-neutral-50/80 cursor-pointer"
+                                            onClick={() => setViewingCreator(c)}
                                         >
-                                            <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedIds.has(u._id)}
-                                                    onChange={() => toggleSelect(u._id)}
-                                                    className="w-4 h-4 rounded border-neutral-300 text-teal-600 focus:ring-teal-500 cursor-pointer accent-teal-600"
-                                                />
+                                            <td className="px-4 py-3">
+                                                <div className="font-medium text-neutral-900">{displayName}</div>
+                                                {c.tagline && (
+                                                    <div className="text-[11px] text-neutral-400 mt-0.5 truncate max-w-[200px]">{c.tagline}</div>
+                                                )}
+                                                <div className="text-[11px] text-neutral-300 font-mono mt-0.5">{c.id}</div>
                                             </td>
                                             <td className="px-4 py-3">
-                                                <div className="font-medium text-neutral-900">
-                                                    {u.first_name} {u.last_name}
-                                                </div>
-                                                <div className="text-[11px] text-neutral-400 font-mono mt-0.5">{u._id}</div>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${sc.bg}`}>
-                                                    <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
-                                                    {sc.label}
+                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${sc?.bg ?? ""}`}>
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${sc?.dot ?? ""}`} />
+                                                    {sc?.label ?? c.status}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">
-                                                {new Date(u.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                                            <td className="px-4 py-3">
+                                                {c.is_verified ? (
+                                                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                                ) : (
+                                                    <span className="text-xs text-neutral-400">—</span>
+                                                )}
                                             </td>
-                                            <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                                                <div className="flex items-center justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                                                    <button
-                                                        onClick={() => setConfirmAction({ type: "single-delete", payload: { userId: u._id } })}
-                                                        title="Delete creator"
-                                                        className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                </div>
+                                            <td className="px-4 py-3 text-neutral-700">
+                                                {c.total_quests ?? "—"}
+                                            </td>
+                                            <td className="px-4 py-3 text-neutral-700">
+                                                {c.total_earnings != null
+                                                    ? `₹${c.total_earnings.toLocaleString("en-IN")}`
+                                                    : "—"}
+                                            </td>
+                                            <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">
+                                                {new Date(c.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                                            </td>
+                                            <td className="px-4 py-3 text-right">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); setViewingCreator(c); }}
+                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-teal-200 text-teal-700 text-xs font-medium hover:bg-teal-50 transition-colors opacity-0 group-hover:opacity-100"
+                                                    aria-label={`View ${displayName}`}
+                                                >
+                                                    View
+                                                </button>
                                             </td>
                                         </tr>
                                     );
@@ -433,58 +413,22 @@ export function CreatorsPage() {
                 )}
             </div>
 
-            {/* Creator Detail Modal (read-only quick view) */}
-            <CreatorDetailModal
-                open={!!viewingUser}
-                userId={viewingUser?._id ?? null}
-                userName={viewingUser ? `${viewingUser.first_name} ${viewingUser.last_name}` : ""}
-                onClose={() => setViewingUser(null)}
-            />
+            {/* Creator Detail Modal */}
+            {viewingCreator && (
+                <CreatorDetailModal
+                    open={!!viewingCreator}
+                    creatorId={viewingCreator.id}
+                    displayName={viewingCreator.name ?? viewingCreator.id}
+                    onClose={() => setViewingCreator(null)}
+                />
+            )}
 
-            {/* Delete Confirmation */}
-            <ConfirmModal
-                open={confirmAction?.type === "single-delete" || confirmAction?.type === "bulk-delete"}
-                title="Delete Creator(s)"
-                message={
-                    confirmAction?.type === "single-delete"
-                        ? `This will ${hardDelete ? "PERMANENTLY" : "soft"}-delete this creator. ${hardDelete ? "All data will be permanently removed." : "The creator will be marked as deleted."}`
-                        : `This will soft-delete ${confirmAction?.type === "bulk-delete" ? confirmAction.payload.ids.length : 0} creator(s). This cannot be easily undone.`
-                }
-                confirmLabel={hardDelete ? "Hard Delete" : "Delete"}
-                confirmStyle="bg-red-600 hover:bg-red-700"
-                onConfirm={executeConfirmedAction}
-                onCancel={() => setConfirmAction(null)}
-                isPending={bulkActionMutation.isPending || deleteMutation.isPending}
-            >
-                {confirmAction?.type === "single-delete" && (
-                    <label className="flex items-center gap-2 mt-3 mb-1 px-1 cursor-pointer select-none">
-                        <input
-                            type="checkbox"
-                            checked={hardDelete}
-                            onChange={(e) => setHardDelete(e.target.checked)}
-                            className="w-4 h-4 rounded border-red-300 text-red-600 focus:ring-red-500 accent-red-600"
-                        />
-                        <span className="text-xs text-red-600 font-medium">Hard delete (permanent, irreversible)</span>
-                    </label>
-                )}
-            </ConfirmModal>
+            {/* Provision Creator Modal */}
+            {showProvision && <ProvisionCreatorModal onClose={() => setShowProvision(false)} />}
 
-            {/* Suspend Confirmation */}
-            <ConfirmModal
-                open={confirmAction?.type === "suspend"}
-                title="Suspend Creator(s)"
-                message={`This will suspend ${confirmAction?.type === "suspend" ? confirmAction.payload.ids.length : 0} creator(s). They will lose access until reactivated.`}
-                confirmLabel="Suspend"
-                confirmStyle="bg-amber-600 hover:bg-amber-700"
-                onConfirm={executeConfirmedAction}
-                onCancel={() => setConfirmAction(null)}
-                isPending={bulkActionMutation.isPending}
-                theme="warning"
-            />
-
-            {/* Loading overlay for mutations */}
-            {isBusy && !confirmAction && (
-                <div className="fixed inset-0 z-40 bg-white/60 flex items-center justify-center">
+            {/* Loading overlay */}
+            {isLoading && data && (
+                <div className="fixed inset-0 z-40 bg-white/40 flex items-center justify-center pointer-events-none">
                     <RefreshCw className="w-6 h-6 text-teal-600 animate-spin" />
                 </div>
             )}

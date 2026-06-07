@@ -69,7 +69,7 @@ export function AnalyticsPage() {
     const { data: narrativesStatus } = useQuery({ queryKey: ["admin-analytics-content-narratives"], queryFn: analyticsService.getNarrativesByStatus, enabled: activeTab === "content" });
     const { data: taskCompletion } = useQuery({ queryKey: ["admin-analytics-content-tasks"], queryFn: analyticsService.getTaskCompletionByType, enabled: activeTab === "content" });
     const { data: achievementUnlockRates } = useQuery({ queryKey: ["admin-analytics-content-achievements"], queryFn: () => analyticsService.getAchievementsUnlockRates(), enabled: activeTab === "content" });
-    const { data: markersContrib } = useQuery({ queryKey: ["admin-analytics-markers-contrib", period], queryFn: () => analyticsService.getMarkerContribution(from, to, period === "90d" ? "monthly" : "daily"), enabled: activeTab === "content" });
+    const { data: markersContrib } = useQuery({ queryKey: ["admin-analytics-markers-contrib", period, period === "90d" ? "monthly" : "daily"], queryFn: () => analyticsService.getMarkerContribution(from, to, period === "90d" ? "monthly" : "daily"), enabled: activeTab === "content" });
 
     const colors = ["#4f46e5", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#f97316"];
 

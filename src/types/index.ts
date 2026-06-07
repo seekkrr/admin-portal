@@ -36,17 +36,22 @@ export interface Creator {
 }
 
 export interface CreatorApplication {
-    _id: string;
+    id: string;
     name: string;
     email: string;
     phone: string | null;
     social_links: string[];
-    status: "pending" | "approved" | "rejected";
+    social_links_verified: boolean;
+    status: "pending" | "verifying" | "approved" | "rejected";
     admin_id: string | null;
     applied_at: string;
     actioned_at: string | null;
     rejection_reason: string | null;
     used_for_creator: boolean;
+    used_at: string | null;
+    used_by_user_id: string | null;
+    created_at: string | null;
+    updated_at: string | null;
 }
 
 export interface CreatorStats {

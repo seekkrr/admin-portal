@@ -60,7 +60,7 @@ export const AppRoutes = () => {
                         <CreatorsPage />
                     </Suspense>
                 } />
-                <Route path="creators/:userId" element={
+                <Route path="creators/:creatorId" element={
                     <Suspense fallback={<LoadingFallback message="Loading creator..." />}>
                         <CreatorEditPage />
                     </Suspense>

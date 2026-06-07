@@ -46,7 +46,7 @@ export function SupportQueriesPage() {
         mutationFn: supportQueriesService.bulkDelete,
         onSuccess: (res) => {
             queryClient.invalidateQueries({ queryKey: ["admin-support-queries"] });
-            toast.success(`Deleted ${res.deleted} support queries`);
+            toast.success(`Deleted ${res.deleted_count} support queries`);
             setSelectedIds(new Set());
             setConfirmAction(null);
         },
