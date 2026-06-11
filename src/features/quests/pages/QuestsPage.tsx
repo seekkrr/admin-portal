@@ -10,11 +10,11 @@ import { AccessDenied } from "@components/AccessDenied";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { questsService } from "../services/quests.service";
 import { formatDuration } from "../utils/formatters";
-import { ConfirmModal } from "@/features/users/components/ConfirmModal";
-import { FilterDropdown } from "@/features/users/components/FilterDropdown";
-import { usePaginationRange } from "@/features/users/hooks/usePagination";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { FilterDropdown } from "@/components/FilterDropdown";
+import { usePaginationRange } from "@/hooks/usePagination";
 import { QuestDetailModal } from "../components/QuestDetailModal";
-import type { DropdownOption } from "@/features/users/components/FilterDropdown";
+import type { DropdownOption } from "@/components/FilterDropdown";
 import type { QuestListItem, QuestStatus } from "@/types";
 
 // ---- Constants ----
@@ -512,3 +512,4 @@ export function QuestsPage() {
         </div>
     );
 }
+

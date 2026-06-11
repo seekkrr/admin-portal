@@ -11,7 +11,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     return (
         <aside
             className={`
-                bg-white border-r border-neutral-200 h-[calc(100vh-4rem)]
+                bg-white/80 backdrop-blur-md border-r border-white/20 h-[calc(100vh-4rem)]
                 flex flex-col transition-all duration-300 ease-in-out z-30
                 ${collapsed ? "w-20" : "w-64"}
                 hidden md:flex

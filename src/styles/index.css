@@ -81,6 +81,8 @@ html {
 
 body {
   background-color: var(--bg-secondary);
+  background-image: radial-gradient(var(--color-neutral-200) 1px, transparent 1px);
+  background-size: 24px 24px;
   color: var(--color-neutral-900);
   min-height: 100vh;
 }

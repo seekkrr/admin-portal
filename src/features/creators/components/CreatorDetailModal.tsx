@@ -5,7 +5,7 @@ import {
     DollarSign, Award, CheckCircle2, Shield,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Badge } from "@/features/users/components/Badge";
+import { Badge } from "@/components/ui/Badge";
 import { creatorsService } from "../services/creators.service";
 
 // ---- Status/Verification styles ----
@@ -183,3 +183,4 @@ function StatCard({ icon, label, value }: { icon: ReactNode; label: string; valu
         </div>
     );
 }
+

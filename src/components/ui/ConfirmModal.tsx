@@ -4,7 +4,7 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 export interface ConfirmModalProps {
     open: boolean;
     title: string;
-    message: string;
+    message: ReactNode;
     confirmLabel: string;
     confirmStyle: string;
     onConfirm: () => void;
@@ -12,6 +12,7 @@ export interface ConfirmModalProps {
     isPending?: boolean;
     children?: ReactNode;
     theme?: "danger" | "warning" | "info";
+    disabledConfirm?: boolean;
 }
 
 /**
@@ -20,7 +21,7 @@ export interface ConfirmModalProps {
  */
 export function ConfirmModal({
     open, title, message, confirmLabel, confirmStyle,
-    onConfirm, onCancel, isPending, children, theme = "danger",
+    onConfirm, onCancel, isPending, children, theme = "danger", disabledConfirm,
 }: ConfirmModalProps) {
     const [typed, setTyped] = useState("");
     const confirmWord = "CONFIRM";
@@ -50,8 +51,8 @@ export function ConfirmModal({
     if (!open) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in" onClick={onCancel}>
-            <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4 animate-slide-up" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40 backdrop-blur-sm animate-fade-in" onClick={onCancel}>
+            <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 p-6 w-full max-w-sm mx-4 animate-slide-up" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-3 mb-4">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center ${currentTheme.bg}`}>
                         <Icon className={`w-5 h-5 ${currentTheme.text}`} />
@@ -82,7 +83,7 @@ export function ConfirmModal({
                     </button>
                     <button
                         onClick={onConfirm}
-                        disabled={typed !== confirmWord || isPending}
+                        disabled={typed !== confirmWord || isPending || disabledConfirm}
                         className={`flex-1 py-2.5 rounded-xl text-sm font-medium text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed ${confirmStyle}`}
                     >
                         {isPending ? <RefreshCw className="w-4 h-4 animate-spin mx-auto" /> : confirmLabel}

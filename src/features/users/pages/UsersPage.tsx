@@ -11,11 +11,11 @@ import { AccessDenied } from "@components/AccessDenied";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { usersService } from "../services/users.service";
 import { creatorsService } from "@/features/creators/services/creators.service";
-import { Badge } from "../components/Badge";
-import { ConfirmModal } from "../components/ConfirmModal";
-import { FilterDropdown } from "../components/FilterDropdown";
-import { usePaginationRange } from "../hooks/usePagination";
-import type { DropdownOption } from "../components/FilterDropdown";
+import { Badge } from "@/components/ui/Badge";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { FilterDropdown } from "@/components/FilterDropdown";
+import { usePaginationRange } from "@/hooks/usePagination";
+import type { DropdownOption } from "@/components/FilterDropdown";
 import type { User } from "@/types";
 
 // ---- Constants ----
@@ -817,3 +817,4 @@ export function UsersPage() {
         </div>
     );
 }
+

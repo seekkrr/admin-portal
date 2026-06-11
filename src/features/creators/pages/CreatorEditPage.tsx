@@ -7,8 +7,8 @@ import {
     AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Badge } from "@/features/users/components/Badge";
-import { ConfirmModal } from "@/features/users/components/ConfirmModal";
+import { Badge } from "@/components/ui/Badge";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { AccessDenied } from "@components/AccessDenied";
 import { useAuthStore } from "@store/auth.store";
 import { creatorsService } from "../services/creators.service";
@@ -256,3 +256,4 @@ function StatCard({ icon, label, value }: { icon: ReactNode; label: string; valu
         </div>
     );
 }
+

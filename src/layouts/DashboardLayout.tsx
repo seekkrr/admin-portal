@@ -26,8 +26,8 @@ export function DashboardLayout() {
     };
 
     return (
-        <div className="min-h-screen bg-neutral-50 flex flex-col">
-            <header className="bg-white border-b border-neutral-200 sticky top-0 z-40 font-sans h-16">
+        <div className="min-h-screen bg-transparent flex flex-col">
+            <header className="bg-white/80 backdrop-blur-md border-b border-white/20 sticky top-0 z-40 font-sans h-16 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
                 <div className="w-full px-4 sm:px-6 lg:px-8 h-full">
                     <div className="flex items-center h-full gap-4">
                         {/* Logo */}

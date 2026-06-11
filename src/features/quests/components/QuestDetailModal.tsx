@@ -8,7 +8,7 @@ import {
     Send, Pause, Archive,
     DollarSign, XCircle, AlertCircle,
 } from "lucide-react";
-import { Badge } from "@/features/users/components/Badge";
+import { Badge } from "@/components/ui/Badge";
 import { questsService } from "../services/quests.service";
 import { formatDuration } from "../utils/formatters";
 import type { QuestStatus, ReviewHistoryEntry } from "@/types";
@@ -444,3 +444,4 @@ function GlassStatCard({ icon, label, value, style }: {
         </div>
     );
 }
+

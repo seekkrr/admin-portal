@@ -561,6 +561,333 @@ export interface SessionDurationData {
     period: AnalyticsPeriod;
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// Shared Geo Types
+// ───────────────────────────────────────────────────────────────────────────
+export interface GeoPoint {
+    type: "Point";
+    coordinates: [number, number]; // [lon, lat]
+}
+
+export interface GeoPolygon {
+    type: "Polygon";
+    coordinates: number[][][];
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Section 8 — Markers & Marker Applications
+//   Backend: v2/models/marker.py → to_public_dict() returns `id` (string)
+//   Statuses: approved | pending | hidden | rejected
+// ───────────────────────────────────────────────────────────────────────────
+export type MarkerStatus = "approved" | "pending" | "hidden" | "rejected";
+export type MarkerApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
+export type MarkerCategory = string;
+
+export interface Marker {
+    id: string;
+    title: string;
+    location: GeoPoint | null;
+    category: MarkerCategory | null;
+    description: string | null;
+    media: string[] | null;
+    tags: string[] | null;
+    opens_at: string | null;
+    closes_at: string | null;
+    address: string | null;
+    map_url: string | null;
+    min_expense: number | null;
+    max_expense: number | null;
+    website_url: string | null;
+    contact: string | null;
+    region_id: string | null;
+    status: MarkerStatus;
+    source: string | null;
+    created_by: string | null;
+    usage_count: number;
+    created_at: string | null;
+    updated_at: string | null;
+}
+
+export interface MarkerApplication {
+    id: string;
+    user_id: string;
+    status: MarkerApplicationStatus;
+    proposed_location: GeoPoint | null;
+    proposed_title: string;
+    proposed_category: string | null;
+    proposed_description: string | null;
+    proposed_address: string | null;
+    photos: string[] | null;
+    additional_info: Record<string, unknown> | null;
+    marker_id: string | null;
+    approved_by: string | null;
+    approved_at: string | null;
+    rejected_by: string | null;
+    rejected_at: string | null;
+    rejection_reason: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+}
+
+export interface MarkersListResponse {
+    success: boolean;
+    markers: Marker[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
+export interface MarkerApplicationsListResponse {
+    success: boolean;
+    applications: MarkerApplication[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
+export interface ListMarkersParams {
+    status?: MarkerStatus;
+    category?: string;
+    tags?: string;
+    search?: string;
+    min_lon?: number;
+    min_lat?: number;
+    max_lon?: number;
+    max_lat?: number;
+    page?: number;
+    page_size?: number;
+}
+
+export interface CreateMarkerPayload {
+    title: string;
+    location: GeoPoint;
+    category?: string;
+    description?: string;
+    address?: string;
+    map_url?: string;
+    website_url?: string;
+    contact?: string;
+    tags?: string[];
+    media?: string[];
+    min_expense?: number;
+    max_expense?: number;
+    region_id?: string;
+    properties?: Record<string, unknown>;
+}
+
+export type UpdateMarkerPayload = Partial<Omit<CreateMarkerPayload, "location">> & {
+    status?: MarkerStatus;
+};
+
+// ───────────────────────────────────────────────────────────────────────────
+// Section 9 — Narratives (admin) & Reviews
+//   Backend narrative: v2/models/narrative.py → to_public_dict() = to_dict()
+//   so the id key is `_id` (string). Statuses: draft | under_review |
+//   approved | rejected | archived. Audio: pending | generating | ready |
+//   failed | quota_exceeded.
+// ───────────────────────────────────────────────────────────────────────────
+export type NarrativeStatus = "draft" | "under_review" | "approved" | "rejected" | "archived";
+export type NarrativeAudioStatus = "pending" | "generating" | "ready" | "failed" | "quota_exceeded";
+export type NarrativeAttachType = "marker" | "quest" | "region";
+export type VoicePersona = "historian_warm" | "mystery_whisper" | "energetic_guide" | "elder_storyteller";
+
+export interface AdminNarrative {
+    _id: string;
+    title: string;
+    attach_type: NarrativeAttachType;
+    attach_id: string;
+    content: string | null;
+    subtitle: string | null;
+    trigger_location: GeoPoint | null;
+    trigger_radius_m: number | null;
+    audio_url: string | null;
+    audio_status: NarrativeAudioStatus;
+    audio_duration_s: number | null;
+    voice_persona: VoicePersona | null;
+    media: string[];
+    is_mandatory: boolean;
+    is_unlocked: boolean;
+    chain_id: string | null;
+    sequence_order: number | null;
+    status: NarrativeStatus;
+    reviewed_by: string | null;
+    reviewed_at: string | null;
+    review_note: string | null;
+    view_count: number;
+    created_by: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+}
+
+export interface NarrativesListResponse {
+    success: boolean;
+    narratives: AdminNarrative[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
+export interface ListNarrativesParams {
+    attach_type?: NarrativeAttachType;
+    attach_id?: string;
+    status?: NarrativeStatus;
+    chain_id?: string;
+    search?: string;
+    sort_by?: string;
+    sort_order?: 1 | -1;
+    page?: number;
+    page_size?: number;
+}
+
+export interface NarrativeAudioStatusResponse {
+    success: boolean;
+    narrative_id: string;
+    audio_status: NarrativeAudioStatus | null;
+    audio_url: string | null;
+    audio_duration_s: number | null;
+}
+
+export interface BulkApproveResponse {
+    success: boolean;
+    approved?: number;
+    failed?: string[];
+    [key: string]: unknown;
+}
+
+// Admin-editable narrative fields (PUT /narratives/{id}). All optional;
+// only changed keys are sent.
+export interface UpdateNarrativePayload {
+    title?: string;
+    content?: string;
+    subtitle?: string;
+    voice_persona?: VoicePersona;
+    trigger_radius_m?: number;
+    is_mandatory?: boolean;
+    is_unlocked?: boolean;
+    sequence_order?: number;
+    media?: string[];
+}
+
+// Reviews — backend ReviewService._serialize keeps `_id` (string)
+export interface AdminReview {
+    _id: string;
+    user_id: string | null;
+    quest_id: string | null;
+    creator_id: string | null;
+    rating: number;
+    comment: string | null;
+    is_verified: boolean;
+    is_visible: boolean;
+    is_deleted: boolean;
+    creator_response?: string | null;
+    creator_responded_at?: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+}
+
+export interface ReviewsListResponse {
+    success: boolean;
+    reviews: AdminReview[];
+    total: number;
+    page?: number;
+    limit?: number;
+}
+
+export interface ListReviewsParams {
+    page?: number;
+    limit?: number;
+    is_visible?: boolean;
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Section 11 — Regions
+//   Backend: v2/models/region.py → to_public_dict() returns `id` (string).
+//   bbox is a GeoJSON Polygon; center_point is a GeoJSON Point;
+//   crowd_meter is a { [month: string]: number } map. Update is PATCH.
+// ───────────────────────────────────────────────────────────────────────────
+export type RegionType = "city" | "hotspot";
+
+export interface Region {
+    id: string;
+    name: string;
+    slug: string;
+    type: RegionType;
+    parent_id: string | null;
+    description: string | null;
+    bbox: GeoPolygon | number[] | null;
+    center_point: GeoPoint | number[] | null;
+    mapbox_place_id: string | null;
+    quest_ids: string[];
+    marker_count: number;
+    admin_weight: number;
+    crowd_meter: Record<string, number>;
+    is_active: boolean;
+    created_at: string | null;
+    updated_at: string | null;
+}
+
+export interface RegionsListResponse {
+    success: boolean;
+    regions: Region[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages?: number;
+}
+
+export interface RegionHotspotsResponse {
+    success: boolean;
+    hotspots: Region[];
+    total: number;
+}
+
+export interface ListRegionsParams {
+    type?: RegionType;
+    parent_id?: string;
+    page?: number;
+    page_size?: number;
+}
+
+export interface RegionMatrixPair {
+    origin: string;
+    destination: string;
+    duration_s: number;
+    [key: string]: unknown;
+}
+
+export interface RegionMatrixResponse {
+    region_id: string;
+    pairs: RegionMatrixPair[];
+    count: number;
+}
+
+export interface UpdateRegionPayload {
+    name?: string;
+    description?: string;
+    bbox?: unknown;
+    center_point?: unknown;
+    is_active?: boolean;
+    mapbox_place_id?: string;
+}
+
+// Create a region directly (POST /regions). type is required by the backend
+// (city | hotspot); center_point/bbox are GeoJSON; parent_id links a hotspot
+// to its city.
+export interface CreateRegionPayload {
+    name: string;
+    type: RegionType;
+    parent_id?: string;
+    description?: string;
+    bbox?: GeoPolygon;
+    center_point?: GeoPoint;
+    mapbox_place_id?: string;
+    admin_weight?: number;
+    slug?: string;
+}
+
 export interface FeatureUsageData {
     features: Array<{
         feature: string;

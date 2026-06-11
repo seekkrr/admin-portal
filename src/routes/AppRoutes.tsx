@@ -19,6 +19,19 @@ const StatsPage = lazy(() => import("@/features/stats/pages/StatsPage").then(m =
 const SupportQueriesPage = lazy(() => import("@/features/support-queries/pages/SupportQueriesPage").then(m => ({ default: m.SupportQueriesPage })));
 const SupportQueryDetailPage = lazy(() => import("@/features/support-queries/pages/SupportQueryDetailPage").then(m => ({ default: m.SupportQueryDetailPage })));
 const AnalyticsPage = lazy(() => import("@/features/analytics/pages/AnalyticsPage").then(m => ({ default: m.AnalyticsPage })));
+// Section 8 — Markers
+const MarkersPage = lazy(() => import("@/features/markers/pages/MarkersPage").then(m => ({ default: m.MarkersPage })));
+const MarkerDetailPage = lazy(() => import("@/features/markers/pages/MarkerDetailPage").then(m => ({ default: m.MarkerDetailPage })));
+const MarkerApplicationsPage = lazy(() => import("@/features/markers/pages/MarkerApplicationsPage").then(m => ({ default: m.MarkerApplicationsPage })));
+const MarkerApplicationDetailPage = lazy(() => import("@/features/markers/pages/MarkerApplicationDetailPage").then(m => ({ default: m.MarkerApplicationDetailPage })));
+// Section 9 — Narratives & Reviews
+const NarrativesPage = lazy(() => import("@/features/content/pages/NarrativesPage").then(m => ({ default: m.NarrativesPage })));
+const NarrativeDetailPage = lazy(() => import("@/features/content/pages/NarrativeDetailPage").then(m => ({ default: m.NarrativeDetailPage })));
+const ReviewsPage = lazy(() => import("@/features/content/pages/ReviewsPage").then(m => ({ default: m.ReviewsPage })));
+const ReviewDetailPage = lazy(() => import("@/features/content/pages/ReviewDetailPage").then(m => ({ default: m.ReviewDetailPage })));
+// Section 11 — Regions
+const RegionsPage = lazy(() => import("@/features/regions/pages/RegionsPage").then(m => ({ default: m.RegionsPage })));
+const RegionDetailPage = lazy(() => import("@/features/regions/pages/RegionDetailPage").then(m => ({ default: m.RegionDetailPage })));
 
 export const AppRoutes = () => {
     return (
@@ -93,6 +106,62 @@ export const AppRoutes = () => {
                 <Route path="analytics" element={
                     <Suspense fallback={<LoadingFallback message="Loading analytics..." />}>
                         <AnalyticsPage />
+                    </Suspense>
+                } />
+
+                {/* Section 8 — Markers (static paths before :markerId) */}
+                <Route path="markers" element={
+                    <Suspense fallback={<LoadingFallback message="Loading markers..." />}>
+                        <MarkersPage />
+                    </Suspense>
+                } />
+                <Route path="markers/applications" element={
+                    <Suspense fallback={<LoadingFallback message="Loading applications..." />}>
+                        <MarkerApplicationsPage />
+                    </Suspense>
+                } />
+                <Route path="markers/applications/:appId" element={
+                    <Suspense fallback={<LoadingFallback message="Loading application..." />}>
+                        <MarkerApplicationDetailPage />
+                    </Suspense>
+                } />
+                <Route path="markers/:markerId" element={
+                    <Suspense fallback={<LoadingFallback message="Loading marker..." />}>
+                        <MarkerDetailPage />
+                    </Suspense>
+                } />
+
+                {/* Section 9 — Narratives & Reviews */}
+                <Route path="narratives" element={
+                    <Suspense fallback={<LoadingFallback message="Loading narratives..." />}>
+                        <NarrativesPage />
+                    </Suspense>
+                } />
+                <Route path="narratives/:narrativeId" element={
+                    <Suspense fallback={<LoadingFallback message="Loading narrative..." />}>
+                        <NarrativeDetailPage />
+                    </Suspense>
+                } />
+                <Route path="reviews" element={
+                    <Suspense fallback={<LoadingFallback message="Loading reviews..." />}>
+                        <ReviewsPage />
+                    </Suspense>
+                } />
+                <Route path="reviews/:reviewId" element={
+                    <Suspense fallback={<LoadingFallback message="Loading review..." />}>
+                        <ReviewDetailPage />
+                    </Suspense>
+                } />
+
+                {/* Section 11 — Regions */}
+                <Route path="regions" element={
+                    <Suspense fallback={<LoadingFallback message="Loading regions..." />}>
+                        <RegionsPage />
+                    </Suspense>
+                } />
+                <Route path="regions/:regionId" element={
+                    <Suspense fallback={<LoadingFallback message="Loading region..." />}>
+                        <RegionDetailPage />
                     </Suspense>
                 } />
             </Route>

@@ -10,10 +10,10 @@ import { useAuthStore } from "@store/auth.store";
 import { AccessDenied } from "@components/AccessDenied";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { creatorsService } from "../services/creators.service";
-import { FilterDropdown } from "@/features/users/components/FilterDropdown";
-import { usePaginationRange } from "@/features/users/hooks/usePagination";
+import { FilterDropdown } from "@/components/FilterDropdown";
+import { usePaginationRange } from "@/hooks/usePagination";
 import { CreatorDetailModal } from "../components/CreatorDetailModal";
-import type { DropdownOption } from "@/features/users/components/FilterDropdown";
+import type { DropdownOption } from "@/components/FilterDropdown";
 import type { CreatorEnriched } from "../services/creators.service";
 
 // ---- Constants ----
@@ -435,3 +435,4 @@ export function CreatorsPage() {
         </div>
     );
 }
+

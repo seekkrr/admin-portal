@@ -32,10 +32,10 @@ export function Card({
     return (
         <div
             className={`
-        bg-white rounded-xl border border-neutral-200
+        bg-white/90 backdrop-blur-sm rounded-xl border border-neutral-200/60 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] ring-1 ring-white/50
         ${paddingStyles[padding]}
         ${shadowStyles[shadow]}
-        ${hover ? "transition-shadow duration-200 hover:shadow-lg" : ""}
+        ${hover ? "transition-all duration-300 hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.1)] hover:-translate-y-0.5" : ""}
         ${className}
       `}
             {...props}
