@@ -86,7 +86,7 @@ export const useAuthStore = create<AuthStore>()(
 
                     // RBAC Check
                     // RBAC Check
-                    const hasAdminRole = user.role?.some(r => ALLOWED_ADMIN_ROLES.includes(r as any));
+                    const hasAdminRole = user.role?.some(r => (ALLOWED_ADMIN_ROLES as readonly string[]).includes(r));
                     if (!hasAdminRole) {
                         set({
                             user, // Set user temporarily so we know who it is, or maybe just fail authentication?

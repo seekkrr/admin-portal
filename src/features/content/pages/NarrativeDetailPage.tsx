@@ -63,7 +63,8 @@ interface EditForm {
 }
 
 export function NarrativeDetailPage() {
-    const { narrativeId } = useParams<{ narrativeId: string }>();
+    const { narrativeId: narrativeIdParam } = useParams<{ narrativeId: string }>();
+    const narrativeId = narrativeIdParam ?? "";
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { user } = useAuthStore();
@@ -82,13 +83,13 @@ export function NarrativeDetailPage() {
         error,
     } = useQuery({
         queryKey: ["narrative-detail", narrativeId],
-        queryFn: () => narrativesService.getById(narrativeId!),
+        queryFn: () => narrativesService.getById(narrativeId),
         enabled: !!narrativeId,
     });
 
     const { data: audioStatus } = useQuery({
         queryKey: ["narrative-audio-status", narrativeId],
-        queryFn: () => narrativesService.audioStatus(narrativeId!),
+        queryFn: () => narrativesService.audioStatus(narrativeId),
         enabled: !!narrativeId,
         refetchInterval: (query) =>
             query.state.data?.audio_status === "generating" ? 3000 : false,
@@ -102,7 +103,7 @@ export function NarrativeDetailPage() {
     };
 
     const approveMut = useMutation({
-        mutationFn: () => narrativesService.approve(narrativeId!, note || undefined),
+        mutationFn: () => narrativesService.approve(narrativeId, note || undefined),
         onSuccess: () => {
             invalidate();
             toast.success("Narrative approved");
@@ -112,7 +113,7 @@ export function NarrativeDetailPage() {
     });
 
     const rejectMut = useMutation({
-        mutationFn: () => narrativesService.reject(narrativeId!, note),
+        mutationFn: () => narrativesService.reject(narrativeId, note),
         onSuccess: () => {
             invalidate();
             toast.success("Narrative rejected");
@@ -122,7 +123,7 @@ export function NarrativeDetailPage() {
     });
 
     const archiveMut = useMutation({
-        mutationFn: () => narrativesService.archive(narrativeId!),
+        mutationFn: () => narrativesService.archive(narrativeId),
         onSuccess: () => {
             invalidate();
             toast.success("Narrative archived");
@@ -132,7 +133,7 @@ export function NarrativeDetailPage() {
     });
 
     const generateMut = useMutation({
-        mutationFn: () => narrativesService.generateAudio(narrativeId!),
+        mutationFn: () => narrativesService.generateAudio(narrativeId),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["narrative-audio-status", narrativeId] });
             toast.success("Audio generation started");
@@ -141,7 +142,7 @@ export function NarrativeDetailPage() {
     });
 
     const deleteAudioMut = useMutation({
-        mutationFn: () => narrativesService.deleteAudio(narrativeId!),
+        mutationFn: () => narrativesService.deleteAudio(narrativeId),
         onSuccess: () => {
             invalidate();
             toast.success("Audio cleared");
@@ -150,7 +151,7 @@ export function NarrativeDetailPage() {
     });
 
     const updateMut = useMutation({
-        mutationFn: (payload: UpdateNarrativePayload) => narrativesService.update(narrativeId!, payload),
+        mutationFn: (payload: UpdateNarrativePayload) => narrativesService.update(narrativeId, payload),
         onSuccess: () => {
             invalidate();
             toast.success("Narrative updated");
@@ -160,7 +161,7 @@ export function NarrativeDetailPage() {
     });
 
     const deleteMut = useMutation({
-        mutationFn: () => narrativesService.remove(narrativeId!, hardDelete),
+        mutationFn: () => narrativesService.remove(narrativeId, hardDelete),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["admin-narratives-queue"] });
             queryClient.invalidateQueries({ queryKey: ["admin-narratives"] });
@@ -364,22 +365,22 @@ export function NarrativeDetailPage() {
                     </div>
 
                     {/* Attached to */}
-                    <div className="mt-6 rounded-lg border border-orange-200 bg-orange-50/50 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-orange-700">Attached to</p>
-                        <div className="mt-1 flex items-center justify-between gap-3">
-                            <span className="text-sm text-neutral-700">
-                                <span className="capitalize">{n.attach_type}</span> ·{" "}
-                                <span className="font-mono text-xs">{n.attach_id}</span>
-                            </span>
+                        <div className="mt-6 flex items-center justify-between gap-3 rounded-lg border border-orange-200 bg-orange-50/50 p-4">
+                            <div>
+                                <p className="text-xs font-semibold uppercase tracking-wider text-orange-700">Attached to</p>
+                                <span className="text-sm text-neutral-700 mt-1 block">
+                                    <span className="capitalize">{n.attach_type}</span> ·{" "}
+                                    <span className="font-mono text-xs">{n.attach_id}</span>
+                                </span>
+                            </div>
                             <Link
                                 to={`${ATTACH_PATH[n.attach_type]}/${n.attach_id}`}
                                 className="flex flex-shrink-0 items-center gap-1.5 text-sm font-medium text-orange-600 hover:underline"
                             >
                                 {attachLabel}
-                                <ExternalLink className="h-3.5 w-3.5" />
+                                <ExternalLink className="h-4 w-4" />
                             </Link>
                         </div>
-                    </div>
                 </Card>
             {/* Edit panel */}
             {canModerate && editForm && (
@@ -607,11 +608,11 @@ export function NarrativeDetailPage() {
                         </button>
                         <button
                             onClick={() => deleteAudioMut.mutate()}
-                            disabled={deleteAudioMut.isPending || !liveAudioUrl}
+                            disabled={deleteAudioMut.isPending || (!liveAudioUrl && liveAudioStatus !== "generating")}
                             className="flex items-center justify-center gap-2 rounded-xl bg-neutral-100 px-4 py-2.5 font-medium text-neutral-700 transition-colors hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             <Trash2 className="h-4 w-4" />
-                            Clear Audio
+                            {liveAudioStatus === "generating" ? "Cancel Audio" : "Clear Audio"}
                         </button>
                         {isGenerating && (
                             <span className="text-xs text-blue-600">Polling for completion…</span>

@@ -11,8 +11,11 @@ export function AuthLayout() {
                     className="h-12 mx-auto"
                     onError={(e) => {
                         e.currentTarget.style.display = 'none';
-                        e.currentTarget.parentElement!.innerText = 'SeekKrr';
-                        e.currentTarget.parentElement!.className = 'mb-8 text-4xl font-bold text-teal-900 font-serif';
+                        const parent = e.currentTarget.parentElement;
+                        if (parent) {
+                            parent.innerText = 'SeekKrr';
+                            parent.className = 'mb-8 text-4xl font-bold text-teal-900 font-serif';
+                        }
                     }}
                 />
             </div>

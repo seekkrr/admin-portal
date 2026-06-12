@@ -187,7 +187,7 @@ function PointsModal({ userId, userName, onClose }: PointsModalProps) {
 export function UsersPage() {
     const { user: currentUser } = useAuthStore();
     const queryClient = useQueryClient();
-    const isAdmin = !!currentUser && currentUser.role?.some(r => ADMIN_ROLES.includes(r as any));
+    const isAdmin = !!currentUser && currentUser.role?.some(r => ADMIN_ROLES.includes(r));
 
     // ---- State ----
     const [searchInput, setSearchInput] = useState("");
@@ -567,7 +567,7 @@ export function UsersPage() {
                                 {filteredUsers.map((u) => {
                                     const sc = statusConfig[u.status] || { label: u.status, dot: "bg-neutral-400", bg: "bg-neutral-50 text-neutral-600 border-neutral-200" };
                                     const ROLE_PRIORITY = ["super_admin", "admin", "finance", "moderator", "creator", "user"];
-                                    const primaryRole = ROLE_PRIORITY.find(r => u.role?.includes(r as any)) || u.role?.[0] || "user";
+                                    const primaryRole = ROLE_PRIORITY.find(r => (u.role as readonly string[] | undefined)?.includes(r)) || u.role?.[0] || "user";
                                     const rc = roleConfig[primaryRole] || { label: primaryRole, bg: "bg-neutral-50 text-neutral-600 border-neutral-200" };
                                     return (
                                         <tr
@@ -710,27 +710,27 @@ export function UsersPage() {
                             {promotingUser.first_name} {promotingUser.last_name}
                             <Badge
                                 label={promotingUser.role?.join(", ") ?? "user"}
-                                styles={roleConfig[["super_admin","admin","finance","moderator","creator","user"].find(r => promotingUser.role?.includes(r as any)) ?? "user"]?.bg ?? ""}
+                                styles={roleConfig[["super_admin","admin","finance","moderator","creator","user"].find(r => (promotingUser.role as readonly string[] | undefined)?.includes(r)) ?? "user"]?.bg ?? ""}
                             />
                         </p>
                         <div className="space-y-2">
                             {PROMOTABLE_ROLES.map((role) => (
                                 <button
                                     key={role}
-                                    disabled={promotingUser.role?.includes(role as any) || roleMutation.isPending}
+                                    disabled={promotingUser.role?.includes(role) || roleMutation.isPending}
                                     onClick={() => {
                                         setPromotingUser(null);
                                         setConfirmAction({ type: "promote", payload: { userId: promotingUser._id, role } });
                                     }}
                                     className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all
-                                        ${promotingUser.role?.includes(role as any)
+                                        ${promotingUser.role?.includes(role)
                                             ? "border-indigo-300 bg-indigo-50 text-indigo-700 cursor-default"
                                             : "border-neutral-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-neutral-700"
                                         }
                                         disabled:opacity-50`}
                                 >
                                     <span className="capitalize">{role.replace("_", " ")}</span>
-                                    {promotingUser.role?.includes(role as any) && <span className="text-xs text-indigo-500">Current</span>}
+                                    {promotingUser.role?.includes(role) && <span className="text-xs text-indigo-500">Current</span>}
                                 </button>
                             ))}
                         </div>

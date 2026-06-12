@@ -41,7 +41,8 @@ interface EditForm {
 }
 
 export function MarkerDetailPage() {
-    const { markerId } = useParams<{ markerId: string }>();
+    const { markerId: markerIdParam } = useParams<{ markerId: string }>();
+    const markerId = markerIdParam ?? "";
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { user } = useAuthStore();
@@ -56,7 +57,7 @@ export function MarkerDetailPage() {
 
     const { data: marker, isLoading, error } = useQuery({
         queryKey: ["marker-detail", markerId],
-        queryFn: () => markersService.getById(markerId!),
+        queryFn: () => markersService.getById(markerId),
         enabled: !!markerId,
         staleTime: 5 * 60 * 1000,
     });
@@ -81,7 +82,7 @@ export function MarkerDetailPage() {
     }, [marker]);
 
     const updateMutation = useMutation({
-        mutationFn: (payload: UpdateMarkerPayload) => markersService.update(markerId!, payload),
+        mutationFn: (payload: UpdateMarkerPayload) => markersService.update(markerId, payload),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["marker-detail", markerId] });
             queryClient.invalidateQueries({ queryKey: ["admin-markers"] });
@@ -93,7 +94,7 @@ export function MarkerDetailPage() {
     });
 
     const deleteMutation = useMutation({
-        mutationFn: () => markersService.remove(markerId!, IS_SUPER ? hardDelete : false),
+        mutationFn: () => markersService.remove(markerId, IS_SUPER ? hardDelete : false),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["admin-markers"] });
             toast.success("Marker deleted");
@@ -201,7 +202,8 @@ export function MarkerDetailPage() {
     };
     const hasHours = !!marker.opens_at || !!marker.closes_at;
     const hoursLabel = hasHours ? `${fmtTime(marker.opens_at)} – ${fmtTime(marker.closes_at)}` : null;
-    const propertyEntries = (marker as any).properties ? Object.entries((marker as any).properties) : [];
+    const markerProps = (marker as { properties?: Record<string, unknown> }).properties;
+    const propertyEntries = markerProps ? Object.entries(markerProps) : [];
 
     const inputClass = "w-full rounded-xl py-2.5 px-4 border border-neutral-200 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all";
 

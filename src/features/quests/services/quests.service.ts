@@ -50,7 +50,13 @@ export const questsService = {
         });
         const raw = (await api.get<Record<string, unknown>>(
             `${API_ENDPOINTS.QUESTS.BASE}?${searchParams.toString()}`
-        )).data as any;
+        )).data as {
+            quests?: QuestListItem[];
+            total?: number;
+            page?: number;
+            page_size?: number;
+            total_pages?: number;
+        };
         return {
             quests: raw.quests ?? [],
             pagination: {

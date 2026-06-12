@@ -29,18 +29,19 @@ type ConfirmAction =
 const ALLOWED_ROLES = ["admin", "super_admin", "finance"];
 
 export function CreatorEditPage() {
-    const { creatorId } = useParams<{ creatorId: string }>();
+    const { creatorId: creatorIdParam } = useParams<{ creatorId: string }>();
+    const creatorId = creatorIdParam ?? "";
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { user: currentUser } = useAuthStore();
-    const hasAccess = !!currentUser && currentUser.role?.some(r => ALLOWED_ROLES.includes(r as any));
+    const hasAccess = !!currentUser && currentUser.role?.some(r => ALLOWED_ROLES.includes(r));
 
     const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
 
     // ---- Fetch creator by creator ID ----
     const { data: creator, isLoading, error } = useQuery({
         queryKey: ["creator-detail", creatorId],
-        queryFn: () => creatorsService.getCreator(creatorId!),
+        queryFn: () => creatorsService.getCreator(creatorId),
         enabled: !!creatorId,
     });
 
@@ -50,7 +51,7 @@ export function CreatorEditPage() {
     // ---- Update mutation (status + is_verified) ----
     const updateMutation = useMutation({
         mutationFn: (updates: { status?: string; is_verified?: boolean }) =>
-            creatorsService.updateCreator(creatorId!, updates),
+            creatorsService.updateCreator(creatorId, updates),
         onSuccess: () => {
             toast.success("Creator updated");
             queryClient.invalidateQueries({ queryKey: ["creator-detail", creatorId] });

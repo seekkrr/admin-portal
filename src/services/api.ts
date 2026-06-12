@@ -51,7 +51,7 @@ function createApiClient(): AxiosInstance {
         (response) => response,
         async (error: AxiosError<ApiError>) => {
             const status = error.response?.status;
-            console.log("[API] Response error:", status, error.response?.data);
+            console.error("[API] Response error:", status, error.response?.data);
 
             // Handle 401 - Unauthorized
             if (status === 401) {

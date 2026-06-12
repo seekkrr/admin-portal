@@ -36,7 +36,7 @@ const statusConfig: Record<CreatorApplication["status"], { label: string; dot: s
 
 export function CreatorApplicationsPage() {
     const { user: currentUser } = useAuthStore();
-    const hasAccess = !!currentUser && currentUser.role?.some(r => ALLOWED_ROLES.includes(r as any));
+    const hasAccess = !!currentUser && currentUser.role?.some(r => ALLOWED_ROLES.includes(r));
 
     // ---- State ----
     const [searchInput, setSearchInput] = useState("");

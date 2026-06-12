@@ -16,14 +16,9 @@ const ADMIN_ROLES = ['admin', 'super_admin'];
 export function StatsPage() {
     const { user } = useAuthStore();
 
-    // 1. RBAC Check
-    if (user && !user.role?.some(r => ALLOWED_ROLES.includes(r as any))) {
-        return <Navigate to="/access-denied" replace />;
-    }
+    const isAdmin = user && user.role?.some((r) => ADMIN_ROLES.includes(r));
 
-    const isAdmin = user && user.role?.some(r => ADMIN_ROLES.includes(r as any));
-
-    // 2. Query Stats - Only if Admin/Super Admin
+    // Query Stats - Only if Admin/Super Admin
     // If not admin, we skip the query (enabled: false) or ignore the result
     const { data: stats, isLoading, error, dataUpdatedAt } = useQuery({
         queryKey: ["admin-stats"],
@@ -35,6 +30,11 @@ export function StatsPage() {
     const [fromDate, setFromDate] = useState<string>("");
     const [toDate, setToDate] = useState<string>("");
     const [isExporting, setIsExporting] = useState(false);
+
+    // RBAC Check (after hooks to preserve hook order)
+    if (user && !user.role?.some((r) => ALLOWED_ROLES.includes(r))) {
+        return <Navigate to="/access-denied" replace />;
+    }
 
     const handleExport = async () => {
         try {

@@ -23,7 +23,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     }
 
     const { user } = useAuthStore.getState();
-    const hasAdminRole = user?.role?.some(r => ALLOWED_ADMIN_ROLES.includes(r as any));
+    const hasAdminRole = user?.role?.some(r => (ALLOWED_ADMIN_ROLES as readonly string[]).includes(r));
 
     if (user && !hasAdminRole) {
         return <Navigate to="/access-denied" replace />;

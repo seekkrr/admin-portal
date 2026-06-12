@@ -106,8 +106,8 @@ function ProvisionCreatorModal({ onClose }: { onClose: () => void }) {
 export function CreatorsPage() {
     const { user: currentUser } = useAuthStore();
     const queryClient = useQueryClient();
-    const hasAccess = !!currentUser && currentUser.role?.some(r => ALLOWED_ROLES.includes(r as any));
-    const isAdmin = !!currentUser && currentUser.role?.some(r => ["admin", "super_admin"].includes(r as any));
+    const hasAccess = !!currentUser && currentUser.role?.some(r => ALLOWED_ROLES.includes(r));
+    const isAdmin = !!currentUser && currentUser.role?.some(r => ["admin", "super_admin"].includes(r));
 
     // ---- State ----
     const [searchInput, setSearchInput] = useState("");
@@ -346,7 +346,7 @@ export function CreatorsPage() {
                                                 {c.total_quests ?? "—"}
                                             </td>
                                             <td className="px-4 py-3 text-neutral-700">
-                                                {c.total_earnings != null
+                                                {c.total_earnings !== null && c.total_earnings !== undefined
                                                     ? `₹${c.total_earnings.toLocaleString("en-IN")}`
                                                     : "—"}
                                             </td>

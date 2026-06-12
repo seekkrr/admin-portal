@@ -44,7 +44,8 @@ function regionPolygon(region: Region): GeoPolygon | null {
 }
 
 export function RegionDetailPage() {
-    const { regionId } = useParams<{ regionId: string }>();
+    const { regionId: regionIdParam } = useParams<{ regionId: string }>();
+    const regionId = regionIdParam ?? "";
     const queryClient = useQueryClient();
     const { user } = useAuthStore();
 
@@ -59,19 +60,19 @@ export function RegionDetailPage() {
 
     const { data: region, isLoading, error } = useQuery<Region>({
         queryKey: ["region-detail", regionId],
-        queryFn: () => regionsService.getById(regionId!),
+        queryFn: () => regionsService.getById(regionId),
         enabled: !!regionId,
         staleTime: 60 * 1000,
     });
 
     const hotspotsQuery = useQuery<{ hotspots: Region[]; total: number }>({
         queryKey: ["region-hotspots", regionId],
-        queryFn: () => regionsService.getHotspots(regionId!),
+        queryFn: () => regionsService.getHotspots(regionId),
         enabled: !!regionId && region?.type === "city",
     });
 
     const updateMutation = useMutation({
-        mutationFn: (payload: UpdateRegionPayload) => regionsService.update(regionId!, payload),
+        mutationFn: (payload: UpdateRegionPayload) => regionsService.update(regionId, payload),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["region-detail", regionId] });
             queryClient.invalidateQueries({ queryKey: ["admin-regions"] });
@@ -270,7 +271,7 @@ export function RegionDetailPage() {
                 </Card>
             )}
 
-            <CrowdMeterSection regionId={regionId!} canApprove={CAN_APPROVE} />
+            <CrowdMeterSection regionId={regionId} canApprove={CAN_APPROVE} />
 
             {/* Admin Ranking Weight */}
             {CAN_APPROVE && (
@@ -319,9 +320,9 @@ export function RegionDetailPage() {
                 </Card>
             )}
 
-            <TravelTimeMatrix regionId={regionId!} canApprove={CAN_APPROVE} />
+            <TravelTimeMatrix regionId={regionId} canApprove={CAN_APPROVE} />
             
-            <LinkedQuests regionId={regionId!} questIds={region.quest_ids} canEdit={CAN_EDIT} />
+            <LinkedQuests regionId={regionId} questIds={region.quest_ids} canEdit={CAN_EDIT} />
 
             {/* Hotspots (cities only) */}
             {region.type === "city" && (
@@ -353,7 +354,7 @@ export function RegionDetailPage() {
                 </Card>
             )}
 
-            <DangerZone regionId={regionId!} regionName={region.name} canEdit={CAN_EDIT} isSuper={IS_SUPER} />
+            <DangerZone regionId={regionId} regionName={region.name} canEdit={CAN_EDIT} isSuper={IS_SUPER} />
 
             {/* Confirm weight modal */}
             <ConfirmModal
@@ -367,7 +368,7 @@ export function RegionDetailPage() {
                 confirmLabel="Apply"
                 confirmStyle="bg-cyan-600 hover:bg-cyan-700"
                 onConfirm={async () => {
-                    const weightMutation = regionsService.setAdminWeight(regionId!, Number(weightInput));
+                    const weightMutation = regionsService.setAdminWeight(regionId, Number(weightInput));
                     try {
                         await weightMutation;
                         queryClient.invalidateQueries({ queryKey: ["region-detail", regionId] });
@@ -375,8 +376,8 @@ export function RegionDetailPage() {
                         toast.success("Admin weight updated");
                         setWeightInput("");
                         setConfirmWeight(false);
-                    } catch (e: any) {
-                        toast.error(e.message || "Failed to update admin weight");
+                    } catch (e) {
+                        toast.error(e instanceof Error ? e.message : "Failed to update admin weight");
                         setConfirmWeight(false);
                     }
                 }}

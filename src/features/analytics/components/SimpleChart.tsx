@@ -22,7 +22,7 @@ export function SimpleLineChart({ data, color = "#4f46e5", height = 250, classNa
     useEffect(() => {
         if (!containerRef.current) return;
         const observer = new ResizeObserver(entries => {
-            for (let entry of entries) {
+            for (const entry of entries) {
                 setSize({ width: entry.contentRect.width, height: entry.contentRect.height });
             }
         });
@@ -102,8 +102,8 @@ export function SimpleLineChart({ data, color = "#4f46e5", height = 250, classNa
                 let lbl = data[i]?.label || "";
                 const match = lbl.match(/^(\d{4}-\d{2}(?:-\d{2})?)(.*)$/);
                 if (match) {
-                    const dateStr = match[1]!;
-                    const rest = match[2]!;
+                    const dateStr = match[1] ?? "";
+                    const rest = match[2] ?? "";
                     if (dateStr.length === 10) {
                         const d = new Date(dateStr);
                         lbl = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + rest;
@@ -168,7 +168,7 @@ export function SimpleBarChart({ data, height = 250, className = "" }: { data: {
     useEffect(() => {
         if (!containerRef.current) return;
         const observer = new ResizeObserver(entries => {
-            for (let entry of entries) {
+            for (const entry of entries) {
                 setSize({ width: entry.contentRect.width, height: entry.contentRect.height });
             }
         });
@@ -249,8 +249,8 @@ export function SimpleBarChart({ data, height = 250, className = "" }: { data: {
                 let lbl = d.label;
                 const match = lbl.match(/^(\d{4}-\d{2}(?:-\d{2})?)(.*)$/);
                 if (match) {
-                    const dateStr = match[1]!;
-                    const rest = match[2]!;
+                    const dateStr = match[1] ?? "";
+                    const rest = match[2] ?? "";
                     if (dateStr.length === 10) {
                         const dt = new Date(dateStr);
                         lbl = dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + rest;
@@ -291,7 +291,7 @@ export function SimpleDoughnutChart({ data, height = 200, className = "" }: { da
     useEffect(() => {
         if (!canvasContainerRef.current) return;
         const observer = new ResizeObserver(entries => {
-            for (let entry of entries) {
+            for (const entry of entries) {
                 setDim({ width: entry.contentRect.width, height: entry.contentRect.height });
             }
         });

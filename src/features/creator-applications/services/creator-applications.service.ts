@@ -33,7 +33,14 @@ export const creatorApplicationsService = {
         });
         const raw = (await api.get<Record<string, unknown>>(
             `${API_ENDPOINTS.CREATOR_APPLICATIONS.LIST}?${searchParams.toString()}`
-        )).data as any;
+        )).data as {
+            applications?: CreatorApplication[];
+            total?: number;
+            page?: number;
+            page_size?: number;
+            total_pages?: number;
+            pending_count?: number;
+        };
         return {
             applications: raw.applications ?? [],
             pagination: {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { analyticsService } from "../services/analytics.service";
 import { PeriodSelector } from "../components/PeriodSelector";
@@ -21,7 +21,7 @@ const TABS = [
 
 export function AnalyticsPage() {
     const { user } = useAuthStore();
-    const isAdmin = user?.role?.some(r => ["admin", "super_admin", "finance"].includes(r as any));
+    const isAdmin = user?.role?.some((r) => ["admin", "super_admin", "finance"].includes(r));
     
     const [activeTab, setActiveTab] = useState<typeof TABS[number]["id"]>("users");
     const [period, setPeriod] = useState<AnalyticsPeriod>("30d");
@@ -37,10 +37,6 @@ export function AnalyticsPage() {
         return { from: from.toISOString(), to };
     };
     const { from, to } = getDates();
-
-    if (user && !isAdmin) {
-        return <Navigate to="/access-denied" replace />;
-    }
 
     // --- Data Fetching ---
     const { data: userGrowth, isLoading: loadUG } = useQuery({ queryKey: ["admin-analytics-users-growth", period], queryFn: () => analyticsService.getUserGrowth(from, to), enabled: activeTab === "users" });
@@ -71,11 +67,15 @@ export function AnalyticsPage() {
     const { data: achievementUnlockRates } = useQuery({ queryKey: ["admin-analytics-content-achievements"], queryFn: () => analyticsService.getAchievementsUnlockRates(), enabled: activeTab === "content" });
     const { data: markersContrib } = useQuery({ queryKey: ["admin-analytics-markers-contrib", period, period === "90d" ? "monthly" : "daily"], queryFn: () => analyticsService.getMarkerContribution(from, to, period === "90d" ? "monthly" : "daily"), enabled: activeTab === "content" });
 
+    if (user && !isAdmin) {
+        return <Navigate to="/access-denied" replace />;
+    }
+
     const colors = ["#4f46e5", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#f97316"];
 
     // --- Shared Render Helpers ---
 
-    const renderSectionHeader = (title: string, description: string, actions?: React.ReactNode) => (
+    const renderSectionHeader = (title: string, description: string, actions?: ReactNode) => (
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
             <div>
                 <h2 className="text-xl font-bold text-neutral-900 tracking-tight">{title}</h2>
@@ -85,7 +85,7 @@ export function AnalyticsPage() {
         </div>
     );
 
-    const renderChartCard = (title: string, description: string, children: React.ReactNode, extraClass = "") => (
+    const renderChartCard = (title: string, description: string, children: ReactNode, extraClass = "") => (
         <Card className={`shadow-sm border-neutral-100 hover:shadow-md transition-shadow duration-300 overflow-hidden ${extraClass}`}>
             <CardHeader className="border-b border-neutral-100/60 pb-3 pt-5 px-6">
                 <CardTitle className="text-base font-bold tracking-tight">{title}</CardTitle>
@@ -97,7 +97,7 @@ export function AnalyticsPage() {
         </Card>
     );
 
-    const renderTable = (headers: string[], rows: React.ReactNode, emptyMsg: string, isEmpty: boolean, maxH?: string) => (
+    const renderTable = (headers: string[], rows: ReactNode, emptyMsg: string, isEmpty: boolean, maxH?: string) => (
         <div className={`overflow-x-auto ${maxH ? `max-h-[${maxH}] overflow-y-auto` : ''}`} style={maxH ? { maxHeight: maxH } : undefined}>
             <table className="min-w-full text-sm">
                 <thead className="text-xs text-neutral-500 bg-neutral-50/80 uppercase tracking-wider sticky top-0 z-10">
@@ -142,12 +142,12 @@ export function AnalyticsPage() {
                 {renderChartCard("User Growth", "New registrations over time", (
                     loadUG
                         ? <div className="h-[240px] bg-neutral-100 animate-pulse rounded-lg" />
-                        : <SimpleLineChart data={(userGrowth?.data || []).map((d: any) => ({ label: d.period, value: d.count }))} color="#4f46e5" height={240} />
+                        : <SimpleLineChart data={(userGrowth?.data || []).map((d: { period: string; count: number }) => ({ label: d.period, value: d.count }))} color="#4f46e5" height={240} />
                 ), "lg:col-span-2")}
 
                 {renderChartCard("Users by Role", "Platform distribution", (
                     <SimpleDoughnutChart
-                        data={(usersByRole?.data || []).map((r: any, i: number) => ({
+                        data={(usersByRole?.data || []).map((r: { role: string; count: number }, i: number) => ({
                             label: r.role.replace('_', ' '), value: r.count, color: colors[i % colors.length]
                         }))}
                         height={180}
@@ -159,7 +159,7 @@ export function AnalyticsPage() {
             {renderChartCard("Monthly Signup Cohorts", "New user signups grouped by registration month",
                 renderTable(
                     ["Cohort Month", "Signups"],
-                    (retention?.data || []).map((c: any, i: number) => (
+                    (retention?.data || []).map((c: { cohort_month: string; user_count: number }, i: number) => (
                         <tr key={i} className="hover:bg-neutral-50/60 transition-colors">
                             <td className="px-5 py-3.5 font-semibold text-neutral-800">{c.cohort_month}</td>
                             <td className="px-5 py-3.5 text-indigo-600 font-bold text-right">{c.user_count}</td>
@@ -219,7 +219,7 @@ export function AnalyticsPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 {renderChartCard("Revenue Over Time", "Daily or weekly gross revenue", (
                     <SimpleLineChart
-                        data={(revOverTime?.data || []).map((d: any) => ({ label: d.period, value: d.revenue }))}
+                        data={(revOverTime?.data || []).map((d: { period: string; revenue: number }) => ({ label: d.period, value: d.revenue }))}
                         color="#10b981"
                         height={260}
                     />
@@ -228,7 +228,7 @@ export function AnalyticsPage() {
                 {renderChartCard("Revenue By Quest", "Top earning quests",
                     renderTable(
                         ["Quest Title", "Revenue", "Sales"],
-                        (revByQuest?.data || []).map((q: any) => (
+                        (revByQuest?.data || []).map((q: { quest_id: string; quest_title: string; revenue: number; count: number }) => (
                             <tr key={q.quest_id} className="hover:bg-neutral-50/60 transition-colors">
                                 <td className="px-5 py-3.5 font-semibold text-neutral-800">{q.quest_title}</td>
                                 <td className="px-5 py-3.5 text-emerald-600 font-bold text-right">${q.revenue?.toLocaleString()}</td>
@@ -263,7 +263,7 @@ export function AnalyticsPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                 {renderChartCard("Quests by Status", "Current distribution of quests", (
                     <SimpleBarChart
-                        data={(questStatus?.data || []).map((s: any) => ({
+                        data={(questStatus?.data || []).map((s: { status: string; count: number }) => ({
                             label: s.status, value: s.count, color: "#4f46e5"
                         }))}
                         height={260}
@@ -272,7 +272,7 @@ export function AnalyticsPage() {
 
                 {renderChartCard("Quest Review Pipeline", "Current review stage for each quest under review", (
                     <SimpleDoughnutChart
-                        data={(questApprovalFunnel?.data || []).map((s: any, i: number) => ({
+                        data={(questApprovalFunnel?.data || []).map((s: { action?: string; status?: string; count: number }, i: number) => ({
                             label: s.action || s.status || "Unknown", value: s.count, color: colors[i % colors.length]
                         }))}
                         height={200}
@@ -284,7 +284,7 @@ export function AnalyticsPage() {
             {renderChartCard("Top Performing Quests", "Highest total completion counts",
                 renderTable(
                     ["Quest Title", "Completions"],
-                    (topQuests?.data || []).map((q: any) => (
+                    (topQuests?.data || []).map((q: { quest_id: string; title: string; completions: number }) => (
                         <tr key={q.quest_id} className="hover:bg-neutral-50/60 transition-colors">
                             <td className="px-5 py-3.5 font-semibold text-neutral-800">{q.title}</td>
                             <td className="px-5 py-3.5 text-blue-600 font-bold text-right">{q.completions}</td>
@@ -308,7 +308,7 @@ export function AnalyticsPage() {
 
                 {renderChartCard("Application Funnel", "Application pipeline status", (
                     <SimpleDoughnutChart
-                        data={(creatorAppFunnel?.data || []).map((s: any, i: number) => ({
+                        data={(creatorAppFunnel?.data || []).map((s: { status: string; count: number }, i: number) => ({
                             label: s.status, value: s.count, color: colors[i % colors.length]
                         }))}
                         height={200}
@@ -320,7 +320,7 @@ export function AnalyticsPage() {
             {renderChartCard("Top Creators", "Most prolific creators by quest count",
                 renderTable(
                     ["Creator Name", "Total Quests", "Total Earnings"],
-                    (topCreators?.data || []).map((c: any) => (
+                    (topCreators?.data || []).map((c: { creator_id: string; name: string; total_quests: number; total_earnings: number }) => (
                         <tr key={c.creator_id} className="hover:bg-neutral-50/60 transition-colors">
                             <td className="px-5 py-3.5 font-semibold text-neutral-800">
                                 <div className="flex items-center gap-2.5">
@@ -350,7 +350,7 @@ export function AnalyticsPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 {renderChartCard("Region Coverage By Type", "Types of locations mapped", (
                     <SimpleDoughnutChart
-                        data={(regionCoverage?.data || []).map((s: any, i: number) => ({
+                        data={(regionCoverage?.data || []).map((s: { type?: string; count: number }, i: number) => ({
                             label: s.type || "Unknown", value: s.count, color: colors[i % colors.length]
                         }))}
                         height={240}
@@ -359,7 +359,7 @@ export function AnalyticsPage() {
 
                 {renderChartCard("Top Regions by Quest Count", "Regions with the most published quests", (
                     <SimpleBarChart
-                        data={(topRegions?.data || []).map((r: any) => ({
+                        data={(topRegions?.data || []).map((r: { name: string; quests: number }) => ({
                             label: r.name, value: r.quests, color: "#8b5cf6"
                         }))}
                         height={240}
@@ -372,7 +372,7 @@ export function AnalyticsPage() {
                 {renderChartCard("Region Details", "Detailed quest counts per region",
                     renderTable(
                         ["Region Name", "Quest Count"],
-                        (topRegions?.data || []).map((r: any) => (
+                        (topRegions?.data || []).map((r: { region_id: string; name: string; quests: number }) => (
                             <tr key={r.region_id} className="hover:bg-neutral-50/60 transition-colors">
                                 <td className="px-5 py-3.5 font-semibold text-neutral-800">
                                     <div className="flex items-center gap-2">
@@ -405,7 +405,7 @@ export function AnalyticsPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 {renderChartCard("Narratives by Status", "Current state of story narratives", (
                     <SimpleBarChart
-                        data={(narrativesStatus?.data || []).map((s: any) => ({
+                        data={(narrativesStatus?.data || []).map((s: { status: string; count: number }) => ({
                             label: s.status, value: s.count, color: "#8b5cf6"
                         }))}
                         height={240}
@@ -414,7 +414,7 @@ export function AnalyticsPage() {
 
                 {renderChartCard("Task Config Distribution", "Count of active task configs by type", (
                     <SimpleBarChart
-                        data={(taskCompletion?.data || []).map((s: any) => ({
+                        data={(taskCompletion?.data || []).map((s: { task_type: string; count: number }) => ({
                             label: s.task_type, value: s.count, color: "#ec4899"
                         }))}
                         height={240}
@@ -427,7 +427,7 @@ export function AnalyticsPage() {
                 {renderChartCard("Achievement Unlock Rates", "Top achievements by total unlock count",
                     renderTable(
                         ["Achievement", "Unlocks"],
-                        (achievementUnlockRates?.data || []).map((a: any) => (
+                        (achievementUnlockRates?.data || []).map((a: { achievement_id: string; name: string; unlocks: number }) => (
                             <tr key={a.achievement_id} className="hover:bg-neutral-50/60 transition-colors">
                                 <td className="px-5 py-3.5 font-semibold text-neutral-800">
                                     <div className="flex items-center gap-2">
@@ -462,8 +462,8 @@ export function AnalyticsPage() {
                         </div>
                         <SimpleLineChart
                             data={(markersContrib?.data || [])
-                                .filter((d: any) => d.status === markerStatusToggle)
-                                .map((d: any) => ({ label: d.period, value: d.count }))}
+                                .filter((d: { status: string; period: string; count: number }) => d.status === markerStatusToggle)
+                                .map((d: { status: string; period: string; count: number }) => ({ label: d.period, value: d.count }))}
                             color={markerStatusToggle === "approved" ? "#3b82f6" : "#ec4899"}
                             height={200}
                         />
@@ -495,7 +495,7 @@ export function AnalyticsPage() {
                     return (
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id as any)}
+                            onClick={() => setActiveTab(tab.id)}
                             className={`flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-lg transition-all duration-200 whitespace-nowrap ${
                                 isActive
                                     ? "bg-white text-indigo-700 shadow-md ring-1 ring-neutral-200/50"

@@ -20,12 +20,11 @@ import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { useAuthStore } from "@store/auth.store";
 import { narrativesService } from "../services/narratives.service";
-import type { AdminNarrative, NarrativeStatus, NarrativeAttachType } from "@/types";
+import type { AdminNarrative, NarrativeStatus, NarrativeAttachType, VoicePersona } from "@/types";
 import { usePaginationRange } from "@/hooks/usePagination";
 import { FilterDropdown } from "@/components/FilterDropdown";
 import { Badge } from "@/components/ui/Badge";
-import { playVoicePreview, PERSONAS } from "../components/VoicePersonaSamples";
-import { BulkActionBar } from "@/components/ui/BulkActionBar";
+import { playVoicePreview, PERSONAS } from "../components/voicePersonas";
 import { useBulkSelection, runBulk } from "@/hooks/useBulkSelection";
 
 const CAN_MODERATE_ROLES = ["admin", "super_admin", "moderator"];
@@ -185,7 +184,7 @@ function NarrativeRow({
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
-                            playVoicePreview(n.voice_persona as any);
+                            playVoicePreview(n.voice_persona as VoicePersona);
                         }}
                         className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-700 hover:bg-orange-100 hover:text-orange-700 transition-colors group"
                         title="Play voice sample"

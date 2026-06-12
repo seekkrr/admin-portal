@@ -76,8 +76,8 @@ const THEME_OPTIONS: DropdownOption[] = [
 export function QuestsPage() {
     const { user: currentUser } = useAuthStore();
     const queryClient = useQueryClient();
-    const hasAccess = !!currentUser && currentUser.role?.some(r => ALLOWED_ROLES.includes(r as any));
-    const canDelete = !!currentUser && currentUser.role?.some(r => CAN_DELETE_ROLES.includes(r as any));
+    const hasAccess = !!currentUser && currentUser.role?.some(r => ALLOWED_ROLES.includes(r));
+    const canDelete = !!currentUser && currentUser.role?.some(r => CAN_DELETE_ROLES.includes(r));
 
     // ---- State ----
     const [searchInput, setSearchInput] = useState("");

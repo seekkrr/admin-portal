@@ -11,7 +11,7 @@ import { LoadingFallback } from "@components/LoadingFallback";
 export function SupportQueriesPage() {
     const { user } = useAuthStore();
     const queryClient = useQueryClient();
-    const CAN_DELETE = user?.role?.some(r => ["admin", "super_admin"].includes(r as any));
+    const CAN_DELETE = user?.role?.some(r => ["admin", "super_admin"].includes(r));
 
     const [page, setPage] = useState(1);
     const [perPage] = useState(20);

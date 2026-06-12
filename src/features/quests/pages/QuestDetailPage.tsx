@@ -64,14 +64,15 @@ const REVIEW_STATUSES: QuestStatus[] = ["Published", "Rejected", "Changes Reques
 
 // ---- Component ----
 export function QuestDetailPage() {
-    const { questId } = useParams<{ questId: string }>();
+    const { questId: questIdParam } = useParams<{ questId: string }>();
+    const questId = questIdParam ?? "";
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { user: currentUser } = useAuthStore();
 
-    const hasAccess = !!currentUser && currentUser.role?.some(r => ALLOWED_ROLES.includes(r as any));
-    const canDelete = !!currentUser && currentUser.role?.some(r => CAN_DELETE_ROLES.includes(r as any));
-    const canEdit = !!currentUser && currentUser.role?.some(r => CAN_EDIT_ROLES.includes(r as any));
+    const hasAccess = !!currentUser && currentUser.role?.some(r => ALLOWED_ROLES.includes(r));
+    const canDelete = !!currentUser && currentUser.role?.some(r => CAN_DELETE_ROLES.includes(r));
+    const canEdit = !!currentUser && currentUser.role?.some(r => CAN_EDIT_ROLES.includes(r));
     const validQuestId = isValidObjectId(questId);
 
     const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
@@ -98,20 +99,20 @@ export function QuestDetailPage() {
     // ---- Fetch ----
     const { data, isLoading, error } = useQuery({
         queryKey: ["quest-detail", questId],
-        queryFn: () => questsService.getQuestDetail(questId!),
+        queryFn: () => questsService.getQuestDetail(questId),
         enabled: !!questId && validQuestId,
     });
 
     // Fetch narratives separately
     const { data: narrativesData, refetch: refetchNarratives } = useQuery({
         queryKey: ["quest-narratives", questId],
-        queryFn: () => narrativeService.getByQuest(questId!),
+        queryFn: () => narrativeService.getByQuest(questId),
         enabled: !!questId && validQuestId,
     });
 
     // ---- Mutations ----
     const statusMutation = useMutation({
-        mutationFn: (status: QuestStatus) => questsService.updateQuestStatus(questId!, status),
+        mutationFn: (status: QuestStatus) => questsService.updateQuestStatus(questId, status),
         onSuccess: () => {
             toast.success("Quest status updated");
             queryClient.invalidateQueries({ queryKey: ["quest-detail", questId] });
@@ -123,7 +124,7 @@ export function QuestDetailPage() {
 
     const reviewMutation = useMutation({
         mutationFn: ({ status, comment }: { status: "Published" | "Rejected" | "Changes Requested"; comment?: string }) =>
-            questsService.reviewQuest(questId!, { status, comment }),
+            questsService.reviewQuest(questId, { status, comment }),
         onSuccess: () => {
             toast.success("Quest review submitted");
             queryClient.invalidateQueries({ queryKey: ["quest-detail", questId] });
@@ -135,7 +136,7 @@ export function QuestDetailPage() {
     });
 
     const deleteMutation = useMutation({
-        mutationFn: (hard: boolean) => questsService.deleteQuest(questId!, hard),
+        mutationFn: (hard: boolean) => questsService.deleteQuest(questId, hard),
         onSuccess: () => {
             toast.success("Quest deleted");
             queryClient.invalidateQueries({ queryKey: ["admin-quests"] });
@@ -145,7 +146,7 @@ export function QuestDetailPage() {
     });
 
     const questUpdateMutation = useMutation({
-        mutationFn: (payload: Record<string, unknown>) => questsService.updateQuest(questId!, payload),
+        mutationFn: (payload: Record<string, unknown>) => questsService.updateQuest(questId, payload),
         onSuccess: () => {
             toast.success("Quest updated");
             queryClient.invalidateQueries({ queryKey: ["quest-detail", questId] });
@@ -254,7 +255,7 @@ export function QuestDetailPage() {
 
             newAssets.push(...uploadedAssets);
 
-            await questsService.updateQuest(questId!, {
+            await questsService.updateQuest(questId, {
                 media: { cloudinary_assets: newAssets },
             });
             queryClient.invalidateQueries({ queryKey: ["quest-detail", questId] });
@@ -273,7 +274,7 @@ export function QuestDetailPage() {
             (a) => a.public_id !== publicId
         );
         try {
-            await questsService.updateQuest(questId!, {
+            await questsService.updateQuest(questId, {
                 media: { cloudinary_assets: updated },
             });
             queryClient.invalidateQueries({ queryKey: ["quest-detail", questId] });
@@ -282,6 +283,12 @@ export function QuestDetailPage() {
             toast.error(err instanceof Error ? err.message : "Remove failed");
         }
     };
+
+    const sortedReviewHistory = useMemo(() => {
+        return [...(data?.review_history ?? [])].sort(
+            (a, b) => new Date(b.reviewed_at || b.timestamp || 0).getTime() - new Date(a.reviewed_at || a.timestamp || 0).getTime()
+        );
+    }, [data?.review_history]);
 
     // ---- Guards ----
     if (!hasAccess) return <AccessDenied message="Only admins and moderators can manage quests." />;
@@ -308,12 +315,6 @@ export function QuestDetailPage() {
     const currentStatus = quest.status;
     const defaultStatus = { label: "Draft", dot: "bg-neutral-400", bg: "bg-neutral-50 text-neutral-600 border-neutral-200", active: "bg-neutral-600 text-white border-neutral-600" };
     const sc = questStatusConfig[currentStatus] ?? defaultStatus;
-
-    const sortedReviewHistory = useMemo(() => {
-        return [...(data.review_history ?? [])].sort(
-            (a, b) => new Date(b.reviewed_at || b.timestamp || 0).getTime() - new Date(a.reviewed_at || a.timestamp || 0).getTime()
-        );
-    }, [data.review_history]);
 
     return (
         <div className="animate-fade-in mx-auto max-w-4xl space-y-4">
@@ -798,7 +799,7 @@ export function QuestDetailPage() {
                 narratives={narrativesData?.narratives ?? []}
                 steps={steps}
                 canEdit={canEdit}
-                questId={questId!}
+                questId={questId}
                 expandedNarratives={expandedNarratives}
                 toggleNarrative={(id: string) => setExpandedNarratives(prev => {
                     const next = new Set(prev);
@@ -850,7 +851,7 @@ export function QuestDetailPage() {
                     
                     try {
                         await narrativeService.create({
-                            quest_id: questId!,
+                            quest_id: questId,
                             from_step_id: fromStep._id,
                             to_step_id: toStep._id,
                             trigger_location: triggerLocation,

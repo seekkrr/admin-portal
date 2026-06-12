@@ -8,22 +8,23 @@ import { toast } from "sonner";
 import { LoadingFallback } from "@components/LoadingFallback";
 
 export function SupportQueryDetailPage() {
-    const { queryId } = useParams<{ queryId: string }>();
+    const { queryId: queryIdParam } = useParams<{ queryId: string }>();
+    const queryId = queryIdParam ?? "";
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { user } = useAuthStore();
     
-    const CAN_DELETE = user?.role?.some(r => ["admin", "super_admin"].includes(r as any));
+    const CAN_DELETE = user?.role?.some(r => ["admin", "super_admin"].includes(r));
 
     const { data: query, isLoading, error } = useQuery({
         queryKey: ["support-query-detail", queryId],
-        queryFn: () => supportQueriesService.getById(queryId!),
+        queryFn: () => supportQueriesService.getById(queryId),
         enabled: !!queryId,
         staleTime: 5 * 60 * 1000,
     });
 
     const deleteMutation = useMutation({
-        mutationFn: () => supportQueriesService.deleteQuery(queryId!),
+        mutationFn: () => supportQueriesService.deleteQuery(queryId),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["admin-support-queries"] });
             toast.success("Query deleted");

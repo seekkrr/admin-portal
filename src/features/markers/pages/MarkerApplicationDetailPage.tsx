@@ -10,7 +10,8 @@ import { LoadingFallback } from "@components/LoadingFallback";
 import { Card } from "@/components/ui/Card";
 
 export function MarkerApplicationDetailPage() {
-    const { appId } = useParams<{ appId: string }>();
+    const { appId: appIdParam } = useParams<{ appId: string }>();
+    const appId = appIdParam ?? "";
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { user } = useAuthStore();
@@ -24,13 +25,13 @@ export function MarkerApplicationDetailPage() {
 
     const { data: application, isLoading, error } = useQuery({
         queryKey: ["marker-application-detail", appId],
-        queryFn: () => markersService.getApplication(appId!),
+        queryFn: () => markersService.getApplication(appId),
         enabled: !!appId,
         staleTime: 5 * 60 * 1000,
     });
 
     const approveMutation = useMutation({
-        mutationFn: () => markersService.approveApplication(appId!),
+        mutationFn: () => markersService.approveApplication(appId),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["admin-marker-applications"] });
             queryClient.invalidateQueries({ queryKey: ["admin-markers"] });
@@ -44,7 +45,7 @@ export function MarkerApplicationDetailPage() {
     });
 
     const rejectMutation = useMutation({
-        mutationFn: () => markersService.rejectApplication(appId!, rejectReason.trim() || undefined),
+        mutationFn: () => markersService.rejectApplication(appId, rejectReason.trim() || undefined),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["admin-marker-applications"] });
             toast.success("Application rejected");
@@ -69,15 +70,14 @@ export function MarkerApplicationDetailPage() {
         );
     }
 
-    console.log("MARKER APPLICATION DATA:", application);
-
     const coords = application.proposed_location?.coordinates ?? null;
     
     // Attempt to extract photos from various possible fields
-    const rawPhotos = 
+    const appMedia = (application as { media?: unknown[] }).media;
+    const rawPhotos =
         (Array.isArray(application.photos) && application.photos.length > 0) ? application.photos :
-        (Array.isArray((application as any).media) && (application as any).media.length > 0) ? (application as any).media :
-        (Array.isArray(application.additional_info?.media) && application.additional_info.media.length > 0) ? application.additional_info.media : 
+        (Array.isArray(appMedia) && appMedia.length > 0) ? appMedia :
+        (Array.isArray(application.additional_info?.media) && application.additional_info.media.length > 0) ? application.additional_info.media :
         (Array.isArray(application.additional_info?.photos) && application.additional_info.photos.length > 0) ? application.additional_info.photos : [];
     
     const photos = rawPhotos.filter(Boolean);
@@ -91,7 +91,7 @@ export function MarkerApplicationDetailPage() {
     const opensAt = typeof additionalInfo.opens_at === 'string' ? additionalInfo.opens_at : null;
     const closesAt = typeof additionalInfo.closes_at === 'string' ? additionalInfo.closes_at : null;
 
-    const hasExpense = minExpense != null || maxExpense != null;
+    const hasExpense = (minExpense !== null && minExpense !== undefined) || (maxExpense !== null && maxExpense !== undefined);
     const expenseLabel = hasExpense ? `₹${minExpense ?? "?"} – ₹${maxExpense ?? "?"}` : null;
 
     const fmtTime = (iso: string | null): string => {
@@ -125,7 +125,6 @@ export function MarkerApplicationDetailPage() {
 
     const tagsArray = Array.isArray(additionalInfo.tags) ? additionalInfo.tags : [];
 
-    const cardClass = "bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden p-6";
     const inputClass = "w-full rounded-xl py-2.5 px-4 border border-neutral-200 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all";
 
     return (

@@ -21,7 +21,6 @@ import { toast } from "sonner";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Badge } from "@/components/ui/Badge";
-import { BulkActionBar } from "@/components/ui/BulkActionBar";
 import { useBulkSelection, runBulk } from "@/hooks/useBulkSelection";
 import { MarkerCreateModal } from "../components/MarkerCreateModal";
 import type { MarkerStatus } from "@/types";

@@ -39,13 +39,13 @@ export function CreatorDetailModal({
 
     const { data: creator, isLoading, error } = useQuery({
         queryKey: ["creator-detail", creatorId],
-        queryFn: () => creatorsService.getCreator(creatorId!),
+        queryFn: () => creatorsService.getCreator(creatorId ?? ""),
         enabled: open && !!creatorId,
     });
 
     const updateMutation = useMutation({
         mutationFn: ({ status, is_verified }: { status?: string; is_verified?: boolean }) =>
-            creatorsService.updateCreator(creatorId!, { status, is_verified }),
+            creatorsService.updateCreator(creatorId ?? "", { status, is_verified }),
         onSuccess: () => {
             toast.success("Creator updated");
             queryClient.invalidateQueries({ queryKey: ["creator-detail", creatorId] });

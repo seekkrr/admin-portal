@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -30,7 +30,7 @@ const questStatusConfig: Record<string, { label: string; dot: string; bg: string
 // ---- Quick-action button config ----
 const quickActionConfig: Record<string, {
     label: string;
-    icon: React.ReactNode;
+    icon: ReactNode;
     base: string;
     hover: string;
     isReviewAction?: boolean;
@@ -106,14 +106,14 @@ export function QuestDetailModal({
 
     const { data, isLoading, error } = useQuery({
         queryKey: ["quest-detail", questId],
-        queryFn: () => questsService.getQuestDetail(questId!),
+        queryFn: () => questsService.getQuestDetail(questId ?? ""),
         enabled: open && !!questId,
         staleTime: 30_000,
     });
 
     // Most recent review history entry (for context in the modal body)
-    const reviewHistory = (data?.review_history ?? []) as ReviewHistoryEntry[];
     const latestReview = useMemo(() => {
+        const reviewHistory = (data?.review_history ?? []) as ReviewHistoryEntry[];
         if (reviewHistory.length === 0) return null;
 
         // Sort by date descending to get the latest review first.
@@ -121,7 +121,7 @@ export function QuestDetailModal({
             (a, b) => new Date(b.reviewed_at || b.timestamp || 0).getTime() - new Date(a.reviewed_at || a.timestamp || 0).getTime()
         );
         return sorted[0];
-    }, [reviewHistory]);
+    }, [data?.review_history]);
 
     if (!open || !questId) return null;
 
@@ -420,7 +420,7 @@ export function QuestDetailModal({
 
 // ---- Glassmorphic Stat Card ----
 function GlassStatCard({ icon, label, value, style }: {
-    icon: React.ReactNode;
+    icon: ReactNode;
     label: string;
     value: string | number;
     style: { bg: string; iconBg: string; border: string; text: string };

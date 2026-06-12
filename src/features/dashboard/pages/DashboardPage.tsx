@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@components/ui";
-import { Users, Activity, Map, DollarSign, MessageSquare, BarChart3, Video } from "lucide-react";
+import { Users, Activity, Map, DollarSign, MessageSquare, BarChart3, Video, type LucideIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { dashboardService } from "../services/dashboard.service";
 import { LoadingFallback } from "@components/LoadingFallback";
@@ -18,11 +18,7 @@ export function DashboardPage() {
     const ADMIN_ROLES = ["admin", "super_admin"];
     const roleColors = ["bg-indigo-600", "bg-indigo-500", "bg-indigo-400", "bg-indigo-300", "bg-indigo-200"];
 
-    if (user && !user.role?.some(r => ALLOWED_ROLES.includes(r as any))) {
-        return <Navigate to="/access-denied" replace />;
-    }
-
-    const isAdmin = user && user.role?.some(r => ADMIN_ROLES.includes(r as any));
+    const isAdmin = user && user.role?.some((r) => ADMIN_ROLES.includes(r));
 
     const { data: overview, isLoading: loadingOverview } = useQuery({
         queryKey: ["admin-dashboard-overview", "30d"],
@@ -52,12 +48,16 @@ export function DashboardPage() {
         staleTime: 5 * 60 * 1000,
     });
 
+    if (user && !user.role?.some((r) => ALLOWED_ROLES.includes(r))) {
+        return <Navigate to="/access-denied" replace />;
+    }
+
     if (isAdmin && loadingOverview) {
         return <LoadingFallback message="Loading dashboard..." />;
     }
 
     // Helper to render KPI cards beautifully and perfectly aligned
-    const renderKpiCard = (title: string, value: string | number, Icon: any, colorClass: string) => (
+    const renderKpiCard = (title: string, value: string | number, Icon: LucideIcon, colorClass: string) => (
         <Card className="hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-300 ease-out border-neutral-100 shadow-sm h-full overflow-hidden relative group bg-white/70 backdrop-blur-xl">
             {/* Subtle top border accent */}
             <div className={`absolute top-0 left-0 w-full h-1 opacity-50 group-hover:opacity-100 transition-opacity ${(colorClass.split(' ')[0] || '').replace('ring', 'bg').replace('text', 'bg')}`} />
@@ -195,7 +195,7 @@ export function DashboardPage() {
                             </CardHeader>
                             <CardContent className="p-6">
                                 <div className="space-y-4">
-                                    {roles?.data?.map((r: any, i: number) => (
+                                    {roles?.data?.map((r: { role: string; count: number }, i: number) => (
                                         <div key={r.role} className="flex items-center justify-between group">
                                             <div className="flex items-center gap-3">
                                                 <div className={`w-3 h-3 rounded-full shadow-sm ring-2 ring-white ${roleColors[i % roleColors.length]}`}></div>

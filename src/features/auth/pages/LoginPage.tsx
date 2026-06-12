@@ -1,4 +1,4 @@
-import { GoogleLogin } from "@react-oauth/google";
+import { GoogleLogin, type CredentialResponse } from "@react-oauth/google";
 import { authService } from "@services/auth.service";
 import { Card } from "@components/ui";
 import { useAuthStore } from "@store/auth.store";
@@ -10,7 +10,7 @@ export function LoginPage() {
     const { login, checkAuth } = useAuthStore();
     const navigate = useNavigate();
 
-    const handleGoogleSuccess = async (credentialResponse: any) => {
+    const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
         if (!credentialResponse.credential) {
             toast.error("Invalid Google login response.");
             return;
@@ -26,15 +26,15 @@ export function LoginPage() {
                 navigate("/", { replace: true });
             } else {
                 const state = useAuthStore.getState();
-                const hasAdminRole = state.user?.role?.some(r => ALLOWED_ADMIN_ROLES.includes(r as any));
+                const hasAdminRole = state.user?.role?.some(r => (ALLOWED_ADMIN_ROLES as readonly string[]).includes(r));
                 if (state.user && !hasAdminRole) {
                     navigate("/access-denied", { replace: true });
                     return;
                 }
                 toast.error("Failed to load user profile.");
             }
-        } catch (err: any) {
-            toast.error(err.message || "Authentication failed. Please try again.");
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Authentication failed. Please try again.");
         }
     };
 

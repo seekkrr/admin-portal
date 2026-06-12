@@ -24,7 +24,8 @@ function Stars({ rating }: { rating: number }) {
 }
 
 export function ReviewDetailPage() {
-    const { reviewId } = useParams<{ reviewId: string }>();
+    const { reviewId: reviewIdParam } = useParams<{ reviewId: string }>();
+    const reviewId = reviewIdParam ?? "";
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { user } = useAuthStore();
@@ -41,7 +42,7 @@ export function ReviewDetailPage() {
         error,
     } = useQuery({
         queryKey: ["review-detail", reviewId],
-        queryFn: () => reviewsService.getById(reviewId!),
+        queryFn: () => reviewsService.getById(reviewId),
         enabled: !!reviewId,
     });
 
@@ -51,7 +52,7 @@ export function ReviewDetailPage() {
     };
 
     const moderateMut = useMutation({
-        mutationFn: (isVisible: boolean) => reviewsService.moderate(reviewId!, isVisible),
+        mutationFn: (isVisible: boolean) => reviewsService.moderate(reviewId, isVisible),
         onSuccess: (updated) => {
             invalidate();
             toast.success(updated.is_visible ? "Review is now visible" : "Review hidden");
@@ -64,7 +65,7 @@ export function ReviewDetailPage() {
     });
 
     const respondMut = useMutation({
-        mutationFn: () => reviewsService.respond(reviewId!, response),
+        mutationFn: () => reviewsService.respond(reviewId, response),
         onSuccess: () => {
             invalidate();
             toast.success("Response submitted");
@@ -74,7 +75,7 @@ export function ReviewDetailPage() {
     });
 
     const deleteMut = useMutation({
-        mutationFn: () => reviewsService.remove(reviewId!),
+        mutationFn: () => reviewsService.remove(reviewId),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["admin-reviews"] });
             toast.success("Review deleted");
