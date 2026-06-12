@@ -14,8 +14,9 @@ import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { FilterDropdown } from "@/components/FilterDropdown";
 import { usePaginationRange } from "@/hooks/usePagination";
 import { QuestDetailModal } from "../components/QuestDetailModal";
+import { regionsService } from "@/features/regions/services/regions.service";
 import type { DropdownOption } from "@/components/FilterDropdown";
-import type { QuestListItem, QuestStatus } from "@/types";
+import type { QuestListEntry, QuestStatus } from "@/types";
 
 // ---- Constants ----
 const ALLOWED_ROLES = ["admin", "super_admin", "moderator"];
@@ -53,24 +54,41 @@ const STATUS_OPTIONS: DropdownOption[] = [
     { value: "Archived", label: "Archived", dot: "bg-red-500" },
 ];
 
+// Values MUST be lowercase to match the backend `difficulty` enum
+// (easy | moderate | hard | expert).
 const DIFFICULTY_OPTIONS: DropdownOption[] = [
     { value: "", label: "All Difficulties" },
-    { value: "Easy", label: "Easy", dot: "bg-emerald-400" },
-    { value: "Medium", label: "Medium", dot: "bg-amber-400" },
-    { value: "Hard", label: "Hard", dot: "bg-orange-500" },
-    { value: "Expert", label: "Expert", dot: "bg-red-500" },
+    { value: "easy", label: "Easy", dot: "bg-emerald-400" },
+    { value: "moderate", label: "Moderate", dot: "bg-amber-400" },
+    { value: "hard", label: "Hard", dot: "bg-orange-500" },
+    { value: "expert", label: "Expert", dot: "bg-red-500" },
 ];
 
+// Theme is a free-form lowercase tag array on the backend; these are the
+// tags actually used across seeded quests.
 const THEME_OPTIONS: DropdownOption[] = [
     { value: "", label: "All Themes" },
-    { value: "Adventure", label: "Adventure" },
-    { value: "Romance", label: "Romance" },
-    { value: "Culture", label: "Culture" },
-    { value: "Food", label: "Food" },
-    { value: "History", label: "History" },
-    { value: "Nature", label: "Nature" },
-    { value: "Custom", label: "Custom" },
+    { value: "heritage", label: "Heritage" },
+    { value: "history", label: "History" },
+    { value: "architecture", label: "Architecture" },
+    { value: "culture", label: "Culture" },
+    { value: "food", label: "Food" },
+    { value: "nature", label: "Nature" },
+    { value: "wellness", label: "Wellness" },
+    { value: "photography", label: "Photography" },
+    { value: "art", label: "Art" },
+    { value: "urban", label: "Urban" },
+    { value: "nightlife", label: "Nightlife" },
+    { value: "science", label: "Science" },
+    { value: "adventure", label: "Adventure" },
 ];
+
+const DIFFICULTY_BADGE: Record<string, string> = {
+    easy: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    moderate: "bg-amber-50 text-amber-700 border-amber-200",
+    hard: "bg-orange-50 text-orange-700 border-orange-200",
+    expert: "bg-red-50 text-red-700 border-red-200",
+};
 
 // ---- Main Component ----
 export function QuestsPage() {
@@ -85,14 +103,13 @@ export function QuestsPage() {
     const [statusFilter, setStatusFilter] = useState("");
     const [difficultyFilter, setDifficultyFilter] = useState("");
     const [themeFilter, setThemeFilter] = useState("");
-    const [regionFilter, setRegionFilter] = useState("");
-    const [debouncedRegion, setDebouncedRegion] = useState("");
+    const [regionFilter, setRegionFilter] = useState(""); // selected region id
     const [page, setPage] = useState(1);
     const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
     const [hardDelete, setHardDelete] = useState(false);
 
     // Modal state
-    const [viewingQuest, setViewingQuest] = useState<QuestListItem | null>(null);
+    const [viewingQuest, setViewingQuest] = useState<QuestListEntry | null>(null);
 
     // ---- Debounced search ----
     useEffect(() => {
@@ -102,15 +119,6 @@ export function QuestsPage() {
         }, SEARCH_DEBOUNCE_MS);
         return () => clearTimeout(timer);
     }, [searchInput]);
-
-    // ---- Debounced region ----
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setDebouncedRegion(regionFilter.trim());
-            setPage(1);
-        }, SEARCH_DEBOUNCE_MS);
-        return () => clearTimeout(timer);
-    }, [regionFilter]);
 
     // Reset hard delete toggle when modal closes
     useEffect(() => { if (!confirmAction) setHardDelete(false); }, [confirmAction]);
@@ -126,10 +134,10 @@ export function QuestsPage() {
         statuses: statusFilter ? undefined : ADMIN_STATUSES,
         difficulty: difficultyFilter || undefined,
         theme: themeFilter || undefined,
-        region: debouncedRegion || undefined,
+        region: regionFilter || undefined,
         page,
         per_page: PER_PAGE,
-    }), [debouncedQuery, statusFilter, difficultyFilter, themeFilter, debouncedRegion, page]);
+    }), [debouncedQuery, statusFilter, difficultyFilter, themeFilter, regionFilter, page]);
 
     const { data, isLoading, error } = useQuery({
         queryKey: ["admin-quests", queryParams],
@@ -140,6 +148,24 @@ export function QuestsPage() {
     const quests = useMemo(() => data?.quests ?? [], [data]);
     const pagination = data?.pagination;
 
+    // ---- Regions (for id → name resolution + filter dropdown) ----
+    const { data: regionsData } = useQuery({
+        queryKey: ["admin-regions-lookup"],
+        queryFn: () => regionsService.list({ page: 1, page_size: 100 }),
+        staleTime: 5 * 60_000,
+    });
+
+    const regionNameById = useMemo(() => {
+        const map = new Map<string, string>();
+        (regionsData?.regions ?? []).forEach((r) => map.set(r.id, r.name));
+        return map;
+    }, [regionsData]);
+
+    const REGION_OPTIONS = useMemo<DropdownOption[]>(() => [
+        { value: "", label: "All Regions" },
+        ...(regionsData?.regions ?? []).map((r) => ({ value: r.id, label: r.name })),
+    ], [regionsData]);
+
     // ---- Client-side instant filter ----
     const filteredQuests = useMemo(() => {
         let result = quests;
@@ -147,18 +173,11 @@ export function QuestsPage() {
         if (searchInput.trim() && searchInput.trim() !== debouncedQuery) {
             const q = searchInput.trim().toLowerCase();
             result = result.filter((quest) =>
-                (quest.quest_title ?? "").toLowerCase().includes(q)
-            );
-        }
-        // Client-side instant region filter for responsiveness while debounce is pending
-        if (regionFilter.trim() && regionFilter.trim() !== debouncedRegion) {
-            const r = regionFilter.trim().toLowerCase();
-            result = result.filter((quest) =>
-                (quest.quest_region ?? "").toLowerCase().includes(r)
+                (quest.title ?? "").toLowerCase().includes(q)
             );
         }
         return result;
-    }, [quests, searchInput, debouncedQuery, regionFilter, debouncedRegion]);
+    }, [quests, searchInput, debouncedQuery]);
 
     // ---- Mutations ----
     const deleteMutation = useMutation({
@@ -191,7 +210,6 @@ export function QuestsPage() {
         setDifficultyFilter("");
         setThemeFilter("");
         setRegionFilter("");
-        setDebouncedRegion("");
         setPage(1);
     }, []);
 
@@ -260,28 +278,14 @@ export function QuestsPage() {
                         )}
                     </div>
 
-                    {/* Region text filter */}
-                    <div className="relative min-w-[180px]">
-                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
-                        <input
-                            type="text"
-                            placeholder="Filter by region..."
-                            value={regionFilter}
-                            onChange={(e) => setRegionFilter(e.target.value)}
-                            className={`w-full pl-9 pr-8 py-2.5 rounded-xl border text-sm transition-all focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent ${regionFilter
-                                ? "border-indigo-300 bg-indigo-50/50 text-indigo-700"
-                                : "border-neutral-200 bg-neutral-50 text-neutral-600"
-                                }`}
-                        />
-                        {regionFilter && (
-                            <button
-                                onClick={() => { setRegionFilter(""); setDebouncedRegion(""); setPage(1); }}
-                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
-                            >
-                                <X className="w-3.5 h-3.5" />
-                            </button>
-                        )}
-                    </div>
+                    {/* Region filter (server-side by region_id) */}
+                    <FilterDropdown
+                        options={REGION_OPTIONS}
+                        value={regionFilter}
+                        onChange={(v) => { setRegionFilter(v); setPage(1); }}
+                        icon={<MapPin className="w-3.5 h-3.5" />}
+                        placeholder="Region"
+                    />
 
                     <FilterDropdown
                         options={STATUS_OPTIONS}
@@ -348,16 +352,23 @@ export function QuestsPage() {
                                     const sc = questStatusConfig[quest.status] || { label: quest.status, dot: "bg-neutral-400", bg: "bg-neutral-50 text-neutral-600 border-neutral-200" };
                                     return (
                                         <tr
-                                            key={quest._id}
+                                            key={quest.id}
                                             className="transition-colors group hover:bg-neutral-50/80 cursor-pointer"
                                             onClick={() => setViewingQuest(quest)}
                                         >
                                             <td className="px-4 py-3">
-                                                <div className="font-medium text-neutral-900">
-                                                    {quest.quest_title || "Untitled Quest"}
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-medium text-neutral-900">
+                                                        {quest.title || "Untitled Quest"}
+                                                    </span>
+                                                    {quest.difficulty && (
+                                                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border capitalize ${DIFFICULTY_BADGE[quest.difficulty] ?? "bg-neutral-50 text-neutral-600 border-neutral-200"}`}>
+                                                            {quest.difficulty}
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <div className="text-[11px] text-neutral-400 mt-0.5">
-                                                    {quest.quest_region || "No region"}
+                                                    {(quest.region_id && regionNameById.get(quest.region_id)) || "No region"}
                                                 </div>
                                             </td>
                                             <td className="px-4 py-3">
@@ -372,7 +383,7 @@ export function QuestsPage() {
                                                 )}
                                             </td>
                                             <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">
-                                                {formatDuration(quest.quest_duration_minutes)}
+                                                {formatDuration(quest.duration_minutes)}
                                             </td>
                                             <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">
                                                 {new Date(quest.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
@@ -388,7 +399,7 @@ export function QuestsPage() {
                                                     </button>
                                                     {canDelete && (
                                                         <button
-                                                            onClick={() => setConfirmAction({ type: "delete", payload: { questId: quest._id, title: quest.quest_title || "Untitled" } })}
+                                                            onClick={() => setConfirmAction({ type: "delete", payload: { questId: quest.id, title: quest.title || "Untitled" } })}
                                                             title="Delete quest"
                                                             className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                                                         >
@@ -451,18 +462,18 @@ export function QuestsPage() {
             {/* Quest Detail Modal (read-only quick view) */}
             <QuestDetailModal
                 open={!!viewingQuest}
-                questId={viewingQuest?._id ?? null}
-                questTitle={viewingQuest?.quest_title ?? ""}
+                questId={viewingQuest?.id ?? null}
+                questTitle={viewingQuest?.title ?? ""}
                 questStatus={viewingQuest?.status ?? "Draft"}
                 onClose={() => setViewingQuest(null)}
                 onStatusChange={(questId, status) => {
                     setViewingQuest(null);
-                    setConfirmAction({ type: "status-change", payload: { questId, title: viewingQuest?.quest_title || "Quest", status } });
+                    setConfirmAction({ type: "status-change", payload: { questId, title: viewingQuest?.title || "Quest", status } });
                 }}
                 canDelete={canDelete}
                 onDelete={(questId) => {
                     setViewingQuest(null);
-                    setConfirmAction({ type: "delete", payload: { questId, title: viewingQuest?.quest_title || "Quest" } });
+                    setConfirmAction({ type: "delete", payload: { questId, title: viewingQuest?.title || "Quest" } });
                 }}
             />
 

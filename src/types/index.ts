@@ -228,6 +228,30 @@ export interface QuestListItem {
     creator_name?: string | null;
 }
 
+// Shape returned by the GET /api/v2/quests list endpoint (distinct from the
+// full quest document used on the detail page). Verified against the live
+// backend serializer — the list trims/renames fields vs the stored model.
+export interface QuestListEntry {
+    id: string;
+    title: string | null;
+    description: string | null;
+    theme: string[];
+    difficulty: string | null;
+    price: number;
+    currency: string | null;
+    points: number | null;
+    duration_minutes: number | null;
+    region_id: string | null;
+    status: QuestStatus;
+    view_count: number;
+    average_rating: number | null;
+    total_markers: number;
+    completion_count: number;
+    review_count: number;
+    cloudinary_assets: unknown[];
+    created_at: string;
+}
+
 // ---- Full Quest Detail Response (from GET /api/quests/:id) ----
 export interface QuestDetailLocation {
     _id: string;

@@ -31,10 +31,6 @@ export const API_ENDPOINTS = {
         USER_POINTS_DEDUCT: (id: string) => `/api/v2/users/${id}/points/deduct`,
         USER_PROMOTE_CREATOR: (id: string) => `/api/v2/users/${id}/promote-creator`,
     },
-    INTEREST: {
-        STATS: "/api/v2/interest/admin/stats",
-        EXPORT: "/api/v2/interest/admin/export",
-    },
     CREATOR_APPLICATIONS: {
         LIST: "/api/v2/creator-applications",
         BY_ID: (id: string) => `/api/v2/creator-applications/${id}`,

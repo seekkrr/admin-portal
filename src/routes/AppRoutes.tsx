@@ -15,7 +15,6 @@ const CreatorEditPage = lazy(() => import("@/features/creators/pages/CreatorEdit
 const CreatorApplicationsPage = lazy(() => import("@/features/creator-applications/pages/CreatorApplicationsPage").then(m => ({ default: m.CreatorApplicationsPage })));
 const QuestsPage = lazy(() => import("@/features/quests/pages/QuestsPage").then(m => ({ default: m.QuestsPage })));
 const QuestDetailPage = lazy(() => import("@/features/quests/pages/QuestDetailPage").then(m => ({ default: m.QuestDetailPage })));
-const StatsPage = lazy(() => import("@/features/stats/pages/StatsPage").then(m => ({ default: m.StatsPage })));
 const SupportQueriesPage = lazy(() => import("@/features/support-queries/pages/SupportQueriesPage").then(m => ({ default: m.SupportQueriesPage })));
 const SupportQueryDetailPage = lazy(() => import("@/features/support-queries/pages/SupportQueryDetailPage").then(m => ({ default: m.SupportQueryDetailPage })));
 const AnalyticsPage = lazy(() => import("@/features/analytics/pages/AnalyticsPage").then(m => ({ default: m.AnalyticsPage })));
@@ -57,12 +56,8 @@ export const AppRoutes = () => {
                         <DashboardPage />
                     </Suspense>
                 } />
-                {/* Backward compat: /stats redirects to /dashboard */}
-                <Route path="stats" element={
-                    <Suspense fallback={<LoadingFallback message="Loading stats..." />}>
-                        <StatsPage />
-                    </Suspense>
-                } />
+                {/* Legacy /stats page removed (depended on V1-only interest endpoint); redirect to dashboard */}
+                <Route path="stats" element={<Navigate to="/dashboard" replace />} />
                 <Route path="users" element={
                     <Suspense fallback={<LoadingFallback message="Loading users..." />}>
                         <UsersPage />

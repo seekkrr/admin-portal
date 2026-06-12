@@ -1,7 +1,7 @@
 import { api } from "@/services/api";
 import { API_ENDPOINTS } from "@/config/api";
 import type {
-    QuestListItem,
+    QuestListEntry,
     QuestDetailResponse,
     QuestStatus,
 } from "@/types";
@@ -9,7 +9,7 @@ import type {
 // ---- Response Types ----
 
 export interface QuestsListResponse {
-    quests: QuestListItem[];
+    quests: QuestListEntry[];
     pagination: {
         total: number;
         page: number;
@@ -25,15 +25,23 @@ export interface QuestsListResponse {
 // ---- Query Params ----
 
 export interface ListQuestsParams {
-    q?: string;
+    q?: string;          // free-text search (mapped to backend `search`)
     status?: string;
     statuses?: string;   // Comma-separated list of statuses for multi-status filtering
     difficulty?: string;
     theme?: string;
-    region?: string;
+    region?: string;     // region id (mapped to backend `region_id`)
     page?: number;
-    per_page?: number;
+    per_page?: number;   // mapped to backend `page_size`
 }
+
+// Frontend param name -> backend query param name. The backend list endpoint
+// expects `search`, `region_id`, `page_size` (not `q`, `region`, `per_page`).
+const PARAM_NAME_MAP: Record<string, string> = {
+    q: "search",
+    region: "region_id",
+    per_page: "page_size",
+};
 
 // ---- Service ----
 
@@ -45,13 +53,13 @@ export const questsService = {
         const searchParams = new URLSearchParams();
         Object.entries(params).forEach(([key, value]) => {
             if (value !== undefined && value !== "") {
-                searchParams.append(key, String(value));
+                searchParams.append(PARAM_NAME_MAP[key] ?? key, String(value));
             }
         });
         const raw = (await api.get<Record<string, unknown>>(
             `${API_ENDPOINTS.QUESTS.BASE}?${searchParams.toString()}`
         )).data as {
-            quests?: QuestListItem[];
+            quests?: QuestListEntry[];
             total?: number;
             page?: number;
             page_size?: number;
