@@ -127,4 +127,40 @@ export const API_ENDPOINTS = {
         VERIFY: (id: string) => `/api/v2/payout-accounts/${id}/verify`,
         SET_PRIMARY: (id: string) => `/api/v2/payout-accounts/${id}/set-primary`,
     },
+    // ── Section 10: Achievements & Leaderboards ──
+    ACHIEVEMENTS: {
+        BASE: "/api/v2/achievements",
+        EXPLORER_LEVELS: "/api/v2/achievements/explorer-levels",
+        BY_ID: (id: string) => `/api/v2/achievements/${id}`,
+        USER_EARNED: (userId: string) => `/api/v2/achievements/users/${userId}/earned`,
+    },
+    LEADERBOARDS: {
+        GLOBAL: "/api/v2/leaderboards/global",
+        GLOBAL_RECOMPUTE: "/api/v2/leaderboards/global/recompute",
+        BY_QUEST: (id: string) => `/api/v2/leaderboards/quest/${id}`,
+        BY_REGION: (id: string) => `/api/v2/leaderboards/region/${id}`,
+        REGION_RECOMPUTE: (id: string) => `/api/v2/leaderboards/region/${id}/recompute`,
+    },
+    // ── Section 12: Task Configs & Step Rewards ──
+    // Verified backend prefixes: /api/v2/tasks and /api/v2/rewards
+    // (the migration spec's /task-configs & /step-rewards paths were stale).
+    TASK_CONFIGS: {
+        BASE: "/api/v2/tasks",
+        BY_MARKER: (id: string) => `/api/v2/tasks/by-marker/${id}`,
+        BY_QUEST: (id: string) => `/api/v2/tasks/by-quest/${id}`,
+        BY_ID: (id: string) => `/api/v2/tasks/${id}`,
+        FULL: (id: string) => `/api/v2/tasks/${id}/full`,
+        TOGGLE_ACTIVE: (id: string) => `/api/v2/tasks/${id}/toggle-active`,
+    },
+    STEP_REWARDS: {
+        BASE: "/api/v2/rewards",
+        FOR_CONTEXT: "/api/v2/rewards/for-context",
+        BY_ID: (id: string) => `/api/v2/rewards/${id}`,
+        EVALUATE: (id: string) => `/api/v2/rewards/${id}/evaluate`,
+    },
+    // ── Section 14: Progress Tracking (read-only) ──
+    PROGRESS: {
+        BY_QUEST_USERS: (questId: string) => `/api/v2/progress/${questId}/users`,
+        BY_QUEST: (questId: string) => `/api/v2/progress/${questId}`,
+    },
 } as const;

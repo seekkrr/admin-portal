@@ -579,7 +579,7 @@ export function NarrativeDetailPage() {
                     <div className="flex flex-row items-center justify-between">
                         <CardTitle>Audio Narration</CardTitle>
                         <Badge
-                            label={liveAudioStatus.replace(/_/g, " ")}
+                            label={(liveAudioStatus || "none").replace(/_/g, " ")}
                             styles={
                                 liveAudioStatus === "pending" ? "bg-neutral-50 text-neutral-600 border-neutral-200" :
                                 liveAudioStatus === "generating" ? "bg-blue-50 text-blue-700 border-blue-200" :

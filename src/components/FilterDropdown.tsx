@@ -1,5 +1,5 @@
 import { type ReactNode, useState, useEffect, useRef } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Check } from "lucide-react";
 
 export interface DropdownOption {
     value: string;
@@ -53,27 +53,35 @@ export function FilterDropdown({ options, value, onChange, icon, placeholder, th
         <div ref={ref} className="relative">
             <button
                 onClick={() => setOpen((v) => !v)}
-                className={`inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border text-sm transition-all
-                    ${value ? `${t.border} ${t.bg} ${t.text}` : "border-neutral-200 bg-neutral-50 text-neutral-600"}
-                    ${t.hoverBorder} focus:outline-none focus:ring-2 ${t.ring}`}
+                aria-haspopup="listbox"
+                aria-expanded={open}
+                className={`inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border text-sm font-medium transition-all active:scale-[0.98]
+                    ${value ? `${t.border} ${t.bg} ${t.text} shadow-sm` : "border-neutral-200 bg-neutral-50 text-neutral-600"}
+                    ${t.hoverBorder} focus:outline-none focus-visible:ring-2 ${t.ring}`}
             >
                 {icon}
                 <span>{selected?.label || placeholder}</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
             </button>
             {open && (
-                <div className="absolute top-full mt-1 left-0 z-30 min-w-[180px] bg-white rounded-xl border border-neutral-200 shadow-lg py-1 animate-fade-in">
-                    {options.map((opt) => (
-                        <button
-                            key={opt.value}
-                            onClick={() => { onChange(opt.value); setOpen(false); }}
-                            className={`w-full text-left px-3.5 py-2 text-sm flex items-center gap-2 transition-colors
-                                ${value === opt.value ? `${t.bg.replace('/50', '')} ${t.text} font-medium` : `text-neutral-700 ${t.hoverBg}`}`}
-                        >
-                            {opt.dot && <span className={`w-2 h-2 rounded-full ${opt.dot}`} />}
-                            {opt.label}
-                        </button>
-                    ))}
+                <div className="absolute top-full mt-1.5 left-0 z-30 min-w-[190px] bg-white rounded-xl border border-neutral-200/80 shadow-xl ring-1 ring-neutral-900/5 p-1 origin-top-left animate-scale-in" role="listbox">
+                    {options.map((opt) => {
+                        const isSel = value === opt.value;
+                        return (
+                            <button
+                                key={opt.value}
+                                role="option"
+                                aria-selected={isSel}
+                                onClick={() => { onChange(opt.value); setOpen(false); }}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center gap-2 transition-colors
+                                    ${isSel ? `${t.bg.replace('/50', '')} ${t.text} font-semibold` : `text-neutral-700 ${t.hoverBg}`}`}
+                            >
+                                {opt.dot && <span className={`w-2 h-2 rounded-full shrink-0 ${opt.dot}`} />}
+                                <span className="flex-1 truncate">{opt.label}</span>
+                                {isSel && <Check className="w-3.5 h-3.5 shrink-0" />}
+                            </button>
+                        );
+                    })}
                 </div>
             )}
         </div>

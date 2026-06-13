@@ -60,7 +60,7 @@ export const narrativesService = {
     },
 
     generateAudio: async (id: string): Promise<{ success: boolean; audio_status: string }> => {
-        const { data } = await api.post(API_ENDPOINTS.NARRATIVES.AUDIO_GENERATE(id));
+        const { data } = await api.post(API_ENDPOINTS.NARRATIVES.AUDIO_GENERATE(id), {});
         return data;
     },
 

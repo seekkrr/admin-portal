@@ -54,6 +54,8 @@ export function MarkersPage() {
     const [tags, setTags] = useState("");
     const [search, setSearch] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
+    const [debouncedCategory, setDebouncedCategory] = useState("");
+    const [debouncedTags, setDebouncedTags] = useState("");
 
     const [showCreate, setShowCreate] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
@@ -66,13 +68,32 @@ export function MarkersPage() {
         return () => clearTimeout(timer);
     }, [search]);
 
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            const trimmed = category.trim();
+            if (trimmed.length >= 3 || trimmed.length === 0) {
+                setDebouncedCategory(trimmed);
+                setPage(1);
+            }
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [category]);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedTags(tags.trim());
+            setPage(1);
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [tags]);
+
     const { data, isLoading, error } = useQuery({
-        queryKey: ["admin-markers", { status, category, tags, q: debouncedSearch, page }],
+        queryKey: ["admin-markers", { status, category: debouncedCategory, tags: debouncedTags, q: debouncedSearch, page }],
         queryFn: () =>
             markersService.list({
                 status: status || undefined,
-                category: category || undefined,
-                tags: tags || undefined,
+                category: debouncedCategory || undefined,
+                tags: debouncedTags || undefined,
                 search: debouncedSearch || undefined,
                 page,
                 page_size: perPage,

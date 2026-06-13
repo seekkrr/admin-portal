@@ -920,3 +920,325 @@ export interface FeatureUsageData {
         percentage: number;
     }>;
 }
+
+// ============================================================
+// Section 10 — Achievements & Leaderboards
+// Backend: /api/v2/achievements, /api/v2/leaderboards
+// ============================================================
+
+// Enforced by the Achievement *model* (VALID_TRIGGER_TYPES), which the service
+// validates against on create/update. Verified live: the API rejects any other
+// value with "trigger_type must be one of [...]". (The route file declares a
+// different, unused constant — the model's set is the real boundary.)
+export type AchievementTriggerType =
+    | "xp_threshold"
+    | "quests_completed"
+    | "markers_visited"
+    | "streak_days"
+    | "tasks_completed"
+    | "manual";
+
+export type AchievementRarity = "common" | "rare" | "epic" | "legendary";
+
+// Achievement.to_dict() uses the base serializer → keeps `_id` (string), not `id`.
+export interface Achievement {
+    _id: string;
+    title: string;
+    description?: string | null;
+    icon_url?: string | null;
+    trigger_type: AchievementTriggerType;
+    trigger_threshold: number;
+    rewards_points: number;
+    rarity: AchievementRarity;
+    perks: string[];
+    is_active: boolean;
+    is_deleted?: boolean;
+    created_at?: string | null;
+    updated_at?: string | null;
+}
+
+export interface AchievementsListResponse {
+    success: boolean;
+    achievements: Achievement[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
+export interface ListAchievementsParams {
+    trigger_type?: AchievementTriggerType;
+    rarity?: AchievementRarity;
+    is_active?: boolean;
+    page?: number;
+    page_size?: number;
+}
+
+export interface CreateAchievementPayload {
+    title: string;
+    description?: string;
+    trigger_type: AchievementTriggerType;
+    trigger_threshold: number;
+    rewards_points?: number;
+    rarity?: AchievementRarity;
+    icon_url?: string;
+    perks?: string[];
+    is_active?: boolean;
+}
+
+// trigger_type is immutable after creation (UpdateAchievementBody omits it).
+export type UpdateAchievementPayload = Partial<Omit<CreateAchievementPayload, "trigger_type">>;
+
+export interface ExplorerLevel {
+    level: number;
+    title: string;
+    min_xp: number;
+    max_xp: number | null;
+    perks: string[];
+}
+
+export interface ExplorerLevelsResponse {
+    success: boolean;
+    explorer_levels: ExplorerLevel[];
+}
+
+// UserAchievement.to_dict() — base serializer, `_id`.
+export interface UserAchievement {
+    _id: string;
+    user_id: string;
+    achievement_id: string;
+    progress_current: number;
+    progress_required: number;
+    is_completed: boolean;
+    earned_at?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+}
+
+export interface UserAchievementsResponse {
+    success: boolean;
+    user_achievements: UserAchievement[];
+}
+
+export type LeaderboardType = "quest" | "region" | "global";
+
+// Leaderboard.to_public_dict() emits `id`.
+export interface LeaderboardEntry {
+    id: string | null;
+    type: LeaderboardType;
+    user_id: string | null;
+    display_name: string | null;
+    avatar_url: string | null;
+    points_scored: number;
+    markers_visited: number | null;
+    rank: number | null;
+    quest_id: string | null;
+    region_id: string | null;
+    recorded_at: string | null;
+}
+
+// Board endpoints return the board dict directly (NOT wrapped in {success}).
+export interface LeaderboardResponse {
+    entries: LeaderboardEntry[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
+export interface RecomputeResponse {
+    message: string;
+    region_id?: string;
+}
+
+// ============================================================
+// Section 12 — Task Configs & Step Rewards
+// Backend: /api/v2/tasks, /api/v2/rewards  (NOT task-configs/step-rewards)
+// ============================================================
+
+export type TaskConfigType =
+    | "photo_challenge"
+    | "qr_scan"
+    | "quiz"
+    | "collection"
+    | "social"
+    | "checkin";
+
+export interface QuizData {
+    question?: string;
+    options?: string[];
+    correct_answer?: string; // present only via /full (task_configs:manage)
+    [k: string]: unknown;
+}
+
+// TaskConfig.to_public_dict() — base `_id`; answer keys stripped for non-admin.
+export interface TaskConfig {
+    _id: string;
+    task_type: TaskConfigType;
+    title: string;
+    description?: string | null;
+    marker_id: string;
+    quest_id?: string | null;
+    photo_requirements?: Record<string, unknown> | null;
+    qr_data?: Record<string, unknown> | null;
+    quiz_data?: QuizData | null;
+    game_config?: Record<string, unknown> | null;
+    collection_items?: unknown[] | null;
+    social_task?: Record<string, unknown> | null;
+    hints?: Array<Record<string, unknown>> | null;
+    base_points: number;
+    is_active: boolean;
+    is_deleted?: boolean;
+    deleted_at?: string | null;
+    created_by?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+}
+
+export interface TaskConfigsListResponse {
+    success: boolean;
+    task_configs: TaskConfig[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
+export interface ListTaskConfigsParams {
+    marker_id?: string;
+    quest_id?: string;
+    task_type?: TaskConfigType;
+    page?: number;
+    page_size?: number;
+}
+
+export interface CreateTaskConfigPayload {
+    task_type: TaskConfigType;
+    title: string;
+    description?: string;
+    marker_id: string;
+    quest_id?: string;
+    photo_requirements?: Record<string, unknown>;
+    qr_data?: Record<string, unknown>;
+    quiz_data?: Record<string, unknown>;
+    game_config?: Record<string, unknown>;
+    collection_items?: unknown[];
+    social_task?: Record<string, unknown>;
+    hints?: Array<Record<string, unknown>>;
+    base_points?: number;
+    is_active?: boolean;
+}
+
+// Update body cannot change task_type / marker_id / quest_id.
+export type UpdateTaskConfigPayload = Partial<
+    Omit<CreateTaskConfigPayload, "task_type" | "marker_id" | "quest_id">
+>;
+
+export type StepRewardContextType =
+    | "quest_completion"
+    | "marker_visit"
+    | "task_completion"
+    | "streak_bonus";
+
+export type BonusOperator = "gte" | "lte" | "eq" | "in";
+
+export interface BonusCondition {
+    field: string;
+    operator: BonusOperator;
+    value: unknown;
+    bonus_points: number;
+}
+
+// StepReward.to_dict() — base `_id`.
+export interface StepReward {
+    _id: string;
+    context_type: StepRewardContextType;
+    context_id: string;
+    base_points: number;
+    bonus_conditions?: BonusCondition[] | null;
+    unlocked_badges?: string[] | null;
+    unlocked_content?: string[] | null;
+    is_deleted?: boolean;
+    deleted_at?: string | null;
+    created_by?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+}
+
+export interface StepRewardsListResponse {
+    success: boolean;
+    rewards: StepReward[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
+export interface ListStepRewardsParams {
+    context_type?: StepRewardContextType;
+    context_id?: string;
+    page?: number;
+    page_size?: number;
+}
+
+export interface CreateStepRewardPayload {
+    context_type: StepRewardContextType;
+    context_id: string;
+    base_points: number;
+    bonus_conditions?: BonusCondition[];
+    unlocked_badges?: string[];
+    unlocked_content?: string[];
+}
+
+export type UpdateStepRewardPayload = Partial<
+    Omit<CreateStepRewardPayload, "context_type" | "context_id">
+>;
+
+export interface RewardEvaluation {
+    success: boolean;
+    reward_id: string;
+    base_points: number;
+    bonus_points: number;
+    total_points: number;
+}
+
+// ============================================================
+// Section 14 — Progress Tracking (read-only)
+// Backend: /api/v2/progress
+// ============================================================
+
+export interface MarkerVisit {
+    marker_id: string | null;
+    visited_at: string | null;
+    is_quest_marker: boolean;
+    points_earned: number;
+}
+
+// ExplorationProgress.to_public_dict() emits `id`.
+export interface ExplorationProgress {
+    id: string | null;
+    user_id: string | null;
+    quest_id: string | null;
+    is_completed: boolean;
+    completion_percentage: number;
+    points_earned: number;
+    hints_used: number;
+    started_at: string | null;
+    completed_at: string | null;
+    total_time_taken: number | null;
+    last_activity_at: string | null;
+    markers_visited: MarkerVisit[];
+    current_destination_marker_id: string | null;
+    total_distance_covered: number | null;
+    created_at: string | null;
+    updated_at: string | null;
+}
+
+// GET /progress/{quest_id}/users — all users' progress (admin oversight).
+export interface QuestProgressResponse {
+    progress: ExplorationProgress[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}

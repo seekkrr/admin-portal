@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-    Search, Users, Trash2, Ban, ChevronLeft, ChevronRight,
+    Search, Users, Trash2, Ban,
     Shield, RefreshCw, AlertTriangle, CheckCircle2, XCircle,
     X, Filter, Coins, Star, TrendingUp
 } from "lucide-react";
@@ -13,8 +13,8 @@ import { usersService } from "../services/users.service";
 import { creatorsService } from "@/features/creators/services/creators.service";
 import { Badge } from "@/components/ui/Badge";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { Pagination } from "@/components/ui/Pagination";
 import { FilterDropdown } from "@/components/FilterDropdown";
-import { usePaginationRange } from "@/hooks/usePagination";
 import type { DropdownOption } from "@/components/FilterDropdown";
 import type { User } from "@/types";
 
@@ -377,10 +377,6 @@ export function UsersPage() {
         }
     }, [confirmAction, bulkActionMutation, deleteMutation, roleMutation, promoteCreatorMutation, hardDelete]);
 
-    // ---- Pagination ----
-    const totalPages = pagination?.total_pages ?? 1;
-    const paginationRange = usePaginationRange(totalPages, page);
-
     // ---- Render ----
     if (!isAdmin) {
         return <AccessDenied message="Only admins can manage users." />;
@@ -650,46 +646,12 @@ export function UsersPage() {
                 )}
 
                 {/* Pagination */}
-                {pagination && pagination.total_pages > 1 && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-100 bg-neutral-50/30">
-                        <span className="text-sm text-neutral-500">
-                            Page <span className="font-medium text-neutral-700">{pagination.page}</span> of <span className="font-medium text-neutral-700">{pagination.total_pages}</span>
-                            <span className="ml-2 text-neutral-400">({pagination.total} total)</span>
-                        </span>
-                        <div className="flex items-center gap-1">
-                            <button
-                                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                disabled={page <= 1}
-                                className="p-2 rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            >
-                                <ChevronLeft className="w-4 h-4" />
-                            </button>
-                            {paginationRange.map((p, idx) =>
-                                p === "..." ? (
-                                    <span key={`ellipsis-${idx}`} className="px-1 text-neutral-400 text-sm">…</span>
-                                ) : (
-                                    <button
-                                        key={p}
-                                        onClick={() => setPage(p)}
-                                        className={`min-w-[36px] h-9 rounded-lg text-sm font-medium transition-all ${p === page
-                                            ? "bg-indigo-600 text-white shadow-sm"
-                                            : "text-neutral-600 hover:bg-neutral-100 border border-neutral-200"
-                                            }`}
-                                    >
-                                        {p}
-                                    </button>
-                                )
-                            )}
-                            <button
-                                onClick={() => setPage((p) => Math.min(pagination.total_pages, p + 1))}
-                                disabled={page >= pagination.total_pages}
-                                className="p-2 rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            >
-                                <ChevronRight className="w-4 h-4" />
-                            </button>
-                        </div>
-                    </div>
-                )}
+                <Pagination
+                    page={page}
+                    totalPages={pagination?.total_pages ?? 1}
+                    total={pagination?.total ?? 0}
+                    onPageChange={setPage}
+                />
             </div>
 
             {/* Points Modal */}

@@ -31,6 +31,15 @@ const ReviewDetailPage = lazy(() => import("@/features/content/pages/ReviewDetai
 // Section 11 — Regions
 const RegionsPage = lazy(() => import("@/features/regions/pages/RegionsPage").then(m => ({ default: m.RegionsPage })));
 const RegionDetailPage = lazy(() => import("@/features/regions/pages/RegionDetailPage").then(m => ({ default: m.RegionDetailPage })));
+// Section 10 — Achievements & Leaderboards
+const AchievementsPage = lazy(() => import("@/features/achievements/pages/AchievementsPage").then(m => ({ default: m.AchievementsPage })));
+const AchievementDetailPage = lazy(() => import("@/features/achievements/pages/AchievementDetailPage").then(m => ({ default: m.AchievementDetailPage })));
+const LeaderboardsPage = lazy(() => import("@/features/achievements/pages/LeaderboardsPage").then(m => ({ default: m.LeaderboardsPage })));
+// Section 12 — Task Configs & Step Rewards
+const TaskConfigsPage = lazy(() => import("@/features/task-configs/pages/TaskConfigsPage").then(m => ({ default: m.TaskConfigsPage })));
+const TaskConfigDetailPage = lazy(() => import("@/features/task-configs/pages/TaskConfigDetailPage").then(m => ({ default: m.TaskConfigDetailPage })));
+// Section 14 — Progress Tracking
+const ProgressPage = lazy(() => import("@/features/progress/pages/ProgressPage").then(m => ({ default: m.ProgressPage })));
 
 export const AppRoutes = () => {
     return (
@@ -157,6 +166,42 @@ export const AppRoutes = () => {
                 <Route path="regions/:regionId" element={
                     <Suspense fallback={<LoadingFallback message="Loading region..." />}>
                         <RegionDetailPage />
+                    </Suspense>
+                } />
+
+                {/* Section 12 — Task Configs (static before :taskId) */}
+                <Route path="task-configs" element={
+                    <Suspense fallback={<LoadingFallback message="Loading task configs..." />}>
+                        <TaskConfigsPage />
+                    </Suspense>
+                } />
+                <Route path="task-configs/:taskId" element={
+                    <Suspense fallback={<LoadingFallback message="Loading task config..." />}>
+                        <TaskConfigDetailPage />
+                    </Suspense>
+                } />
+
+                {/* Section 10 — Achievements & Leaderboards */}
+                <Route path="achievements" element={
+                    <Suspense fallback={<LoadingFallback message="Loading achievements..." />}>
+                        <AchievementsPage />
+                    </Suspense>
+                } />
+                <Route path="achievements/:achievementId" element={
+                    <Suspense fallback={<LoadingFallback message="Loading achievement..." />}>
+                        <AchievementDetailPage />
+                    </Suspense>
+                } />
+                <Route path="leaderboards" element={
+                    <Suspense fallback={<LoadingFallback message="Loading leaderboards..." />}>
+                        <LeaderboardsPage />
+                    </Suspense>
+                } />
+
+                {/* Section 14 — Progress Tracking (read-only) */}
+                <Route path="progress" element={
+                    <Suspense fallback={<LoadingFallback message="Loading progress..." />}>
+                        <ProgressPage />
                     </Suspense>
                 } />
             </Route>

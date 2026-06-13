@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
 import { ChevronLeft, Menu } from "lucide-react";
 import { NAV_ITEMS } from "@/config/navigation";
+import { useRef, useState, useEffect } from "react";
 
 interface SidebarProps {
     collapsed: boolean;
@@ -8,6 +9,34 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const [scrollState, setScrollState] = useState<"top" | "middle" | "bottom">("top");
+
+    const handleScroll = () => {
+        if (!scrollRef.current) return;
+        const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+        if (scrollTop === 0) {
+            setScrollState("top");
+        } else if (scrollTop + clientHeight >= scrollHeight - 1) {
+            setScrollState("bottom");
+        } else {
+            setScrollState("middle");
+        }
+    };
+
+    useEffect(() => {
+        handleScroll(); // Initial check
+        window.addEventListener('resize', handleScroll);
+        return () => window.removeEventListener('resize', handleScroll);
+    }, []);
+
+    // Determine the mask based on scroll position
+    const getMaskStyle = () => {
+        if (scrollState === "top") return "linear-gradient(to bottom, black calc(100% - 24px), transparent)";
+        if (scrollState === "bottom") return "linear-gradient(to bottom, transparent, black 24px, black)";
+        return "linear-gradient(to bottom, transparent, black 24px, black calc(100% - 24px), transparent)";
+    };
+
     return (
         <aside
             className={`
@@ -26,35 +55,48 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 </button>
             </div>
 
-            <div className="flex-1 py-6 px-3 space-y-2">
+            <div 
+                ref={scrollRef}
+                onScroll={handleScroll}
+                className="flex-1 overflow-y-auto sidebar-scroll-mask py-4 px-3 space-y-1"
+                style={{ 
+                    WebkitMaskImage: getMaskStyle(),
+                    maskImage: getMaskStyle(),
+                }}
+            >
                 {NAV_ITEMS.map((item) => (
                     <NavLink
                         key={item.to}
                         to={item.to}
+                        title={collapsed ? item.label : undefined}
                         className={({ isActive }) => `
-                            flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group relative
+                            flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative outline-none
+                            focus-visible:ring-2 focus-visible:ring-indigo-500/40
                             ${isActive
-                                ? "bg-neutral-900 text-white shadow-md shadow-neutral-200"
-                                : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+                                ? "bg-neutral-900 text-white shadow-md shadow-neutral-900/15"
+                                : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 hover:translate-x-0.5"
                             }
                             ${collapsed ? "justify-center" : ""}
                         `}
                     >
-                        <item.icon className={`w-5 h-5 shrink-0 ${collapsed ? "w-6 h-6" : ""}`} />
-                        <span
-                            className={`
-                                font-medium whitespace-nowrap overflow-hidden transition-all duration-300 origin-left
-                                ${collapsed ? "w-0 opacity-0 absolute" : "w-auto opacity-100 relative"}
-                            `}
-                        >
-                            {item.label}
-                        </span>
-
-                        {/* Tooltip for collapsed state */}
-                        {collapsed && (
-                            <div className="absolute left-14 bg-neutral-900 text-white text-xs px-2 py-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-lg">
-                                {item.label}
-                            </div>
+                        {({ isActive }) => (
+                            <>
+                                {/* Active accent bar in the gutter */}
+                                <span
+                                    className={`absolute -left-3 top-1/2 -translate-y-1/2 w-1 rounded-r-full bg-indigo-500 transition-all duration-200 ${isActive ? "h-6 opacity-100" : "h-0 opacity-0"}`}
+                                />
+                                <item.icon
+                                    className={`shrink-0 transition-transform duration-200 group-hover:scale-110 ${collapsed ? "w-6 h-6" : "w-5 h-5"} ${isActive ? "text-indigo-300" : ""}`}
+                                />
+                                <span
+                                    className={`
+                                        font-medium whitespace-nowrap overflow-hidden transition-all duration-300 origin-left
+                                        ${collapsed ? "w-0 opacity-0 absolute" : "w-auto opacity-100 relative"}
+                                    `}
+                                >
+                                    {item.label}
+                                </span>
+                            </>
                         )}
                     </NavLink>
                 ))}

@@ -2,13 +2,13 @@ import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Star, ChevronLeft, ChevronRight, MessageSquare, Eye, EyeOff, Trash2 } from "lucide-react";
+import { Star, MessageSquare, Eye, EyeOff, Trash2 } from "lucide-react";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { Pagination } from "@/components/ui/Pagination";
 import { useAuthStore } from "@store/auth.store";
 import { reviewsService } from "../services/reviews.service";
 import { FilterDropdown } from "@/components/FilterDropdown";
-import { usePaginationRange } from "@/hooks/usePagination";
 import { useBulkSelection, runBulk } from "@/hooks/useBulkSelection";
 
 const PAGE_SIZE = 20;
@@ -53,10 +53,7 @@ export function ReviewsPage() {
         staleTime: 60 * 1000,
     });
 
-    const paginationRange = usePaginationRange(
-        Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE)),
-        page
-    );
+
 
     const moderateMut = useMutation({
         mutationFn: ({ id, isVisible: v }: { id: string; isVisible: boolean }) =>
@@ -346,44 +343,12 @@ export function ReviewsPage() {
                     </div>
 
                     {totalPages > 1 && (
-                        <div className="flex items-center justify-between rounded-b-xl border-t border-neutral-200 bg-neutral-50 p-4">
-                            <span className="text-sm text-neutral-500">
-                                Showing page {page} of {totalPages} · {reviews.length} shown
-                            </span>
-                            <div className="flex items-center gap-1">
-                                <button
-                                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                    disabled={page <= 1}
-                                    className="rounded-lg border border-neutral-200 p-2 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                    <ChevronLeft className="h-4 w-4" />
-                                </button>
-                                {paginationRange.map((pageNumber, i) => (
-                                    pageNumber === "..." ? (
-                                        <span key={`dots-${i}`} className="px-3 py-2 text-neutral-400">...</span>
-                                    ) : (
-                                        <button
-                                            key={pageNumber}
-                                            onClick={() => setPage(pageNumber as number)}
-                                            className={`min-w-[32px] rounded-lg border p-2 text-sm font-medium transition-colors ${
-                                                page === pageNumber
-                                                    ? "border-amber-600 bg-amber-50 text-amber-600"
-                                                    : "border-transparent text-neutral-600 hover:bg-neutral-100"
-                                            }`}
-                                        >
-                                            {pageNumber}
-                                        </button>
-                                    )
-                                ))}
-                                <button
-                                    onClick={() => setPage((p) => p + 1)}
-                                    disabled={page >= totalPages}
-                                    className="rounded-lg border border-neutral-200 p-2 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                    <ChevronRight className="h-4 w-4" />
-                                </button>
-                            </div>
-                        </div>
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            total={total}
+                            onPageChange={setPage}
+                        />
                     )}
             </div>
             
