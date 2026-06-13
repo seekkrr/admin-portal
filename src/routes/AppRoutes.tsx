@@ -40,6 +40,17 @@ const TaskConfigsPage = lazy(() => import("@/features/task-configs/pages/TaskCon
 const TaskConfigDetailPage = lazy(() => import("@/features/task-configs/pages/TaskConfigDetailPage").then(m => ({ default: m.TaskConfigDetailPage })));
 // Section 14 — Progress Tracking
 const ProgressPage = lazy(() => import("@/features/progress/pages/ProgressPage").then(m => ({ default: m.ProgressPage })));
+// Section 6 — Financial: Transactions & Refunds
+const TransactionsPage = lazy(() => import("@/features/financial/pages/TransactionsPage").then(m => ({ default: m.TransactionsPage })));
+const TransactionDetailPage = lazy(() => import("@/features/financial/pages/TransactionDetailPage").then(m => ({ default: m.TransactionDetailPage })));
+const RefundsPage = lazy(() => import("@/features/financial/pages/RefundsPage").then(m => ({ default: m.RefundsPage })));
+const RefundDetailPage = lazy(() => import("@/features/financial/pages/RefundDetailPage").then(m => ({ default: m.RefundDetailPage })));
+const PaymentEventsPage = lazy(() => import("@/features/financial/pages/PaymentEventsPage").then(m => ({ default: m.PaymentEventsPage })));
+// Section 7 — Financial: Payout Accounts & Payouts
+const PayoutAccountsPage = lazy(() => import("@/features/payouts/pages/PayoutAccountsPage").then(m => ({ default: m.PayoutAccountsPage })));
+const PayoutAccountDetailPage = lazy(() => import("@/features/payouts/pages/PayoutAccountDetailPage").then(m => ({ default: m.PayoutAccountDetailPage })));
+const PayoutsPage = lazy(() => import("@/features/payouts/pages/PayoutsPage").then(m => ({ default: m.PayoutsPage })));
+const PayoutDetailPage = lazy(() => import("@/features/payouts/pages/PayoutDetailPage").then(m => ({ default: m.PayoutDetailPage })));
 
 export const AppRoutes = () => {
     return (
@@ -202,6 +213,55 @@ export const AppRoutes = () => {
                 <Route path="progress" element={
                     <Suspense fallback={<LoadingFallback message="Loading progress..." />}>
                         <ProgressPage />
+                    </Suspense>
+                } />
+
+                {/* Section 6 — Financial: Transactions & Refunds (static before :id) */}
+                <Route path="transactions" element={
+                    <Suspense fallback={<LoadingFallback message="Loading transactions..." />}>
+                        <TransactionsPage />
+                    </Suspense>
+                } />
+                <Route path="transactions/:transactionId" element={
+                    <Suspense fallback={<LoadingFallback message="Loading transaction..." />}>
+                        <TransactionDetailPage />
+                    </Suspense>
+                } />
+                <Route path="refunds" element={
+                    <Suspense fallback={<LoadingFallback message="Loading refunds..." />}>
+                        <RefundsPage />
+                    </Suspense>
+                } />
+                <Route path="refunds/:refundId" element={
+                    <Suspense fallback={<LoadingFallback message="Loading refund..." />}>
+                        <RefundDetailPage />
+                    </Suspense>
+                } />
+                <Route path="payment-events" element={
+                    <Suspense fallback={<LoadingFallback message="Loading payment events..." />}>
+                        <PaymentEventsPage />
+                    </Suspense>
+                } />
+
+                {/* Section 7 — Financial: Payout Accounts & Payouts (static before :id) */}
+                <Route path="payout-accounts" element={
+                    <Suspense fallback={<LoadingFallback message="Loading payout accounts..." />}>
+                        <PayoutAccountsPage />
+                    </Suspense>
+                } />
+                <Route path="payout-accounts/:accountId" element={
+                    <Suspense fallback={<LoadingFallback message="Loading payout account..." />}>
+                        <PayoutAccountDetailPage />
+                    </Suspense>
+                } />
+                <Route path="payouts" element={
+                    <Suspense fallback={<LoadingFallback message="Loading payouts..." />}>
+                        <PayoutsPage />
+                    </Suspense>
+                } />
+                <Route path="payouts/:payoutId" element={
+                    <Suspense fallback={<LoadingFallback message="Loading payout..." />}>
+                        <PayoutDetailPage />
                     </Suspense>
                 } />
             </Route>

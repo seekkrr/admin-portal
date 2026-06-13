@@ -6,8 +6,8 @@ export function Footer() {
                     © {new Date().getFullYear()} SeekKrr. All rights reserved.
                 </p>
                 <div className="flex items-center gap-4 text-sm text-neutral-400">
-                    <a href="#" className="hover:text-neutral-600 transition-colors">Privacy Policy</a>
-                    <a href="#" className="hover:text-neutral-600 transition-colors">Terms of Service</a>
+                    <a href="https://seekkrr.com/terms" className="hover:text-neutral-600 transition-colors">Privacy Policy</a>
+                    <a href="https://seekkrr.com/privacy" className="hover:text-neutral-600 transition-colors">Terms of Service</a>
                 </div>
             </div>
         </footer>

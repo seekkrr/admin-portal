@@ -120,12 +120,41 @@ export const API_ENDPOINTS = {
         BY_ID: (id: string) => `/api/v2/queries/${id}`,
         BULK_DELETE: "/api/v2/queries/bulk/delete",
     },
+    // ── Section 7: Financial — Payout Accounts ──
     PAYOUT_ACCOUNTS: {
         LIST: "/api/v2/payout-accounts",
+        CREATE: "/api/v2/payout-accounts",
         BY_ID: (id: string) => `/api/v2/payout-accounts/${id}`,
         UPDATE: (id: string) => `/api/v2/payout-accounts/${id}`,
+        DELETE: (id: string) => `/api/v2/payout-accounts/${id}`,
         VERIFY: (id: string) => `/api/v2/payout-accounts/${id}/verify`,
         SET_PRIMARY: (id: string) => `/api/v2/payout-accounts/${id}/set-primary`,
+    },
+    // ── Section 6: Financial — Transactions ──
+    TRANSACTIONS: {
+        BASE: "/api/v2/transactions",
+        BY_ID: (id: string) => `/api/v2/transactions/${id}`,
+        CAPTURE: (id: string) => `/api/v2/transactions/${id}/capture`,
+    },
+    // ── Section 6: Financial — Refunds ──
+    REFUNDS: {
+        BASE: "/api/v2/refunds",
+        BY_ID: (id: string) => `/api/v2/refunds/${id}`,
+        APPROVE: (id: string) => `/api/v2/refunds/${id}/approve`,
+    },
+    // ── Section 7: Financial — Payouts (admin-initiated disbursements) ──
+    PAYOUTS: {
+        BASE: "/api/v2/payouts",
+        BY_ID: (id: string) => `/api/v2/payouts/${id}`,
+        PROCESS: (id: string) => `/api/v2/payouts/${id}/process`,
+        FAIL: (id: string) => `/api/v2/payouts/${id}/fail`,
+        CANCEL: (id: string) => `/api/v2/payouts/${id}/cancel`,
+        CREATOR_SUMMARY: (creatorId: string) => `/api/v2/payouts/creators/${creatorId}/summary`,
+    },
+    // ── Section 6/7: Financial — Payment Events (immutable audit log) ──
+    PAYMENT_EVENTS: {
+        BASE: "/api/v2/payment-events",
+        BY_ID: (id: string) => `/api/v2/payment-events/${id}`,
     },
     // ── Section 10: Achievements & Leaderboards ──
     ACHIEVEMENTS: {

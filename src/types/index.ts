@@ -1242,3 +1242,342 @@ export interface QuestProgressResponse {
     page_size: number;
     total_pages: number;
 }
+
+// ============================================================
+// Section 6 — Financial: Transactions & Refunds
+// Backend: /api/v2/transactions, /api/v2/refunds
+// PII (customer_email/phone, card_last4) is masked SERVER-SIDE in
+// Transaction.to_safe_dict() based on the caller's roles. Never attempt to
+// unmask client-side; render whatever the API returns.
+// ============================================================
+
+export type TransactionStatus =
+    | "pending"
+    | "authorized"
+    | "captured"
+    | "failed"
+    | "expired"
+    | "refunded";
+
+export type PaymentGateway = "razorpay" | "stripe" | "paypal";
+
+export type PaymentType =
+    | "quest_booking"
+    | "premium_addon"
+    | "top_up"
+    | "subscription"
+    | (string & {});
+
+export interface PaymentMethodInfo {
+    type?: "card" | "upi" | "netbanking" | string;
+    card_last4?: string | null;
+    card_network?: string | null;
+    card_issuer?: string | null;
+    upi_vpa?: string | null;
+    bank_name?: string | null;
+}
+
+// Transaction (FinanceBaseModel.to_dict → emits `_id`). gateway_signature is
+// always stripped server-side.
+export interface Transaction {
+    _id: string;
+    order_id: string;
+    gateway_order_id: string | null;
+    gateway_payment_id: string | null;
+    user_id: string;
+    amount: number;
+    currency: string;
+    status: TransactionStatus;
+    payment_gateway: PaymentGateway | string;
+    description: string | null;
+    metadata: Record<string, unknown> | null;
+    payment_type: PaymentType | null;
+    idempotency_key: string | null;
+    payment_method: PaymentMethodInfo | null;
+    razorpay_fee: number | null;
+    razorpay_tax: number | null;
+    customer_email: string | null; // masked unless caller ∈ {admin, super_admin}
+    customer_phone: string | null; // masked unless caller ∈ {finance, admin, super_admin}
+    quest_id: string | null;
+    error_code: string | null;
+    error_description: string | null;
+    error_source: string | null;
+    error_step: string | null;
+    error_reason: string | null;
+    is_deleted?: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+// GET /transactions/{id} returns the transaction fields FLAT alongside `success`
+// (no `transaction` wrapper key).
+export type TransactionDetail = Transaction;
+
+export interface TransactionsListResponse {
+    success: boolean;
+    transactions: Transaction[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
+export interface ListTransactionsParams {
+    status?: TransactionStatus | "";
+    user_id?: string;
+    payment_type?: string;
+    page?: number;
+    page_size?: number;
+}
+
+// Manual capture requires real Razorpay gateway params + transactions:create
+// (only user/super_admin) AND caller-owns-the-transaction. Not usable by a
+// plain admin acting on another user's order.
+export interface CapturePaymentPayload {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+}
+
+export type RefundStatus = "initiated" | "processing" | "completed" | "failed";
+export type RefundType = "full" | "partial";
+export type RefundSpeed = "normal" | "optimum";
+
+// Refund (FinanceBaseModel.to_dict → emits `_id`).
+export interface Refund {
+    _id: string;
+    transaction_id: string;
+    user_id: string;
+    amount: number;
+    currency: string;
+    reason: string;
+    status: RefundStatus;
+    gateway_refund_id: string | null;
+    initiated_by: string | null;
+    reviewed_by: string | null;
+    failure_reason: string | null;
+    acquirer_data: Record<string, unknown> | null;
+    razorpay_speed: RefundSpeed | null;
+    refund_type: RefundType | null;
+    is_deleted?: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export type RefundDetail = Refund;
+
+export interface RefundsListResponse {
+    success: boolean;
+    refunds: Refund[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
+export interface ListRefundsParams {
+    status?: RefundStatus | "";
+    user_id?: string;
+    page?: number;
+    page_size?: number;
+}
+
+export interface InitiateRefundPayload {
+    transaction_id: string;
+    amount?: number; // omit for a full refund
+    reason: string; // min 3 chars
+}
+
+export interface ApproveRefundPayload {
+    speed?: RefundSpeed; // default "normal"
+}
+
+// Payment Events — immutable audit log. Backend: /api/v2/payment-events
+// (finance/admin/super_admin, view-only). List returns NO `success` key.
+export interface PaymentEvent {
+    _id: string;
+    event_type: string;
+    source: string;
+    transaction_id: string | null;
+    refund_id: string | null;
+    payout_id: string | null;
+    razorpay_event_id: string | null;
+    razorpay_event_type: string | null;
+    payload: Record<string, unknown> | null;
+    error: Record<string, unknown> | null;
+    user_id: string | null;
+    ip_address: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface PaymentEventsListResponse {
+    events: PaymentEvent[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
+export interface ListPaymentEventsParams {
+    transaction_id?: string;
+    refund_id?: string;
+    payout_id?: string;
+    event_type?: string;
+    page?: number;
+    page_size?: number;
+}
+
+// ============================================================
+// Section 7 — Financial: Payout Accounts & Payouts
+// Backend: /api/v2/payout-accounts, /api/v2/payouts
+// NOTE: `AdminPayoutAccount` is the V2 admin shape — distinct from the V1
+// `PayoutAccount` (creators feature). Bank/UPI values are masked server-side.
+// ============================================================
+
+export type PayoutAccountMethod = "bank_transfer" | "upi";
+export type PayoutAccountStatus = "pending_verification" | "verified" | "rejected" | "disabled";
+
+export interface PayoutBankDetails {
+    account_number_masked: string | null;
+    ifsc_code: string | null;
+    bank_name: string | null;
+}
+
+// PayoutAccount.to_safe_dict() → emits `id` (not `_id`).
+export interface AdminPayoutAccount {
+    id: string;
+    creator_id: string;
+    method: PayoutAccountMethod;
+    status: PayoutAccountStatus;
+    is_primary: boolean;
+    currency: string;
+    account_holder_name: string | null;
+    bank_details: PayoutBankDetails | null;
+    upi_id: string | null;
+    verified_by: string | null;
+    verified_at: string | null;
+    rejection_reason: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+}
+
+export interface PayoutAccountsListResponse {
+    success: boolean;
+    accounts: AdminPayoutAccount[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
+export interface ListPayoutAccountsParams {
+    status?: PayoutAccountStatus | "";
+    method?: PayoutAccountMethod | "";
+    creator_id?: string;
+    page?: number;
+    page_size?: number;
+}
+
+export interface PayoutAccountBankInput {
+    account_number?: string;
+    ifsc_code?: string;
+    bank_name?: string;
+}
+
+export interface CreatePayoutAccountPayload {
+    method: PayoutAccountMethod;
+    currency: string; // 3-letter ISO, e.g. "INR"
+    account_holder_name?: string;
+    bank_details?: PayoutAccountBankInput; // required when method === "bank_transfer"
+    upi_id?: string; // required when method === "upi"
+}
+
+export interface UpdatePayoutAccountPayload {
+    currency?: string;
+    account_holder_name?: string;
+    bank_details?: PayoutAccountBankInput;
+    upi_id?: string;
+}
+
+export interface VerifyPayoutAccountPayload {
+    action: "verify" | "reject";
+    rejection_reason?: string; // used when action === "reject"
+}
+
+// Payouts — admin-initiated creator disbursements. Backend: /api/v2/payouts
+// (Payout.to_safe_dict → emits `_id`; bank_account.account_number & upi_id masked).
+export type PayoutStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
+export type PayoutMethod = "bank_transfer" | "upi" | "razorpay_x";
+
+export interface Payout {
+    _id: string;
+    payout_reference: string;
+    creator_id: string;
+    initiated_by: string | null;
+    amount: number;
+    currency: string;
+    status: PayoutStatus;
+    payout_method: PayoutMethod | string;
+    bank_account: Record<string, unknown> | null;
+    upi_id: string | null;
+    razorpay_payout_id: string | null;
+    razorpay_fund_account_id: string | null;
+    razorpay_contact_id: string | null;
+    reference_number: string | null;
+    period_start: string | null;
+    period_end: string | null;
+    earnings_snapshot: Record<string, unknown> | null;
+    notes: string | null;
+    failure_reason: string | null;
+    processed_at: string | null;
+    is_deleted?: boolean;
+    created_at: string;
+    updated_at: string | null;
+}
+
+// GET /payouts returns the result directly — NO `success` key.
+export interface PayoutsListResponse {
+    payouts: Payout[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
+export interface ListPayoutsParams {
+    creator_id?: string;
+    status?: PayoutStatus | "";
+    page?: number;
+    page_size?: number;
+}
+
+export interface InitiatePayoutPayload {
+    creator_id: string;
+    amount: number;
+    currency?: string;
+    payout_method?: PayoutMethod;
+    payout_account_id?: string;
+    bank_account?: Record<string, unknown>;
+    upi_id?: string;
+    period_start?: string;
+    period_end?: string;
+    notes?: string;
+}
+
+export interface ProcessPayoutPayload {
+    reference_number: string; // UTR / NEFT reference, min 3 chars
+}
+
+export interface FailPayoutPayload {
+    reason: string; // min 3 chars
+}
+
+// GET /payouts/creators/{creator_id}/summary — returned directly (no `success`).
+export interface CreatorPayoutSummary {
+    creator_id: string;
+    total_earnings: number;
+    total_paid: number;
+    pending_balance: number;
+    payouts: Payout[];
+}

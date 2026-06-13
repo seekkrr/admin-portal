@@ -753,7 +753,7 @@ export function AchievementsPage() {
                 confirmStyle="bg-red-600 hover:bg-red-700"
                 disabledConfirm={false}
                 isPending={deleteMutation.isPending}
-                onConfirm={() => deleteMutation.mutate({ id: confirmDelete!.id, hard: hardDelete })}
+                onConfirm={() => confirmDelete && deleteMutation.mutate({ id: confirmDelete.id, hard: hardDelete })}
                 onCancel={() => {
                     setConfirmDelete(null);
                     setHardDelete(false);
