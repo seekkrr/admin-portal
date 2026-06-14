@@ -1,17 +1,16 @@
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
     X, ExternalLink, RefreshCw,
     Clock, MapPin, Eye, Tag,
-    Star, Layers, ChevronRight, Trash2,
-    Send, Pause, Archive,
-    DollarSign, XCircle, AlertCircle,
+    Star, Layers, ChevronRight,
+    DollarSign,
 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { questsService } from "../services/quests.service";
 import { formatDuration } from "../utils/formatters";
-import type { QuestStatus, ReviewHistoryEntry } from "@/types";
+import type { QuestStatus } from "@/types";
 
 // ---- Status styles ----
 const questStatusConfig: Record<string, { label: string; dot: string; bg: string }> = {
@@ -26,46 +25,6 @@ const questStatusConfig: Record<string, { label: string; dot: string; bg: string
 };
 
 // formatDuration imported from ../utils/formatters
-
-// ---- Quick-action button config ----
-const quickActionConfig: Record<string, {
-    label: string;
-    icon: ReactNode;
-    base: string;
-    hover: string;
-    isReviewAction?: boolean;
-}> = {
-    Published: {
-        label: "Publish",
-        icon: <Send className="w-4 h-4" />,
-        base: "border border-emerald-200 bg-emerald-50 text-emerald-700",
-        hover: "hover:bg-emerald-100 hover:border-emerald-300 hover:shadow-sm",
-    },
-    Paused: {
-        label: "Pause",
-        icon: <Pause className="w-4 h-4" />,
-        base: "border border-amber-200 bg-amber-50 text-amber-700",
-        hover: "hover:bg-amber-100 hover:border-amber-300 hover:shadow-sm",
-    },
-    Archived: {
-        label: "Archive",
-        icon: <Archive className="w-4 h-4" />,
-        base: "border border-rose-200 bg-rose-50 text-rose-700",
-        hover: "hover:bg-rose-100 hover:border-rose-300 hover:shadow-sm",
-    },
-    Rejected: {
-        label: "Reject",
-        icon: <XCircle className="w-4 h-4" />,
-        base: "border border-rose-200 bg-rose-50 text-rose-700",
-        hover: "hover:bg-rose-100 hover:border-rose-300 hover:shadow-sm",
-    },
-    'Changes Requested': {
-        label: "Request Changes",
-        icon: <AlertCircle className="w-4 h-4" />,
-        base: "border border-orange-200 bg-orange-50 text-orange-700",
-        hover: "hover:bg-orange-100 hover:border-orange-300 hover:shadow-sm",
-    },
-};
 
 // ---- Stat card styles ----
 const statCardStyles = [
@@ -84,15 +43,15 @@ interface QuestDetailModalProps {
     questTitle: string;
     questStatus: QuestStatus;
     onClose: () => void;
-    onStatusChange: (questId: string, status: QuestStatus) => void;
-    canDelete: boolean;
-    onDelete: (questId: string) => void;
+    onStatusChange?: (questId: string, status: QuestStatus) => void;
+    canDelete?: boolean;
+    onDelete?: (questId: string) => void;
 }
 
 /** Read-only quick-view modal for quest details. */
 export function QuestDetailModal({
     open, questId, questTitle, questStatus,
-    onClose, onStatusChange, canDelete, onDelete,
+    onClose,
 }: QuestDetailModalProps) {
     const navigate = useNavigate();
 
@@ -111,43 +70,12 @@ export function QuestDetailModal({
         staleTime: 30_000,
     });
 
-    // Most recent review history entry (for context in the modal body)
-    const latestReview = useMemo(() => {
-        const reviewHistory = (data?.review_history ?? []) as ReviewHistoryEntry[];
-        if (reviewHistory.length === 0) return null;
-
-        // Sort by date descending to get the latest review first.
-        const sorted = [...reviewHistory].sort(
-            (a, b) => new Date(b.reviewed_at || b.timestamp || 0).getTime() - new Date(a.reviewed_at || a.timestamp || 0).getTime()
-        );
-        return sorted[0];
-    }, [data?.review_history]);
-
     if (!open || !questId) return null;
 
-    const quest = data?.quest;
-    const metadata = data?.metadata;
-    const creator = data?.creator;
-    const steps = data?.steps ?? [];
-    const media = data?.media;
+    // V2: data IS the flat quest detail (no sub-document wrappers)
+    const quest = data;
     const defaultSc = { label: "Draft", dot: "bg-neutral-400", bg: "bg-neutral-50 text-neutral-600 border-neutral-200" };
     const sc = questStatusConfig[questStatus] ?? defaultSc;
-
-    // ---- State machine: valid admin transitions per current quest status ----
-    // Under Review → Publish, Request Changes, Reject
-    // Published    → Pause, Archive
-    // Paused       → Publish, Archive
-    // Rejected     → Publish, Archive
-    // Changes Req. → Publish, Reject, Archive
-    const statusTransitions: Partial<Record<QuestStatus, QuestStatus[]>> = {
-        "Under Review":      ["Published", "Changes Requested", "Rejected"],
-        "Published":         ["Paused", "Archived"],
-        "Paused":            ["Published", "Archived"],
-        "Rejected":          ["Published", "Archived"],
-        "Changes Requested": ["Published", "Rejected", "Archived"],
-        "Archived":          [],
-    };
-    const availableStatuses: QuestStatus[] = (statusTransitions[questStatus] ?? []);
 
     return (
         <div
@@ -199,19 +127,19 @@ export function QuestDetailModal({
                                     <GlassStatCard
                                         icon={<Tag className="w-4 h-4" />}
                                         label="Theme"
-                                        value={metadata?.theme ?? "—"}
+                                        value={(quest?.theme?.[0] ?? "—")}
                                         style={statCardStyles[0]}
                                     />
                                     <GlassStatCard
                                         icon={<Star className="w-4 h-4" />}
                                         label="Difficulty"
-                                        value={metadata?.difficulty ?? "—"}
+                                        value={(quest?.difficulty ?? "—")}
                                         style={statCardStyles[1]}
                                     />
                                     <GlassStatCard
                                         icon={<Clock className="w-4 h-4" />}
                                         label="Duration"
-                                        value={formatDuration(metadata?.duration_minutes)}
+                                        value={formatDuration(quest?.duration_minutes)}
                                         style={statCardStyles[2]}
                                     />
                                 </div>
@@ -230,98 +158,67 @@ export function QuestDetailModal({
                                     />
                                     <GlassStatCard
                                         icon={<Layers className="w-4 h-4" />}
-                                        label="Steps"
-                                        value={steps.length}
+                                        label="Markers"
+                                        value={(quest?.total_markers ?? 0)}
                                         style={statCardStyles[5]}
                                     />
                                 </div>
                             </div>
 
                             {/* Description */}
-                            {metadata?.description && metadata.description.length > 0 && (
+                            {quest?.description && (
                                 <div>
                                     <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider mb-2">Description</h4>
-                                    <div className="bg-neutral-50 rounded-xl border border-neutral-200 p-4 text-sm text-neutral-700 leading-relaxed space-y-2">
-                                        {metadata.description.map((para, i) => (
-                                            <p key={i}>{para}</p>
-                                        ))}
+                                    <div className="bg-neutral-50 rounded-xl border border-neutral-200 p-4 text-sm text-neutral-700 leading-relaxed">
+                                        <p>{quest.description}</p>
                                     </div>
                                 </div>
                             )}
 
                             {/* Creator */}
-                            {creator && (
+                            {quest?.creator_summary?.name && (
                                 <div>
                                     <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider mb-2">Creator</h4>
                                     <div className="bg-neutral-50 rounded-xl border border-neutral-200 p-3 text-sm flex justify-between items-center">
-                                        <span className="text-neutral-800 font-medium">{creator.first_name} {creator.last_name}</span>
-                                        <span className="text-xs text-neutral-400">ID: {creator._id.slice(-8)}</span>
+                                        <span className="text-neutral-800 font-medium">{quest.creator_summary.name}</span>
+                                        <span className="text-xs text-neutral-400">ID: …{quest.creator_summary.id.slice(-8)}</span>
                                     </div>
                                 </div>
                             )}
 
-                                {/* Latest Review Comment */}
-                                {latestReview && (
-                                    <div>
-                                        <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider mb-2">Last Review</h4>
-                                        <div className={`rounded-xl border p-3 text-sm space-y-1.5 ${
-                                            questStatusConfig[latestReview.status || ""]?.bg ?? "bg-neutral-50 border-neutral-200"
-                                        }`}>
-                                            <div className="flex items-center justify-between flex-wrap gap-2">
-                                                <span className={`text-xs font-semibold ${
-                                                    latestReview.status === "Approved" ? "text-indigo-700" :
-                                                    latestReview.status === "Rejected" ? "text-rose-700" :
-                                                    latestReview.status === "Changes Requested" ? "text-orange-700" :
-                                                    "text-neutral-700"
-                                                }`}>{latestReview.status || "Comment"}</span>
-                                                <span className="text-xs text-neutral-400">
-                                                    {latestReview.reviewed_by || (latestReview.admin_id ? `Admin (${latestReview.admin_id.slice(-6)})` : "System")} · {new Date(latestReview.reviewed_at || latestReview.timestamp || 0).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
-                                                </span>
-                                            </div>
-                                            {latestReview.comment && (
-                                                <p className="text-neutral-700 italic">"{latestReview.comment}"</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                            {/* Location */}
-                            {data?.location && (
+                            {/* Region */}
+                            {quest?.region_summary?.name && (
                                 <div>
                                     <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                                        <MapPin className="w-4 h-4" /> Location
+                                        <MapPin className="w-4 h-4" /> Region
                                     </h4>
-                                    <div className="bg-neutral-50 rounded-xl border border-neutral-200 p-3 text-sm space-y-1.5">
+                                    <div className="bg-neutral-50 rounded-xl border border-neutral-200 p-3 text-sm">
                                         <div className="flex justify-between">
                                             <span className="text-neutral-500">Region</span>
-                                            <span className="font-medium text-neutral-800">{data.location.region}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-neutral-500">Waypoints</span>
-                                            <span className="font-medium text-neutral-800">{data.location.route_waypoints?.length ?? 0}</span>
+                                            <span className="font-medium text-neutral-800">{quest.region_summary.name}</span>
                                         </div>
                                     </div>
                                 </div>
                             )}
 
-                            {/* Steps preview */}
-                            {steps.length > 0 && (
+                            {/* Markers preview */}
+                            {quest && quest.total_markers > 0 && (
                                 <div>
                                     <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider mb-2">
-                                        Steps ({steps.length})
+                                        Markers ({quest.total_markers})
                                     </h4>
                                     <div className="bg-neutral-50 rounded-xl border border-neutral-200 divide-y divide-neutral-100">
-                                        {steps.slice(0, 4).map((step) => (
-                                            <div key={step._id} className="px-3 py-2.5 flex items-center gap-2">
+                                        {quest.marker_summaries.slice(0, 4).map((m) => (
+                                            <div key={m.marker_id} className="px-3 py-2.5 flex items-center gap-2">
                                                 <span className="w-6 h-6 rounded-full bg-violet-100 text-violet-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
-                                                    {step.order}
+                                                    {m.order ?? "·"}
                                                 </span>
-                                                <span className="text-sm text-neutral-700 truncate">{step.title}</span>
+                                                <span className="text-sm text-neutral-700 truncate">{m.name ?? "Unnamed marker"}</span>
                                             </div>
                                         ))}
-                                        {steps.length > 4 && (
+                                        {quest.total_markers > 4 && (
                                             <div className="px-3 py-2 text-xs text-neutral-400 text-center">
-                                                +{steps.length - 4} more steps
+                                                +{quest.total_markers - 4} more markers
                                             </div>
                                         )}
                                     </div>
@@ -329,11 +226,11 @@ export function QuestDetailModal({
                             )}
 
                             {/* Media preview */}
-                            {media && media.cloudinary_assets.length > 0 && (
+                            {quest && quest.cloudinary_assets.length > 0 && (
                                 <div>
-                                    <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider mb-2">Media ({media.cloudinary_assets.length})</h4>
+                                    <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider mb-2">Media ({quest.cloudinary_assets.length})</h4>
                                     <div className="flex gap-2 overflow-x-auto pb-1">
-                                        {media.cloudinary_assets.slice(0, 5).map((asset) => (
+                                        {quest.cloudinary_assets.slice(0, 5).map((asset) => (
                                             <img
                                                 key={asset.public_id}
                                                 src={asset.secure_url}
@@ -341,55 +238,14 @@ export function QuestDetailModal({
                                                 className="w-16 h-16 rounded-lg object-cover border border-neutral-200 flex-shrink-0"
                                             />
                                         ))}
-                                        {media.cloudinary_assets.length > 5 && (
+                                        {quest.cloudinary_assets.length > 5 && (
                                             <div className="w-16 h-16 rounded-lg border border-neutral-200 flex items-center justify-center text-xs text-neutral-400">
-                                                +{media.cloudinary_assets.length - 5}
+                                                +{quest.cloudinary_assets.length - 5}
                                             </div>
                                         )}
                                     </div>
                                 </div>
                             )}
-
-                            {/* ── Quick Actions ── Prominent Gradient Buttons ── */}
-                            <div className="pt-1">
-                                <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                    ⚡ Quick Actions
-                                </h4>
-                                <div className="grid grid-cols-2 gap-2.5">
-                                    {availableStatuses.map((status) => {
-                                        const ac = quickActionConfig[status];
-                                        if (!ac) return null;
-                                        return (
-                                            <button
-                                                key={status}
-                                                onClick={() => onStatusChange(questId, status)}
-                                                className={`
-                                                    flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold
-                                                    transition-all duration-200 active:scale-[0.97]
-                                                    ${ac.base} ${ac.hover}
-                                                `}
-                                            >
-                                                {ac.icon}
-                                                {ac.label}
-                                            </button>
-                                        );
-                                    })}
-                                    {canDelete && (
-                                        <button
-                                            onClick={() => onDelete(questId)}
-                                            className="
-                                                flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold
-                                                border border-red-200 bg-red-50 text-red-700
-                                                hover:bg-red-100 hover:border-red-300 hover:shadow-sm
-                                                transition-all duration-200 active:scale-[0.97]
-                                            "
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                            Delete
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
                         </>
                     )}
                 </div>
@@ -444,4 +300,3 @@ function GlassStatCard({ icon, label, value, style }: {
         </div>
     );
 }
-

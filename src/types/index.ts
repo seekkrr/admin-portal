@@ -118,7 +118,7 @@ export interface CloudinaryUploadResponse {
 }
 
 // Quest Types
-export type QuestDifficulty = "Easy" | "Medium" | "Hard" | "Expert";
+export type QuestDifficulty = "easy" | "moderate" | "hard" | "expert";
 export type QuestStatus =
     | "Draft"
     | "Under Review"
@@ -128,109 +128,12 @@ export type QuestStatus =
     | "Paused"
     | "Rejected"
     | "Archived";
-export type QuestTheme = "Adventure" | "Romance" | "Culture" | "Food" | "History" | "Nature" | "Custom";
+export type QuestTheme =
+    | "adventure" | "romance" | "culture" | "food" | "history"
+    | "nature" | "spiritual" | "photography" | "archaeological"
+    | "offbeat" | "finding_yourself" | "other";
 
-// Review history entry returned by the backend
-export interface ReviewHistoryEntry {
-    comment: string;
-    reviewed_by?: string;   // Frontend expectation
-    admin_id?: string;      // Backend raw data fallback
-    status?: QuestStatus;
-    reviewed_at?: string;   // Frontend expectation
-    timestamp?: string;     // Backend raw data fallback
-}
-
-export interface QuestLocation {
-    _id?: string;
-    country?: string;
-    region?: string;
-    city?: string;
-    latitude: number;
-    longitude: number;
-    address?: string;
-    place_name?: string;
-}
-
-export interface QuestMetadata {
-    _id?: string;
-    title: string;
-    description: string;
-    difficulty: QuestDifficulty;
-    duration_minutes?: number;
-    theme?: string;
-    tags?: string[];
-}
-
-export interface QuestMedia {
-    _id?: string;
-    cloudinary_assets: CloudinaryAsset[];
-    video_url?: string;
-    source_url?: string;
-    source_reel_url?: string;
-}
-
-export interface QuestStep {
-    _id?: string;
-    quest_id?: string;
-    order: number;
-    title: string;
-    description?: string;
-    location: QuestLocation;
-    points_reward?: number;
-}
-
-export interface Quest {
-    _id: string;
-    metadata_id: string;
-    location_id: string;
-    media_id: string;
-    created_by: string;
-    status: QuestStatus;
-    price?: number;
-    currency?: string;
-    booking_enabled: boolean;
-    created_at: string;
-    updated_at: string;
-}
-
-export interface QuestWithDetails extends Quest {
-    metadata?: QuestMetadata;
-    location?: QuestLocation;
-    media?: QuestMedia;
-    steps?: QuestStep[];
-}
-
-// ---- Enriched Quest (from list endpoint) ----
-export interface QuestListItem {
-    _id: string;
-    metadata_id: string;
-    location_id: string;
-    media_id: string;
-    created_by: string;
-    status: QuestStatus;
-    price: number;
-    currency: string | null;
-    booking_enabled: boolean;
-    view_count: number;
-    is_deleted: boolean;
-    deleted_at: string | null;
-    schema_version: number;
-    version: number;
-    created_at: string;
-    updated_at: string;
-    // Enriched fields from list endpoint
-    quest_title: string | null;
-    quest_duration_minutes: number | null;
-    quest_region: string | null;
-    quest_image: string | null;
-    quest_difficulty?: string | null;
-    quest_theme?: string | null;
-    creator_name?: string | null;
-}
-
-// Shape returned by the GET /api/v2/quests list endpoint (distinct from the
-// full quest document used on the detail page). Verified against the live
-// backend serializer — the list trims/renames fields vs the stored model.
+// Shape returned by GET /api/v2/quests (list endpoint) — to_list_dict()
 export interface QuestListEntry {
     id: string;
     title: string | null;
@@ -248,108 +151,134 @@ export interface QuestListEntry {
     total_markers: number;
     completion_count: number;
     review_count: number;
-    cloudinary_assets: unknown[];
-    created_at: string;
+    cloudinary_assets: CloudinaryAsset[];
+    created_at: string | null;
 }
 
-// ---- Full Quest Detail Response (from GET /api/quests/:id) ----
-export interface QuestDetailLocation {
-    _id: string;
-    region: string;
-    start_location: { type: "Point"; coordinates: [number, number] };
-    end_location: { type: "Point"; coordinates: [number, number] };
-    route_waypoints: {
-        order: number;
-        location: { type: "Point"; coordinates: [number, number] };
-        estimated_time_minutes: number | null;
-        distance_from_previous_km: number | null;
-    }[];
-    map_data: {
-        zoom_level: number;
-        map_style: string;
-    };
-    route_geometry: { type: "LineString"; coordinates: number[][] } | null;
-    created_at: string;
-    updated_at: string;
+// MarkerSummary — one entry per marker in the quest playlist
+// coordinates is null for admin (not booked); real coords fetched via markers API
+export interface MarkerSummary {
+    marker_id: string;
+    name: string | null;
+    category: string | null;
+    tags: string[];
+    images: CloudinaryAsset[];
+    things_to_do_text: string | null;
+    things_to_do_image_url: string | null;
+    order: number | null;
+    is_required: boolean;
+    is_unlocked: boolean;
+    coordinates: { lat: number; lng: number } | null;
 }
 
-export interface QuestDetailMetadata {
-    _id: string;
-    title: string;
-    description: string[] | null;
+export interface CreatorSummary {
+    id: string;
+    name: string | null;
+    avatar_url: string | null;
+    tagline: string | null;
+    creator_badge: string | null;
+}
+
+export interface RegionSummaryV2 {
+    id: string;
+    name: string | null;
+    crowd_meter: Record<string, number> | null;
+}
+
+export interface LinkedAchievement {
+    id: string;
+    name: string | null;
+    icon_url: string | null;
+    xp_reward: number | null;
+}
+
+// Shape returned by GET /api/v2/quests/{id} — to_detail_response()
+export interface V2QuestDetail {
+    id: string;
+    title: string | null;
+    description: string | null;
+    theme: string[] | null;
     keywords: string[] | null;
-    theme: QuestTheme;
-    difficulty: QuestDifficulty;
+    difficulty: string | null;
     price: number;
-    max_points: number;
-    duration_minutes: number;
-    hints_allowed: number;
-    created_at: string;
-    updated_at: string;
-}
-
-export interface QuestDetailMedia {
-    _id: string;
-    cloudinary_assets: CloudinaryAsset[];
-    mapbox_reference: Record<string, string>;
-    reel_url?: string | null;
-    created_at: string;
-    updated_at: string;
-}
-
-export interface QuestDetailStep {
-    _id: string;
-    quest_id: string;
-    order: number;
-    title: string;
-    description: string;
-    how_to_reach?: string | null;
-    cloudinary_assets: CloudinaryAsset[];
-    waypoint_order?: number | null;
-    created_at: string;
-    updated_at: string;
-}
-
-export interface QuestDetailCreator {
-    _id: string;
-    first_name: string;
-    last_name: string;
-    role: Array<string>;
-    status: string;
-    is_creator: boolean;
-    created_at: string;
-    updated_at: string;
-}
-
-// Narrative type for quest narrative management
-export interface Narrative {
-    _id: string;
-    quest_id: string;
-    from_step_id: string;
-    to_step_id: string;
-    from_step_order: number;
-    to_step_order: number;
-    title?: string;
-    content: string;
-    trigger_location?: { type: "Point"; coordinates: [number, number] };
-    trigger_radius_m: number;
-    media?: CloudinaryAsset[];
-    is_mandatory: boolean;
+    currency: string | null;
+    points: number | null;
+    duration_minutes: number | null;
+    hints_allowed: number | null;
+    min_expense: number | null;
+    max_expense: number | null;
+    best_month_start: string | null;
+    best_month_end: string | null;
+    start_time: string | null;
+    status: QuestStatus;
     view_count: number;
-    created_by: string;
-    created_at: string;
-    updated_at: string;
+    average_rating: number | null;
+    review_count: number;
+    completion_count: number;
+    total_markers: number;
+    cloudinary_assets: CloudinaryAsset[];
+    reel_urls: string[];
+    creator_summary: CreatorSummary;
+    region_summary: RegionSummaryV2;
+    start_point: { marker_id: string; name: string | null; lat: number | null; lng: number | null } | null;
+    marker_summaries: MarkerSummary[];
+    linked_achievement: LinkedAchievement | null;
+    user_booking_status: string;
+    created_at: string | null;
+    updated_at: string | null;
 }
 
-export interface QuestDetailResponse {
-    quest: QuestListItem;
-    metadata: QuestDetailMetadata | null;
-    location: QuestDetailLocation | null;
-    media: QuestDetailMedia | null;
-    steps: QuestDetailStep[];
-    narratives: Narrative[];
-    creator: QuestDetailCreator | null;
-    review_history: ReviewHistoryEntry[];
+// Review history entry from GET /api/v2/quests/{id}/review
+export interface QuestReviewHistoryEntry {
+    action: string;           // "submitted" | "approved" | "changes_requested" | "rejected" | "paused" | "unpaused"
+    comment: string | null;
+    commented_by: string | null;
+    commented_at: string | null;
+}
+
+export interface QuestReviewRecord {
+    id: string;
+    quest_id: string;
+    review_history: QuestReviewHistoryEntry[];
+    status_updated_by: string | null;
+    status_updated_at: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+}
+
+// Payload for PUT /api/v2/quests/{id} — only fields UpdateQuestBody accepts
+export interface UpdateQuestPayload {
+    title?: string;
+    description?: string | null;
+    theme?: string[];
+    keywords?: string[];
+    difficulty?: string;
+    price?: number;
+    currency?: string;
+    points?: number;
+    duration_minutes?: number;
+    hints_allowed?: number;
+    min_expense?: number;
+    max_expense?: number;
+    best_month_start?: string | null;
+    best_month_end?: string | null;
+    cloudinary_assets?: CloudinaryAsset[];
+    reel_urls?: string[];
+    marker_playlist?: Array<{
+        marker_id: string;
+        order: number;
+        is_required?: boolean;
+    }>;
+}
+
+// Legacy review history entry — kept for backward compatibility during migration
+export interface ReviewHistoryEntry {
+    comment: string | null;
+    reviewed_by?: string;
+    admin_id?: string;
+    status?: string;
+    reviewed_at?: string;
+    timestamp?: string;
 }
 
 // API Response Types

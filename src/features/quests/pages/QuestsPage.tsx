@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     Search, Compass, Trash2, ChevronLeft, ChevronRight,
-    RefreshCw, X, Filter, Eye, MapPin,
+    RefreshCw, X, Filter, Eye, MapPin, CheckCircle, XCircle, AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@store/auth.store";
@@ -14,9 +14,10 @@ import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { FilterDropdown } from "@/components/FilterDropdown";
 import { usePaginationRange } from "@/hooks/usePagination";
 import { QuestDetailModal } from "../components/QuestDetailModal";
+import { QuestActionModal, type QuestActionType } from "../components/QuestActionModal";
 import { regionsService } from "@/features/regions/services/regions.service";
 import type { DropdownOption } from "@/components/FilterDropdown";
-import type { QuestListEntry, QuestStatus } from "@/types";
+import type { QuestListEntry } from "@/types";
 
 // ---- Constants ----
 const ALLOWED_ROLES = ["admin", "super_admin", "moderator"];
@@ -40,8 +41,7 @@ const questStatusConfig: Record<string, { label: string; dot: string; bg: string
 
 // ---- Discriminated Union for Confirm Actions ----
 type ConfirmAction =
-    | { type: "delete"; payload: { questId: string; title: string } }
-    | { type: "status-change"; payload: { questId: string; title: string; status: QuestStatus } };
+    | { type: "delete"; payload: { questId: string; title: string } };
 
 // ---- Filter Dropdown Options ----
 const STATUS_OPTIONS: DropdownOption[] = [
@@ -107,6 +107,21 @@ export function QuestsPage() {
     const [page, setPage] = useState(1);
     const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
     const [hardDelete, setHardDelete] = useState(false);
+
+    const [activeTab, setActiveTab] = useState<"all" | "review-queue">("all");
+    const [actionModal, setActionModal] = useState<{
+        action: QuestActionType;
+        questId: string;
+        questTitle: string;
+    } | null>(null);
+
+    // Review queue query — only enabled when on that tab
+    const { data: reviewQueueData, isLoading: reviewQueueLoading } = useQuery({
+        queryKey: ["admin-review-queue", page],
+        queryFn: () => questsService.getReviewQueue({ page, per_page: PER_PAGE }),
+        enabled: activeTab === "review-queue",
+        staleTime: 15_000,
+    });
 
     // Modal state
     const [viewingQuest, setViewingQuest] = useState<QuestListEntry | null>(null);
@@ -191,15 +206,39 @@ export function QuestsPage() {
         onError: (err: Error) => { toast.error(err.message); setConfirmAction(null); },
     });
 
-    const statusMutation = useMutation({
-        mutationFn: ({ questId, status }: { questId: string; status: QuestStatus }) =>
-            questsService.updateQuestStatus(questId, status),
+    const approveMutation = useMutation({
+        mutationFn: (questId: string) => questsService.approve(questId),
         onSuccess: () => {
-            toast.success("Quest status updated");
+            toast.success("Quest approved and published");
+            queryClient.invalidateQueries({ queryKey: ["admin-review-queue"] });
             queryClient.invalidateQueries({ queryKey: ["admin-quests"] });
-            setConfirmAction(null);
+            setActionModal(null);
         },
-        onError: (err: Error) => { toast.error(err.message); setConfirmAction(null); },
+        onError: (err: Error) => { toast.error(err.message); setActionModal(null); },
+    });
+
+    const requestChangesMutation = useMutation({
+        mutationFn: ({ questId, comment }: { questId: string; comment: string }) =>
+            questsService.requestChanges(questId, comment),
+        onSuccess: () => {
+            toast.success("Changes requested");
+            queryClient.invalidateQueries({ queryKey: ["admin-review-queue"] });
+            queryClient.invalidateQueries({ queryKey: ["admin-quests"] });
+            setActionModal(null);
+        },
+        onError: (err: Error) => { toast.error(err.message); setActionModal(null); },
+    });
+
+    const rejectMutation = useMutation({
+        mutationFn: ({ questId, reason }: { questId: string; reason: string }) =>
+            questsService.reject(questId, reason),
+        onSuccess: () => {
+            toast.success("Quest rejected");
+            queryClient.invalidateQueries({ queryKey: ["admin-review-queue"] });
+            queryClient.invalidateQueries({ queryKey: ["admin-quests"] });
+            setActionModal(null);
+        },
+        onError: (err: Error) => { toast.error(err.message); setActionModal(null); },
     });
 
     // ---- Handlers ----
@@ -213,24 +252,32 @@ export function QuestsPage() {
         setPage(1);
     }, []);
 
-    const isBusy = deleteMutation.isPending || statusMutation.isPending;
+    const handleActionConfirm = useCallback((text: string) => {
+        if (!actionModal) return;
+        const { action, questId } = actionModal;
+        if (action === "approve") approveMutation.mutate(questId);
+        else if (action === "requestChanges") requestChangesMutation.mutate({ questId, comment: text });
+        else if (action === "reject") rejectMutation.mutate({ questId, reason: text });
+    }, [actionModal, approveMutation, requestChangesMutation, rejectMutation]);
+
+    const isBusy = deleteMutation.isPending || approveMutation.isPending || requestChangesMutation.isPending || rejectMutation.isPending;
     const hasActiveFilters = searchInput || statusFilter || difficultyFilter || themeFilter || regionFilter;
+
+    // Tab-aware display data
+    const displayQuests = activeTab === "review-queue" ? (reviewQueueData?.quests ?? []) : filteredQuests;
+    const displayLoading = activeTab === "review-queue" ? reviewQueueLoading : isLoading;
+    const displayPagination = activeTab === "review-queue" ? reviewQueueData?.pagination : pagination;
 
     // ---- Confirm handler ----
     const executeConfirmedAction = useCallback(() => {
         if (!confirmAction) return;
-        switch (confirmAction.type) {
-            case "delete":
-                deleteMutation.mutate({ questId: confirmAction.payload.questId, hard: hardDelete });
-                break;
-            case "status-change":
-                statusMutation.mutate({ questId: confirmAction.payload.questId, status: confirmAction.payload.status });
-                break;
+        if (confirmAction.type === "delete") {
+            deleteMutation.mutate({ questId: confirmAction.payload.questId, hard: hardDelete });
         }
-    }, [confirmAction, deleteMutation, statusMutation, hardDelete]);
+    }, [confirmAction, deleteMutation, hardDelete]);
 
     // ---- Pagination ----
-    const totalPages = pagination?.total_pages ?? 1;
+    const totalPages = displayPagination?.total_pages ?? 1;
     const paginationRange = usePaginationRange(totalPages, page);
 
     // ---- Render ----
@@ -253,6 +300,38 @@ export function QuestsPage() {
                         </p>
                     </div>
                 </div>
+            </div>
+
+            {/* Tab bar */}
+            <div className="flex gap-1 bg-neutral-100 rounded-xl p-1 w-fit">
+                <button
+                    onClick={() => { setActiveTab("all"); setPage(1); }}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        activeTab === "all"
+                            ? "bg-white shadow-sm text-neutral-900"
+                            : "text-neutral-500 hover:text-neutral-700"
+                    }`}
+                >
+                    All Quests
+                    {pagination && (
+                        <span className="ml-2 text-xs text-neutral-400">({pagination.total})</span>
+                    )}
+                </button>
+                <button
+                    onClick={() => { setActiveTab("review-queue"); setPage(1); }}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        activeTab === "review-queue"
+                            ? "bg-white shadow-sm text-neutral-900"
+                            : "text-neutral-500 hover:text-neutral-700"
+                    }`}
+                >
+                    Review Queue
+                    {reviewQueueData && reviewQueueData.pagination.total > 0 && (
+                        <span className="ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500 text-white">
+                            {reviewQueueData.pagination.total}
+                        </span>
+                    )}
+                </button>
             </div>
 
             {/* Toolbar */}
@@ -324,9 +403,9 @@ export function QuestsPage() {
 
             {/* Table */}
             <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-                {isLoading ? (
+                {displayLoading ? (
                     <LoadingFallback />
-                ) : error || filteredQuests.length === 0 ? (
+                ) : error || displayQuests.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 text-neutral-400 gap-2">
                         <Compass className="w-8 h-8" />
                         <p className="text-sm font-medium text-neutral-500">No quests found</p>
@@ -348,7 +427,7 @@ export function QuestsPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-neutral-50">
-                                {filteredQuests.map((quest) => {
+                                {displayQuests.map((quest) => {
                                     const sc = questStatusConfig[quest.status] || { label: quest.status, dot: "bg-neutral-400", bg: "bg-neutral-50 text-neutral-600 border-neutral-200" };
                                     return (
                                         <tr
@@ -386,10 +465,44 @@ export function QuestsPage() {
                                                 {formatDuration(quest.duration_minutes)}
                                             </td>
                                             <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">
-                                                {new Date(quest.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                                                {quest.created_at ? new Date(quest.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
                                             </td>
                                             <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                                                 <div className="flex items-center justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                                                    {activeTab === "review-queue" && (
+                                                        <>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setActionModal({ action: "approve", questId: quest.id, questTitle: quest.title || "Quest" });
+                                                                }}
+                                                                title="Approve"
+                                                                className="p-1.5 rounded-lg text-neutral-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                                            >
+                                                                <CheckCircle className="w-4 h-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setActionModal({ action: "requestChanges", questId: quest.id, questTitle: quest.title || "Quest" });
+                                                                }}
+                                                                title="Request Changes"
+                                                                className="p-1.5 rounded-lg text-neutral-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                                                            >
+                                                                <AlertCircle className="w-4 h-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setActionModal({ action: "reject", questId: quest.id, questTitle: quest.title || "Quest" });
+                                                                }}
+                                                                title="Reject"
+                                                                className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                                            >
+                                                                <XCircle className="w-4 h-4" />
+                                                            </button>
+                                                        </>
+                                                    )}
                                                     <button
                                                         onClick={() => setViewingQuest(quest)}
                                                         title="View details"
@@ -417,11 +530,11 @@ export function QuestsPage() {
                 )}
 
                 {/* Pagination */}
-                {pagination && pagination.total_pages > 1 && (
+                {displayPagination && displayPagination.total_pages > 1 && (
                     <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-100 bg-neutral-50/30">
                         <span className="text-sm text-neutral-500">
-                            Page <span className="font-medium text-neutral-700">{pagination.page}</span> of <span className="font-medium text-neutral-700">{pagination.total_pages}</span>
-                            <span className="ml-2 text-neutral-400">({pagination.total} total)</span>
+                            Page <span className="font-medium text-neutral-700">{displayPagination.page}</span> of <span className="font-medium text-neutral-700">{displayPagination.total_pages}</span>
+                            <span className="ml-2 text-neutral-400">({displayPagination.total} total)</span>
                         </span>
                         <div className="flex items-center gap-1">
                             <button
@@ -448,8 +561,8 @@ export function QuestsPage() {
                                 )
                             )}
                             <button
-                                onClick={() => setPage((p) => Math.min(pagination.total_pages, p + 1))}
-                                disabled={page >= pagination.total_pages}
+                                onClick={() => setPage((p) => Math.min(displayPagination?.total_pages ?? 1, p + 1))}
+                                disabled={page >= (displayPagination?.total_pages ?? 1)}
                                 className="p-2 rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                             >
                                 <ChevronRight className="w-4 h-4" />
@@ -466,9 +579,8 @@ export function QuestsPage() {
                 questTitle={viewingQuest?.title ?? ""}
                 questStatus={viewingQuest?.status ?? "Draft"}
                 onClose={() => setViewingQuest(null)}
-                onStatusChange={(questId, status) => {
+                onStatusChange={(_questId, _status) => {
                     setViewingQuest(null);
-                    setConfirmAction({ type: "status-change", payload: { questId, title: viewingQuest?.title || "Quest", status } });
                 }}
                 canDelete={canDelete}
                 onDelete={(questId) => {
@@ -501,17 +613,14 @@ export function QuestsPage() {
                 </label>
             </ConfirmModal>
 
-            {/* Status Change Confirmation */}
-            <ConfirmModal
-                open={confirmAction?.type === "status-change"}
-                title="Change Quest Status"
-                message={`You are about to change "${confirmAction?.type === "status-change" ? confirmAction.payload.title : ""}" to "${confirmAction?.type === "status-change" ? confirmAction.payload.status : ""}". This will take effect immediately.`}
-                confirmLabel="Change Status"
-                confirmStyle="bg-violet-600 hover:bg-violet-700"
-                onConfirm={executeConfirmedAction}
-                onCancel={() => setConfirmAction(null)}
-                isPending={statusMutation.isPending}
-                theme="warning"
+            {/* Review action modal */}
+            <QuestActionModal
+                open={!!actionModal}
+                action={actionModal?.action ?? null}
+                questTitle={actionModal?.questTitle ?? ""}
+                isPending={approveMutation.isPending || requestChangesMutation.isPending || rejectMutation.isPending}
+                onConfirm={handleActionConfirm}
+                onCancel={() => setActionModal(null)}
             />
 
             {/* Loading overlay for mutations */}

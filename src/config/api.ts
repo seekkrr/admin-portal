@@ -7,11 +7,14 @@ export const API_ENDPOINTS = {
     },
     QUESTS: {
         BASE: "/api/v2/quests",
-        CREATE: "/api/v2/quests",
         BY_ID: (id: string) => `/api/v2/quests/${id}`,
-        REVIEW: (id: string) => `/api/v2/quests/${id}/review`,
-        STEPS: (questId: string) => `/api/v2/quests/${questId}/steps`,
-        STEP_BY_ID: (stepId: string) => `/api/v2/quests/steps/${stepId}`,
+        REVIEW_QUEUE: "/api/v2/quests/review-queue",
+        REVIEW_HISTORY: (id: string) => `/api/v2/quests/${id}/review`,
+        APPROVE: (id: string) => `/api/v2/quests/${id}/approve`,
+        REQUEST_CHANGES: (id: string) => `/api/v2/quests/${id}/request-changes`,
+        REJECT: (id: string) => `/api/v2/quests/${id}/reject`,
+        PAUSE: (id: string) => `/api/v2/quests/${id}/pause`,
+        UNPAUSE: (id: string) => `/api/v2/quests/${id}/unpause`,
     },
     CREATORS: {
         LIST: "/api/v2/creators",
