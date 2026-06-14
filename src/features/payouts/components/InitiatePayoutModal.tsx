@@ -12,6 +12,7 @@ interface InitiatePayoutModalProps {
     open: boolean;
     onClose: () => void;
     defaultCreatorId?: string;
+    defaultAmount?: string;
 }
 
 const inputCls =
@@ -70,7 +71,7 @@ function AccountCard({
     );
 }
 
-export function InitiatePayoutModal({ open, onClose, defaultCreatorId }: InitiatePayoutModalProps) {
+export function InitiatePayoutModal({ open, onClose, defaultCreatorId, defaultAmount }: InitiatePayoutModalProps) {
     const queryClient = useQueryClient();
 
     const [creatorId, setCreatorId] = useState("");
@@ -89,7 +90,7 @@ export function InitiatePayoutModal({ open, onClose, defaultCreatorId }: Initiat
             setCreatorId(defaultCreatorId ?? "");
             setDebouncedCreatorId(defaultCreatorId ?? "");
             setSelectedAccountId(null);
-            setAmount("");
+            setAmount(defaultAmount ?? "");
             setCurrency("INR");
             setPeriodStart("");
             setPeriodEnd("");
@@ -97,7 +98,7 @@ export function InitiatePayoutModal({ open, onClose, defaultCreatorId }: Initiat
             setErrors({});
             setConfirming(false);
         }
-    }, [open, defaultCreatorId]);
+    }, [open, defaultCreatorId, defaultAmount]);
 
     // Debounce creator id input (only query when it looks like an ObjectId)
     useEffect(() => {

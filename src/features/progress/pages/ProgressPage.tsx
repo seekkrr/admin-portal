@@ -10,8 +10,10 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@components/ui";
 import { LoadingFallback } from "@components/LoadingFallback";
-import { Pagination } from "@/components/ui/Pagination";import { progressService } from "../services/progress.service";
+import { Pagination } from "@/components/ui/Pagination";
+import { progressService } from "../services/progress.service";
 import type { ExplorationProgress } from "@/types";
+import { shortId } from "@/utils/format";
 
 function formatDate(value: string | null): string {
     if (!value) return "—";
@@ -22,6 +24,28 @@ function formatDate(value: string | null): string {
 function formatNumber(value: number | null): string {
     if (value === null || value === undefined) return "—";
     return String(value);
+}
+
+/** Format metres as km (2 dp) if ≥ 1000, otherwise show metres. */
+function formatDistance(metres: number | null | undefined): string {
+    if (metres === null || metres === undefined) return "—";
+    if (metres >= 1000) return `${(metres / 1000).toFixed(2)} km`;
+    return `${Math.round(metres)} m`;
+}
+
+/** Render a marker id as a link to /markers/:id with shortId display. */
+function MarkerLink({ markerId }: { markerId: string | null | undefined }) {
+    if (!markerId) return <span className="text-neutral-400">—</span>;
+    return (
+        <Link
+            to={`/markers/${markerId}`}
+            onClick={(e) => e.stopPropagation()}
+            className="font-mono text-xs text-indigo-600 hover:text-indigo-900 hover:underline"
+            title={markerId}
+        >
+            {shortId(markerId)}
+        </Link>
+    );
 }
 
 export function ProgressPage() {
@@ -297,9 +321,8 @@ export function ProgressPage() {
                                                                     destination
                                                                     marker
                                                                 </div>
-                                                                <div className="text-sm text-neutral-800 mt-0.5 font-mono break-all">
-                                                                    {p.current_destination_marker_id ??
-                                                                        "—"}
+                                                                <div className="text-sm text-neutral-800 mt-0.5">
+                                                                    <MarkerLink markerId={p.current_destination_marker_id} />
                                                                 </div>
                                                             </div>
                                                             <div>
@@ -309,7 +332,7 @@ export function ProgressPage() {
                                                                     covered
                                                                 </div>
                                                                 <div className="text-sm text-neutral-800 mt-0.5">
-                                                                    {formatNumber(
+                                                                    {formatDistance(
                                                                         p.total_distance_covered,
                                                                     )}
                                                                 </div>
@@ -369,9 +392,8 @@ export function ProgressPage() {
                                                                                             "marker"
                                                                                         }-${mIdx}`}
                                                                                     >
-                                                                                        <td className="px-3 py-2 font-mono text-neutral-700 break-all">
-                                                                                            {m.marker_id ??
-                                                                                                "—"}
+                                                                                        <td className="px-3 py-2">
+                                                                                            <MarkerLink markerId={m.marker_id} />
                                                                                         </td>
                                                                                         <td className="px-3 py-2 text-neutral-500 whitespace-nowrap">
                                                                                             {formatDate(

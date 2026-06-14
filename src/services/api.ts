@@ -66,10 +66,15 @@ function createApiClient(): AxiosInstance {
                 }
             }
 
-            // Extract error message
+            // Extract error message — check all known backend shapes:
+            // V2 FastAPI: { detail: "..." } or { message: "..." }
+            // V1 Flask: { error: "..." } or { details: "..." }
+            const responseData = error.response?.data as Record<string, unknown> | undefined;
             const errorMessage =
-                error.response?.data?.error ||
-                error.response?.data?.details ||
+                (typeof responseData?.message === "string" && responseData.message) ||
+                (typeof responseData?.detail === "string" && responseData.detail) ||
+                (typeof responseData?.error === "string" && responseData.error) ||
+                (typeof responseData?.details === "string" && responseData.details) ||
                 error.message ||
                 "An unexpected error occurred";
 

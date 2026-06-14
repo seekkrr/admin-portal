@@ -7,6 +7,7 @@ import {
     ArrowLeft,
     Scale,
     Edit2,
+    Link2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { regionsService } from "../services/regions.service";
@@ -14,6 +15,7 @@ import { LoadingFallback } from "@components/LoadingFallback";
 import { GeoMap, type GeoMapPoint } from "@components/maps/GeoMap";
 import { useAuthStore } from "@store/auth.store";
 import type { Region, UpdateRegionPayload, GeoPolygon } from "@/types";
+import { shortId } from "@/utils/format";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
@@ -69,6 +71,13 @@ export function RegionDetailPage() {
         queryKey: ["region-hotspots", regionId],
         queryFn: () => regionsService.getHotspots(regionId),
         enabled: !!regionId && region?.type === "city",
+    });
+
+    const parentQuery = useQuery<Region>({
+        queryKey: ["region-detail", region?.parent_id],
+        queryFn: () => regionsService.getById(region!.parent_id!),
+        enabled: !!region?.parent_id,
+        staleTime: 5 * 60 * 1000,
     });
 
     const updateMutation = useMutation({
@@ -198,6 +207,20 @@ export function RegionDetailPage() {
                                 </span>
                             </span>
                         </div>
+                        {region.type === "hotspot" && region.parent_id && (
+                            <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
+                                <span className="w-40 shrink-0 font-medium text-neutral-500 flex items-center gap-1">
+                                    <Link2 className="w-3.5 h-3.5" />
+                                    Parent region
+                                </span>
+                                <Link
+                                    to={`/regions/${region.parent_id}`}
+                                    className="text-cyan-700 hover:text-cyan-900 hover:underline font-medium"
+                                >
+                                    {parentQuery.data?.name ?? shortId(region.parent_id)}
+                                </Link>
+                            </div>
+                        )}
                     </div>
                 </Card>
             )}

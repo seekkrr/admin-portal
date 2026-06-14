@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Banknote, Plus, Search, Lock } from "lucide-react";
 import { payoutsService } from "../services/payouts.service";
 import { PayoutStatusBadge } from "../components/PayoutAccountStatusBadge";
@@ -36,6 +36,25 @@ export function PayoutsPage() {
     const [debouncedCreatorId, setDebouncedCreatorId] = useState("");
     const [page, setPage] = useState(1);
     const [showInitiate, setShowInitiate] = useState(false);
+    const [prefillAmount, setPrefillAmount] = useState<string>("");
+
+    // Deep-link from the Creators "Pending Payout" card:
+    // /payouts?createForCreator=<id>&amount=<n> opens the Initiate Payout modal prefilled.
+    const [searchParams, setSearchParams] = useSearchParams();
+    useEffect(() => {
+        const forCreator = searchParams.get("createForCreator");
+        if (forCreator) {
+            setCreatorId(forCreator);
+            setDebouncedCreatorId(forCreator);
+            setPrefillAmount(searchParams.get("amount") ?? "");
+            setShowInitiate(true);
+            searchParams.delete("createForCreator");
+            searchParams.delete("amount");
+            setSearchParams(searchParams, { replace: true });
+        }
+        // run once on mount
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -204,7 +223,12 @@ export function PayoutsPage() {
                 />
             </div>
 
-            <InitiatePayoutModal open={showInitiate} onClose={() => setShowInitiate(false)} />
+            <InitiatePayoutModal
+                open={showInitiate}
+                onClose={() => setShowInitiate(false)}
+                defaultCreatorId={creatorId || undefined}
+                defaultAmount={prefillAmount || undefined}
+            />
         </div>
     );
 }

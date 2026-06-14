@@ -243,9 +243,26 @@ export function AchievementDetailPage() {
                         <span className="text-neutral-800">{achievement.is_active ? "Yes" : "No"}</span>
                     </DetailRow>
                     <DetailRow label="Icon URL">
-                        <span className="text-neutral-800 font-mono break-all">
-                            {achievement.icon_url || "—"}
-                        </span>
+                        {achievement.icon_url ? (
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <img
+                                    src={achievement.icon_url}
+                                    alt="Icon preview"
+                                    className="w-10 h-10 rounded-lg object-cover bg-neutral-100 border border-neutral-200 shrink-0"
+                                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                                />
+                                <a
+                                    href={achievement.icon_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-indigo-600 hover:text-indigo-800 text-sm font-medium underline underline-offset-2"
+                                >
+                                    Open icon ↗
+                                </a>
+                            </div>
+                        ) : (
+                            <span className="text-neutral-800">—</span>
+                        )}
                     </DetailRow>
                     <DetailRow label="Created">
                         <span className="text-neutral-800">{fmtDate(achievement.created_at)}</span>

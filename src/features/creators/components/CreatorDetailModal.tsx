@@ -1,8 +1,9 @@
 import { type ReactNode, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     X, RefreshCw, TrendingUp,
-    DollarSign, Award, CheckCircle2, Shield,
+    DollarSign, Award, CheckCircle2, Shield, ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/Badge";
@@ -26,6 +27,7 @@ export function CreatorDetailModal({
     open, creatorId, displayName, onClose,
 }: CreatorDetailModalProps) {
     const queryClient = useQueryClient();
+    const navigate = useNavigate();
 
     // Close on Escape key
     useEffect(() => {
@@ -112,7 +114,24 @@ export function CreatorDetailModal({
                                     <StatCard icon={<Award className="w-4 h-4 text-violet-500" />} label="Rating" value={creator.rating ?? "—"} />
                                 </div>
                                 <div className="grid grid-cols-2 gap-3 mt-3">
-                                    <StatCard icon={<DollarSign className="w-4 h-4 text-orange-500" />} label="Pending Payout" value={`₹${(creator.pending_payouts ?? 0).toLocaleString("en-IN")}`} />
+                                    {/* Pending Payout — actionable: navigate to Payouts with pre-filled query params */}
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            onClose();
+                                            // /payouts consumes these params to open the Initiate Payout modal prefilled.
+                                            navigate(`/payouts?createForCreator=${creatorId}&amount=${creator.pending_payouts ?? 0}`);
+                                        }}
+                                        className="bg-white rounded-xl border border-orange-200 p-3 text-center hover:bg-orange-50 hover:border-orange-300 transition-colors group cursor-pointer"
+                                        title="Create payout for this creator"
+                                    >
+                                        <div className="flex items-center justify-center mb-1.5 relative">
+                                            <DollarSign className="w-4 h-4 text-orange-500" />
+                                            <ExternalLink className="w-2.5 h-2.5 text-orange-400 absolute -top-0.5 -right-2 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        </div>
+                                        <div className="text-lg font-bold text-neutral-900">{`₹${(creator.pending_payouts ?? 0).toLocaleString("en-IN")}`}</div>
+                                        <div className="text-[11px] text-orange-600 uppercase tracking-wider font-medium">Pending Payout</div>
+                                    </button>
                                     <StatCard icon={<Award className="w-4 h-4 text-teal-500" />} label="Travelers" value={creator.travelers_served ?? 0} />
                                 </div>
                             </div>

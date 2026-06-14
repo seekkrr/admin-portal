@@ -89,10 +89,11 @@ const CREATOR_OPTIONS: DropdownOption[] = [
 interface PointsModalProps {
     userId: string;
     userName: string;
+    currentPoints: number;
     onClose: () => void;
 }
 
-function PointsModal({ userId, userName, onClose }: PointsModalProps) {
+function PointsModal({ userId, userName, currentPoints, onClose }: PointsModalProps) {
     const queryClient = useQueryClient();
     const [amount, setAmount] = useState("");
     const [mode, setMode] = useState<"add" | "deduct">("add");
@@ -138,7 +139,12 @@ function PointsModal({ userId, userName, onClose }: PointsModalProps) {
                 <h3 className="text-lg font-bold text-neutral-900 mb-1 flex items-center gap-2">
                     <Coins className="w-5 h-5 text-amber-500" /> Manage Points
                 </h3>
-                <p className="text-sm text-neutral-500 mb-5">{userName}</p>
+                <div className="flex items-center justify-between mb-5">
+                    <p className="text-sm text-neutral-500">{userName}</p>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-xs font-semibold text-amber-700">
+                        <Coins className="w-3 h-3" /> {currentPoints.toLocaleString()} pts
+                    </span>
+                </div>
 
                 <div className="flex rounded-xl overflow-hidden border border-neutral-200 mb-4">
                     <button
@@ -422,6 +428,11 @@ export function UsersPage() {
                             <span className="text-xs text-neutral-500 uppercase tracking-wider font-semibold">Creators</span>
                         </div>
                         <div className="text-2xl font-bold text-teal-700">{statsData.creators?.toLocaleString() ?? "—"}</div>
+                        {(statsData.creators_by_status?.suspended ?? 0) > 0 && (
+                            <div className="text-xs text-amber-600 mt-1 font-medium">
+                                {statsData.creators_by_status!.suspended} suspended
+                            </div>
+                        )}
                     </div>
                     <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4">
                         <div className="flex items-center gap-2 mb-1">
@@ -659,6 +670,7 @@ export function UsersPage() {
                 <PointsModal
                     userId={pointsUser._id}
                     userName={`${pointsUser.first_name} ${pointsUser.last_name}`}
+                    currentPoints={pointsUser.points_earned}
                     onClose={() => setPointsUser(null)}
                 />
             )}

@@ -9,6 +9,7 @@ import { Users, DollarSign, Map, Video, Globe, MessageSquare, Activity, Star, Aw
 import { useAuthStore } from "@store/auth.store";
 import { Navigate } from "react-router-dom";
 import type { AnalyticsPeriod } from "@/types";
+import { formatCurrency } from "@/utils/format";
 
 const TABS = [
     { id: "users", label: "Users", icon: Users },
@@ -60,6 +61,7 @@ export function AnalyticsPage() {
     const { data: creatorAppFunnel } = useQuery({ queryKey: ["admin-analytics-creators-application-funnel"], queryFn: analyticsService.getCreatorApplicationFunnel, enabled: activeTab === "creators" });
 
     const { data: topRegions } = useQuery({ queryKey: ["admin-analytics-regions-top"], queryFn: () => analyticsService.getTopRegions(), enabled: activeTab === "regions" });
+    const { data: topRegionsByMarkers } = useQuery({ queryKey: ["admin-analytics-regions-top-markers"], queryFn: () => analyticsService.getTopRegions("markers", 10), enabled: activeTab === "regions" });
     const { data: regionCoverage } = useQuery({ queryKey: ["admin-analytics-regions-coverage"], queryFn: analyticsService.getRegionCoverage, enabled: activeTab === "regions" });
 
     const { data: narrativesStatus } = useQuery({ queryKey: ["admin-analytics-content-narratives"], queryFn: analyticsService.getNarrativesByStatus, enabled: activeTab === "content" });
@@ -185,7 +187,7 @@ export function AnalyticsPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
                 <AnalyticsCard
                     title={`Total Revenue (${period})`}
-                    value={`$${revTotal?.data?.total_revenue?.toLocaleString() || 0}`}
+                    value={formatCurrency(revTotal?.data?.total_revenue ?? 0)}
                     icon={DollarSign}
                     colorClass="ring-emerald-100 text-emerald-600"
                     isLoading={loadRT}
@@ -231,7 +233,7 @@ export function AnalyticsPage() {
                         (revByQuest?.data || []).map((q: { quest_id: string; quest_title: string; revenue: number; count: number }) => (
                             <tr key={q.quest_id} className="hover:bg-neutral-50/60 transition-colors">
                                 <td className="px-5 py-3.5 font-semibold text-neutral-800">{q.quest_title}</td>
-                                <td className="px-5 py-3.5 text-emerald-600 font-bold text-right">${q.revenue?.toLocaleString()}</td>
+                                <td className="px-5 py-3.5 text-emerald-600 font-bold text-right">{formatCurrency(q.revenue)}</td>
                                 <td className="px-5 py-3.5 text-neutral-500 text-right">{q.count}</td>
                             </tr>
                         )),
@@ -270,10 +272,10 @@ export function AnalyticsPage() {
                     />
                 ), "lg:col-span-2")}
 
-                {renderChartCard("Quest Review Pipeline", "Current review stage for each quest under review", (
+                {renderChartCard("Quest Review Pipeline", "Count of quests at each review stage", (
                     <SimpleDoughnutChart
-                        data={(questApprovalFunnel?.data || []).map((s: { action?: string; status?: string; count: number }, i: number) => ({
-                            label: s.action || s.status || "Unknown", value: s.count, color: colors[i % colors.length]
+                        data={(questApprovalFunnel?.data || []).map((s: { action: string; count: number }, i: number) => ({
+                            label: s.action || "Unknown", value: s.count, color: colors[i % colors.length]
                         }))}
                         height={200}
                     />
@@ -331,7 +333,7 @@ export function AnalyticsPage() {
                                 </div>
                             </td>
                             <td className="px-5 py-3.5 text-neutral-600 text-right">{c.total_quests}</td>
-                            <td className="px-5 py-3.5 text-emerald-600 font-bold text-right">${c.total_earnings?.toLocaleString()}</td>
+                            <td className="px-5 py-3.5 text-emerald-600 font-bold text-right">{formatCurrency(c.total_earnings)}</td>
                         </tr>
                     )),
                     "No creator data available",
@@ -369,10 +371,10 @@ export function AnalyticsPage() {
 
             {/* Bottom row with Table */}
             <div className="grid grid-cols-1 gap-5">
-                {renderChartCard("Region Details", "Detailed quest counts per region",
+                {renderChartCard("Top Regions by Markers", "Cities ranked by total marker count across hotspots",
                     renderTable(
-                        ["Region Name", "Quest Count"],
-                        (topRegions?.data || []).map((r: { region_id: string; name: string; quests: number }) => (
+                        ["Region Name", "Marker Count"],
+                        (topRegionsByMarkers?.data || []).map((r: { region_id: string; name: string; markers: number }) => (
                             <tr key={r.region_id} className="hover:bg-neutral-50/60 transition-colors">
                                 <td className="px-5 py-3.5 font-semibold text-neutral-800">
                                     <div className="flex items-center gap-2">
@@ -380,11 +382,11 @@ export function AnalyticsPage() {
                                         {r.name}
                                     </div>
                                 </td>
-                                <td className="px-5 py-3.5 font-bold text-indigo-600 text-right">{r.quests}</td>
+                                <td className="px-5 py-3.5 font-bold text-purple-600 text-right">{r.markers}</td>
                             </tr>
                         )),
                         "No region data available",
-                        !topRegions?.data || topRegions.data.length === 0,
+                        !topRegionsByMarkers?.data || topRegionsByMarkers.data.length === 0,
                         "300px"
                     )
                 )}

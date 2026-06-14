@@ -224,8 +224,8 @@ export function TaskConfigDetailPage() {
             <JsonSection title="Quiz data" value={task.quiz_data} />
             <JsonSection title="Game config" value={task.game_config} />
             <JsonSection title="Collection items" value={task.collection_items} />
-            <JsonSection title="Social task" value={task.social_task} />
-            <JsonSection title="Hints" value={task.hints} />
+            <SocialTaskSection value={task.social_task} />
+            <HintsSection value={task.hints} />
 
             {/* Reveal answer keys */}
             {CAN_MANAGE && (
@@ -426,6 +426,78 @@ function JsonSection({ title, value }: { title: string; value: unknown }) {
                 <pre className="text-xs font-mono text-neutral-700 bg-neutral-50 rounded-xl p-4 overflow-x-auto whitespace-pre-wrap break-words">
                     {JSON.stringify(value, null, 2)}
                 </pre>
+            </div>
+        </Card>
+    );
+}
+
+function SocialTaskSection({ value }: { value: unknown }) {
+    if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length === 0) return null;
+    const entries = Object.entries(value as Record<string, unknown>);
+    return (
+        <Card padding="none" className="overflow-hidden">
+            <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
+                <h3 className="text-base font-semibold">Social task</h3>
+            </div>
+            <div className="p-6 space-y-3 text-sm">
+                {entries.map(([key, val]) => (
+                    <div key={key} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
+                        <span className="w-36 shrink-0 font-medium text-neutral-500 capitalize">{key.replace(/_/g, " ")}</span>
+                        <span className="text-neutral-800 break-words">
+                            {val === null || val === undefined
+                                ? "—"
+                                : typeof val === "object"
+                                  ? <pre className="text-xs font-mono bg-neutral-50 rounded px-2 py-1 overflow-x-auto">{JSON.stringify(val, null, 2)}</pre>
+                                  : String(val)}
+                        </span>
+                    </div>
+                ))}
+            </div>
+        </Card>
+    );
+}
+
+function HintsSection({ value }: { value: unknown }) {
+    if (!value || !Array.isArray(value) || value.length === 0) return null;
+    return (
+        <Card padding="none" className="overflow-hidden">
+            <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
+                <h3 className="text-base font-semibold">Hints ({value.length})</h3>
+            </div>
+            <div className="p-6">
+                <ol className="space-y-3 text-sm list-none">
+                    {value.map((hint, idx) => {
+                        if (!hint || typeof hint !== "object") {
+                            return (
+                                <li key={idx} className="rounded-xl border border-neutral-100 bg-neutral-50 px-4 py-3">
+                                    <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Hint {idx + 1}</span>
+                                    <p className="mt-1 text-neutral-700">{String(hint)}</p>
+                                </li>
+                            );
+                        }
+                        const h = hint as Record<string, unknown>;
+                        const text = (h.text ?? h.hint ?? h.content ?? h.description) as string | undefined;
+                        const cost = h.cost ?? h.point_cost ?? h.points;
+                        const otherEntries = Object.entries(h).filter(
+                            ([k]) => !["text", "hint", "content", "description", "cost", "point_cost", "points"].includes(k)
+                        );
+                        return (
+                            <li key={idx} className="rounded-xl border border-neutral-100 bg-neutral-50 px-4 py-3">
+                                <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Hint {idx + 1}</span>
+                                {text !== undefined && <p className="mt-1 text-neutral-800">{text}</p>}
+                                {cost !== undefined && (
+                                    <p className="mt-1 text-xs text-neutral-500">Cost: <span className="font-semibold text-neutral-700">{String(cost)}</span> pts</p>
+                                )}
+                                {otherEntries.map(([k, v]) => (
+                                    <p key={k} className="mt-0.5 text-xs text-neutral-500">
+                                        <span className="capitalize">{k.replace(/_/g, " ")}</span>:{" "}
+                                        <span className="text-neutral-700">{typeof v === "object" ? JSON.stringify(v) : String(v)}</span>
+                                    </p>
+                                ))}
+                            </li>
+                        );
+                    })}
+                </ol>
             </div>
         </Card>
     );

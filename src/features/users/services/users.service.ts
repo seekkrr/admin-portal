@@ -22,6 +22,11 @@ export interface UserStatsResponse {
     total: number;
     by_status: Record<string, number>;
     creators: number;
+    creators_by_status?: {
+        active?: number;
+        suspended?: number;
+        rejected?: number;
+    };
     by_role: Record<string, number>;
     new_last_7_days: number;
     recent_signups: Array<{ _id: string; email: string; first_name: string; last_name: string; created_at: string }>;

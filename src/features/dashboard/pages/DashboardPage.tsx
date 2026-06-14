@@ -8,6 +8,7 @@ import { useAuthStore } from "@store/auth.store";
 import { Navigate } from "react-router-dom";
 import type { AnalyticsPeriod } from "@/types";
 import { SimpleLineChart } from "@/features/analytics/components/SimpleChart";
+import { formatCurrency } from "@/utils/format";
 
 export function DashboardPage() {
     const { user } = useAuthStore();
@@ -101,10 +102,10 @@ export function DashboardPage() {
                     {/* Overview Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
                         {renderKpiCard("Total Users", overview?.data?.total_users || 0, Users, "ring-indigo-100 text-indigo-600")}
-                        {renderKpiCard(`Active Users (Last ${activeUsersPeriod.replace('d', ' Days')})`, activeUsers?.data?.active_users || 0, Activity, "ring-emerald-100 text-emerald-600")}
+                        {renderKpiCard("Active Accounts", activeUsers?.data?.active_users || 0, Activity, "ring-emerald-100 text-emerald-600")}
                         {renderKpiCard("Published Quests", overview?.data?.published_quests || 0, Map, "ring-blue-100 text-blue-600")}
                         {renderKpiCard("Active Creators", overview?.data?.active_creators || 0, Video, "ring-amber-100 text-amber-600")}
-                        {renderKpiCard("Revenue (Last 30 Days)", `$${overview?.data?.revenue_in_period?.toLocaleString() || 0}`, DollarSign, "ring-emerald-100 text-emerald-600")}
+                        {renderKpiCard("Revenue (Last 30 Days)", formatCurrency(overview?.data?.revenue_in_period ?? 0), DollarSign, "ring-emerald-100 text-emerald-600")}
                         {renderKpiCard("Total Reviews", overview?.data?.total_reviews || 0, MessageSquare, "ring-violet-100 text-violet-600")}
                         {renderKpiCard("Quest Completions (Last 30 Days)", overview?.data?.completions_in_period || 0, Map, "ring-rose-100 text-rose-600")}
                         {renderKpiCard("Completion Rate", `${overview?.data?.completion_rate || 0}%`, Activity, "ring-cyan-100 text-cyan-600")}

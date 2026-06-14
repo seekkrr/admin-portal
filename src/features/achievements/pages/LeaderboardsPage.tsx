@@ -153,7 +153,8 @@ export function LeaderboardsPage() {
                 ))}
             </div>
 
-            {/* Controls */}
+            {/* Controls — hidden on global tab for non-super-admins */}
+            {(tab !== "global" || IS_SUPER) && (
             <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 space-y-3">
                 <div className="flex flex-wrap items-center gap-3">
                     {tab === "quest" && (
@@ -236,6 +237,7 @@ export function LeaderboardsPage() {
                     )}
                 </div>
             </div>
+            )}
 
             <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">

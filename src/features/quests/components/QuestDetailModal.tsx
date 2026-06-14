@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
     X, ExternalLink, RefreshCw,
@@ -187,16 +187,23 @@ export function QuestDetailModal({
                             )}
 
                             {/* Region */}
-                            {quest?.region_summary?.name && (
+                            {quest?.region_summary && (quest.region_summary.name || quest.region_summary.id) && (
                                 <div>
                                     <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider mb-2 flex items-center gap-2">
                                         <MapPin className="w-4 h-4" /> Region
                                     </h4>
-                                    <div className="bg-neutral-50 rounded-xl border border-neutral-200 p-3 text-sm">
-                                        <div className="flex justify-between">
-                                            <span className="text-neutral-500">Region</span>
-                                            <span className="font-medium text-neutral-800">{quest.region_summary.name}</span>
-                                        </div>
+                                    <div className="bg-neutral-50 rounded-xl border border-neutral-200 p-3 text-sm flex justify-between items-center">
+                                        <span className="text-neutral-800 font-medium">
+                                            {quest.region_summary.name ?? "Region"}
+                                        </span>
+                                        <Link
+                                            to={`/regions/${quest.region_summary.id}`}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="text-xs text-neutral-400 hover:text-indigo-600 hover:underline font-mono"
+                                            title={quest.region_summary.id}
+                                        >
+                                            ID: …{quest.region_summary.id.slice(-8)}
+                                        </Link>
                                     </div>
                                 </div>
                             )}

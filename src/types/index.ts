@@ -11,6 +11,7 @@ export interface User {
     role: Array<"user" | "admin" | "super_admin" | "creator" | "moderator" | "finance">;
     status: "active" | "suspended" | "deleted";
     is_creator: boolean;
+    points_earned: number;   // returned by the admin user list (to_admin_dict)
     created_at: string;
     updated_at: string;
 }
