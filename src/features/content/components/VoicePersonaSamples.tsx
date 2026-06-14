@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Play, Square, Mic, AlertTriangle } from "lucide-react";
 import type { VoicePersona } from "@/types";
 import { PERSONAS, speechSupported, type PersonaConfig } from "./voicePersonas";
@@ -10,9 +10,11 @@ interface VoicePersonaSamplesProps {
 
 export function VoicePersonaSamples({ selected, onSelect }: VoicePersonaSamplesProps) {
     const [speakingId, setSpeakingId] = useState<VoicePersona | null>(null);
+    const isMounted = useRef(true);
 
     useEffect(() => {
         return () => {
+            isMounted.current = false;
             if (speechSupported) window.speechSynthesis.cancel();
         };
     }, []);
@@ -32,8 +34,8 @@ export function VoicePersonaSamples({ selected, onSelect }: VoicePersonaSamplesP
         const utterance = new SpeechSynthesisUtterance(persona.sampleLine);
         utterance.rate = persona.rate;
         utterance.pitch = persona.pitch;
-        utterance.onend = () => setSpeakingId(null);
-        utterance.onerror = () => setSpeakingId(null);
+        utterance.onend = () => { if (isMounted.current) setSpeakingId(null); };
+        utterance.onerror = () => { if (isMounted.current) setSpeakingId(null); };
         setSpeakingId(persona.id);
         window.speechSynthesis.speak(utterance);
     };

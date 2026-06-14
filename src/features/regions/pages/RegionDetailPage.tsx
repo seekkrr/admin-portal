@@ -75,7 +75,7 @@ export function RegionDetailPage() {
 
     const parentQuery = useQuery<Region>({
         queryKey: ["region-detail", region?.parent_id],
-        queryFn: () => regionsService.getById(region!.parent_id!),
+        queryFn: () => regionsService.getById(region?.parent_id ?? ""),
         enabled: !!region?.parent_id,
         staleTime: 5 * 60 * 1000,
     });

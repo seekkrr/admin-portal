@@ -430,7 +430,7 @@ export function UsersPage() {
                         <div className="text-2xl font-bold text-teal-700">{statsData.creators?.toLocaleString() ?? "—"}</div>
                         {(statsData.creators_by_status?.suspended ?? 0) > 0 && (
                             <div className="text-xs text-amber-600 mt-1 font-medium">
-                                {statsData.creators_by_status!.suspended} suspended
+                                {statsData.creators_by_status?.suspended} suspended
                             </div>
                         )}
                     </div>

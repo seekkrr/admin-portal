@@ -121,6 +121,7 @@ export const GeoMap = memo(function GeoMap({
         map.addControl(new mapboxgl.FullscreenControl(), "top-right");
 
         map.on("style.load", () => {
+            if (mapRef.current !== map) return;
             // Region polygon
             if (polygon) {
                 map.addSource("geo-polygon", { type: "geojson", data: { type: "Feature", properties: {}, geometry: polygon } });

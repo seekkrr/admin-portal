@@ -62,7 +62,7 @@ export const achievementsService = {
 
     userEarned: async (userId: string): Promise<UserAchievement[]> => {
         const { data } = await api.get<UserAchievementsResponse>(
-            API_ENDPOINTS.ACHIEVEMENTS.USER_EARNED(userId),
+            API_ENDPOINTS.ACHIEVEMENTS.USER_EARNED(encodeURIComponent(userId)),
         );
         return data.user_achievements;
     },

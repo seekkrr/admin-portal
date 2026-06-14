@@ -19,14 +19,14 @@ export const leaderboardsService = {
 
     quest: async (questId: string, page = 1, page_size = 20): Promise<LeaderboardResponse> => {
         const { data } = await api.get<LeaderboardResponse>(
-            `${API_ENDPOINTS.LEADERBOARDS.BY_QUEST(questId)}?${boardQuery(page, page_size)}`,
+            API_ENDPOINTS.LEADERBOARDS.BY_QUEST(encodeURIComponent(questId)) + "?" + boardQuery(page, page_size),
         );
         return data;
     },
 
     region: async (regionId: string, page = 1, page_size = 20): Promise<LeaderboardResponse> => {
         const { data } = await api.get<LeaderboardResponse>(
-            `${API_ENDPOINTS.LEADERBOARDS.BY_REGION(regionId)}?${boardQuery(page, page_size)}`,
+            API_ENDPOINTS.LEADERBOARDS.BY_REGION(encodeURIComponent(regionId)) + "?" + boardQuery(page, page_size),
         );
         return data;
     },

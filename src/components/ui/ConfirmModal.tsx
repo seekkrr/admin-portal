@@ -35,8 +35,10 @@ export function ConfirmModal({
     const currentTheme = themeConfig[theme];
     const Icon = currentTheme.icon;
 
-    // Reset typed input when modal opens
-    useEffect(() => { if (open) setTyped(""); }, [open]);
+    // Reset typed input when modal opens or closes
+    useEffect(() => {
+        setTyped("");
+    }, [open]);
 
     // Close on Escape key
     useEffect(() => {
