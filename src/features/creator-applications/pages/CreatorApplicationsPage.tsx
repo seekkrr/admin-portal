@@ -1,53 +1,68 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
     UserPlus, AlertTriangle,
-    ChevronLeft, ChevronRight, Filter,
+    Filter, Search, X,
 } from "lucide-react";
 import { useAuthStore } from "@store/auth.store";
 import { AccessDenied } from "@components/AccessDenied";
 import { LoadingFallback } from "@components/LoadingFallback";
-import { FilterDropdown } from "@/features/users/components/FilterDropdown";
-import { usePaginationRange } from "@/features/users/hooks/usePagination";
+import { FilterDropdown } from "@/components/FilterDropdown";
+import { Pagination } from "@/components/ui/Pagination";
 import { creatorApplicationsService } from "../services/creator-applications.service";
 import { ApplicationDetailModal } from "../components/ApplicationDetailModal";
-import type { DropdownOption } from "@/features/users/components/FilterDropdown";
+import type { DropdownOption } from "@/components/FilterDropdown";
 import type { CreatorApplication } from "@/types";
 
 // ---- Constants ----
 const ALLOWED_ROLES = ["admin", "super_admin"];
 const PER_PAGE = 20;
+const SEARCH_DEBOUNCE_MS = 400;
 
 const STATUS_OPTIONS: DropdownOption[] = [
     { value: "", label: "All Statuses" },
     { value: "pending", label: "Pending", dot: "bg-amber-500" },
+    { value: "verifying", label: "Verifying", dot: "bg-blue-500" },
     { value: "approved", label: "Approved", dot: "bg-emerald-500" },
     { value: "rejected", label: "Rejected", dot: "bg-red-500" },
 ];
 
 const statusConfig: Record<CreatorApplication["status"], { label: string; dot: string; bg: string }> = {
     pending: { label: "Pending", dot: "bg-amber-500", bg: "bg-amber-50 text-amber-700 border-amber-200" },
+    verifying: { label: "Verifying", dot: "bg-blue-500", bg: "bg-blue-50 text-blue-700 border-blue-200" },
     approved: { label: "Approved", dot: "bg-emerald-500", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
     rejected: { label: "Rejected", dot: "bg-red-500", bg: "bg-red-50 text-red-700 border-red-200" },
 };
 
 export function CreatorApplicationsPage() {
     const { user: currentUser } = useAuthStore();
-    const hasAccess = !!currentUser && ALLOWED_ROLES.includes(currentUser.role);
+    const hasAccess = !!currentUser && currentUser.role?.some(r => ALLOWED_ROLES.includes(r));
 
     // ---- State ----
-    const [statusFilter, setStatusFilter] = useState<"pending" | "approved" | "rejected" | "">("pending");
+    const [searchInput, setSearchInput] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
+    const [statusFilter, setStatusFilter] = useState<"pending" | "verifying" | "approved" | "rejected" | "">("pending");
     const [page, setPage] = useState(1);
 
     // Modal state
     const [viewingApp, setViewingApp] = useState<CreatorApplication | null>(null);
 
+    // ---- Debounced search ----
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchInput.trim());
+            setPage(1);
+        }, SEARCH_DEBOUNCE_MS);
+        return () => clearTimeout(timer);
+    }, [searchInput]);
+
     // ---- Fetch Applications ----
     const queryParams = useMemo(() => ({
         status: statusFilter ? statusFilter : undefined,
+        search: debouncedSearch || undefined,
         page,
-        limit: PER_PAGE,
-    }), [statusFilter, page]);
+        page_size: PER_PAGE,
+    }), [statusFilter, debouncedSearch, page]);
 
     const { data, isLoading, error } = useQuery({
         queryKey: ["admin-creator-applications", queryParams],
@@ -60,13 +75,16 @@ export function CreatorApplicationsPage() {
     const pendingCount = data?.pending_count ?? 0;
 
     const clearFilters = useCallback(() => {
+        setSearchInput("");
+        setDebouncedSearch("");
         setStatusFilter("");
         setPage(1);
     }, []);
 
+    const hasFilters = !!(searchInput || statusFilter);
+
     // ---- Pagination ----
-    const totalPages = pagination?.total_pages ?? 1;
-    const paginationRange = usePaginationRange(totalPages, page);
+
 
     // ---- Render ----
     if (!hasAccess) {
@@ -98,16 +116,36 @@ export function CreatorApplicationsPage() {
             </div>
 
             {/* Toolbar */}
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 space-y-3 flex items-center gap-3">
+            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 flex flex-wrap items-center gap-3">
+                {/* Search */}
+                <div className="relative flex-1 min-w-[240px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                    <input
+                        type="text"
+                        placeholder="Search by name or email..."
+                        value={searchInput}
+                        onChange={(e) => setSearchInput(e.target.value)}
+                        className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                    />
+                    {searchInput && (
+                        <button
+                            onClick={() => { setSearchInput(""); setDebouncedSearch(""); setPage(1); }}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
+
                 <FilterDropdown
                     options={STATUS_OPTIONS}
                     value={statusFilter}
-                    onChange={(v) => { setStatusFilter(v as "pending" | "approved" | "rejected" | ""); setPage(1); }}
+                    onChange={(v) => { setStatusFilter(v as "pending" | "verifying" | "approved" | "rejected" | ""); setPage(1); }}
                     icon={<Filter className="w-3.5 h-3.5" />}
                     placeholder="Status"
                 />
 
-                {statusFilter && (
+                {hasFilters && (
                     <button
                         onClick={clearFilters}
                         className="px-3 py-2.5 rounded-xl text-sm text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
@@ -140,6 +178,7 @@ export function CreatorApplicationsPage() {
                                     <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Contact</th>
                                     <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Status</th>
                                     <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Applied</th>
+                                    <th className="text-right px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-neutral-50">
@@ -147,13 +186,13 @@ export function CreatorApplicationsPage() {
                                     const sc = statusConfig[u.status];
                                     return (
                                         <tr
-                                            key={u._id}
+                                            key={u.id}
                                             className="transition-colors group hover:bg-neutral-50/80 cursor-pointer"
                                             onClick={() => setViewingApp(u)}
                                         >
                                             <td className="px-4 py-3">
                                                 <div className="font-medium text-neutral-900">{u.name}</div>
-                                                <div className="text-[11px] text-neutral-400 font-mono mt-0.5">{u._id}</div>
+                                                <div className="text-[11px] text-neutral-400 font-mono mt-0.5">{u.id}</div>
                                             </td>
                                             <td className="px-4 py-3">
                                                 <div className="text-neutral-600 truncate max-w-[200px]">{u.email}</div>
@@ -168,6 +207,14 @@ export function CreatorApplicationsPage() {
                                             <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">
                                                 {new Date(u.applied_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
                                             </td>
+                                            <td className="px-4 py-3 text-right">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); setViewingApp(u); }}
+                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-700 text-xs font-medium hover:bg-indigo-50 transition-colors opacity-0 group-hover:opacity-100"
+                                                >
+                                                    Review
+                                                </button>
+                                            </td>
                                         </tr>
                                     );
                                 })}
@@ -177,49 +224,18 @@ export function CreatorApplicationsPage() {
                 )}
 
                 {/* Pagination */}
-                {pagination && pagination.total_pages > 1 && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-100 bg-neutral-50/30">
-                        <span className="text-sm text-neutral-500">
-                            Page <span className="font-medium text-neutral-700">{pagination.page}</span> of <span className="font-medium text-neutral-700">{pagination.total_pages}</span>
-                            <span className="ml-2 text-neutral-400">({pagination.total} total)</span>
-                        </span>
-                        <div className="flex items-center gap-1">
-                            <button
-                                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                disabled={page <= 1}
-                                className="p-2 rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            >
-                                <ChevronLeft className="w-4 h-4" />
-                            </button>
-                            {paginationRange.map((p, idx) =>
-                                p === "..." ? (
-                                    <span key={`ellipsis-${idx}`} className="px-1 text-neutral-400 text-sm">…</span>
-                                ) : (
-                                    <button
-                                        key={p}
-                                        onClick={() => setPage(p as number)}
-                                        className={`min-w-[36px] h-9 rounded-lg text-sm font-medium transition-all ${p === page
-                                            ? "bg-indigo-600 text-white shadow-sm"
-                                            : "text-neutral-600 hover:bg-neutral-100 border border-neutral-200"
-                                            }`}
-                                    >
-                                        {p}
-                                    </button>
-                                )
-                            )}
-                            <button
-                                onClick={() => setPage((p) => Math.min(pagination.total_pages, p + 1))}
-                                disabled={page >= pagination.total_pages}
-                                className="p-2 rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            >
-                                <ChevronRight className="w-4 h-4" />
-                            </button>
-                        </div>
-                    </div>
+                {pagination && (
+                    <Pagination
+                        page={page}
+                        totalPages={pagination.total_pages}
+                        total={pagination.total}
+                        onPageChange={setPage}
+                        theme="indigo"
+                    />
                 )}
             </div>
 
-            {/* Application Detail Modal - For review/approve/reject */}
+            {/* Application Detail Modal */}
             <ApplicationDetailModal
                 open={!!viewingApp}
                 application={viewingApp}
@@ -228,3 +244,4 @@ export function CreatorApplicationsPage() {
         </div>
     );
 }
+

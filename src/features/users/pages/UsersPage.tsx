@@ -1,20 +1,21 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-    Search, Users, Trash2, Ban, ChevronLeft, ChevronRight,
+    Search, Users, Trash2, Ban,
     Shield, RefreshCw, AlertTriangle, CheckCircle2, XCircle,
-    X, Filter
+    X, Filter, Coins, Star, TrendingUp
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@store/auth.store";
 import { AccessDenied } from "@components/AccessDenied";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { usersService } from "../services/users.service";
-import { Badge } from "../components/Badge";
-import { ConfirmModal } from "../components/ConfirmModal";
-import { FilterDropdown } from "../components/FilterDropdown";
-import { usePaginationRange } from "../hooks/usePagination";
-import type { DropdownOption } from "../components/FilterDropdown";
+import { creatorsService } from "@/features/creators/services/creators.service";
+import { Badge } from "@/components/ui/Badge";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { Pagination } from "@/components/ui/Pagination";
+import { FilterDropdown } from "@/components/FilterDropdown";
+import type { DropdownOption } from "@/components/FilterDropdown";
 import type { User } from "@/types";
 
 // ---- Constants ----
@@ -59,7 +60,8 @@ type ConfirmAction =
     | { type: "suspend"; payload: { ids: string[] } }
     | { type: "bulk-delete"; payload: { ids: string[] } }
     | { type: "single-delete"; payload: { userId: string } }
-    | { type: "promote"; payload: { userId: string; role: string } };
+    | { type: "promote"; payload: { userId: string; role: string } }
+    | { type: "promote-creator"; payload: { userId: string; name: string } };
 
 // ---- Filter Dropdown Options ----
 const STATUS_OPTIONS: DropdownOption[] = [
@@ -83,11 +85,115 @@ const CREATOR_OPTIONS: DropdownOption[] = [
     { value: "false", label: "Non-Creators", dot: "bg-neutral-400" },
 ];
 
+// ---- Points Modal ----
+interface PointsModalProps {
+    userId: string;
+    userName: string;
+    currentPoints: number;
+    onClose: () => void;
+}
+
+function PointsModal({ userId, userName, currentPoints, onClose }: PointsModalProps) {
+    const queryClient = useQueryClient();
+    const [amount, setAmount] = useState("");
+    const [mode, setMode] = useState<"add" | "deduct">("add");
+
+    useEffect(() => {
+        setAmount("");
+        setMode("add");
+    }, [userId]);
+
+    const addMutation = useMutation({
+        mutationFn: (amt: number) => usersService.addPoints(userId, amt),
+        onSuccess: (data, amt) => {
+            toast.success(`Added ${amt} points. New total: ${data.points_earned}`);
+            queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+            onClose();
+        },
+        onError: (err: Error) => toast.error(err.message),
+    });
+
+    const deductMutation = useMutation({
+        mutationFn: (amt: number) => usersService.deductPoints(userId, amt),
+        onSuccess: (data, amt) => {
+            toast.success(`Deducted ${amt} points. New total: ${data.points_earned}`);
+            queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+            onClose();
+        },
+        onError: (err: Error) => toast.error(err.message),
+    });
+
+    const isBusy = addMutation.isPending || deductMutation.isPending;
+    const parsedAmount = parseInt(amount, 10);
+    const isValid = !isNaN(parsedAmount) && parsedAmount > 0;
+
+    const handleSubmit = () => {
+        if (!isValid) return;
+        if (mode === "add") addMutation.mutate(parsedAmount);
+        else deductMutation.mutate(parsedAmount);
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4 animate-slide-up" onClick={(e) => e.stopPropagation()}>
+                <h3 className="text-lg font-bold text-neutral-900 mb-1 flex items-center gap-2">
+                    <Coins className="w-5 h-5 text-amber-500" /> Manage Points
+                </h3>
+                <div className="flex items-center justify-between mb-5">
+                    <p className="text-sm text-neutral-500">{userName}</p>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-xs font-semibold text-amber-700">
+                        <Coins className="w-3 h-3" /> {currentPoints.toLocaleString()} pts
+                    </span>
+                </div>
+
+                <div className="flex rounded-xl overflow-hidden border border-neutral-200 mb-4">
+                    <button
+                        className={`flex-1 py-2 text-sm font-medium transition-colors ${mode === "add" ? "bg-emerald-600 text-white" : "text-neutral-600 hover:bg-neutral-50"}`}
+                        onClick={() => setMode("add")}
+                    >
+                        Add Points
+                    </button>
+                    <button
+                        className={`flex-1 py-2 text-sm font-medium transition-colors ${mode === "deduct" ? "bg-red-600 text-white" : "text-neutral-600 hover:bg-neutral-50"}`}
+                        onClick={() => setMode("deduct")}
+                    >
+                        Deduct Points
+                    </button>
+                </div>
+
+                <input
+                    type="number"
+                    min={1}
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="Enter amount..."
+                    className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4"
+                    disabled={isBusy}
+                    onKeyDown={(e) => { if (e.key === "Enter" && isValid) handleSubmit(); }}
+                />
+
+                <div className="flex gap-2">
+                    <button onClick={onClose} disabled={isBusy} className="flex-1 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-600 hover:bg-neutral-50 transition-colors disabled:opacity-50">
+                        Cancel
+                    </button>
+                    <button
+                        onClick={handleSubmit}
+                        disabled={!isValid || isBusy}
+                        className={`flex-1 py-2.5 rounded-xl text-white text-sm font-medium transition-colors disabled:opacity-50 ${mode === "add" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"}`}
+                    >
+                        {isBusy ? "Saving..." : mode === "add" ? "Add" : "Deduct"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ---- Main Component ----
 export function UsersPage() {
     const { user: currentUser } = useAuthStore();
     const queryClient = useQueryClient();
-    const isAdmin = !!currentUser && ADMIN_ROLES.includes(currentUser.role);
+    const isAdmin = !!currentUser && currentUser.role?.some(r => ADMIN_ROLES.includes(r));
 
     // ---- State ----
     const [searchInput, setSearchInput] = useState("");
@@ -98,6 +204,7 @@ export function UsersPage() {
     const [page, setPage] = useState(1);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(() => loadSessionSelections());
     const [promotingUser, setPromotingUser] = useState<User | null>(null);
+    const [pointsUser, setPointsUser] = useState<User | null>(null);
 
     // Confirmation state — discriminated union for type safety
     const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
@@ -118,6 +225,13 @@ export function UsersPage() {
     // Reset hard delete toggle when modal closes
     useEffect(() => { if (!confirmAction) setHardDelete(false); }, [confirmAction]);
 
+    // ---- Fetch User Stats ----
+    const { data: statsData } = useQuery({
+        queryKey: ["admin-user-stats"],
+        queryFn: () => usersService.getUserStats(),
+        staleTime: 60_000,
+    });
+
     // ---- Fetch Users ----
     const queryParams = useMemo(() => ({
         q: debouncedQuery || undefined,
@@ -125,7 +239,7 @@ export function UsersPage() {
         role: roleFilter || undefined,
         is_creator: creatorFilter || undefined,
         page,
-        per_page: PER_PAGE,
+        page_size: PER_PAGE,
     }), [debouncedQuery, statusFilter, roleFilter, creatorFilter, page]);
 
     const { data, isLoading, error } = useQuery({
@@ -155,6 +269,7 @@ export function UsersPage() {
             if (result.succeeded.length > 0) {
                 toast.success(result.summary);
                 queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+                queryClient.invalidateQueries({ queryKey: ["admin-user-stats"] });
                 setSelectedIds((prev) => {
                     const next = new Set(prev);
                     result.succeeded.forEach((id) => next.delete(id));
@@ -186,11 +301,25 @@ export function UsersPage() {
         onSuccess: (_, { userId }) => {
             toast.success("User deleted");
             queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+            queryClient.invalidateQueries({ queryKey: ["admin-user-stats"] });
             setSelectedIds((prev) => {
                 const next = new Set(prev);
                 next.delete(userId);
                 return next;
             });
+            setConfirmAction(null);
+        },
+        onError: (err: Error) => { toast.error(err.message); setConfirmAction(null); },
+    });
+
+    const promoteCreatorMutation = useMutation({
+        mutationFn: (userId: string) => creatorsService.provisionCreator(userId),
+        onSuccess: () => {
+            toast.success("User promoted to creator");
+            queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+            queryClient.invalidateQueries({ queryKey: ["admin-creators"] });
+            queryClient.invalidateQueries({ queryKey: ["admin-user-stats"] });
+            queryClient.invalidateQueries({ queryKey: ["admin-creator-platform-stats"] });
             setConfirmAction(null);
         },
         onError: (err: Error) => { toast.error(err.message); setConfirmAction(null); },
@@ -229,7 +358,7 @@ export function UsersPage() {
         setPage(1);
     }, []);
 
-    const isBusy = bulkActionMutation.isPending || roleMutation.isPending || deleteMutation.isPending;
+    const isBusy = bulkActionMutation.isPending || roleMutation.isPending || deleteMutation.isPending || promoteCreatorMutation.isPending;
     const allOnPageSelected = filteredUsers.length > 0 && filteredUsers.every((u) => selectedIds.has(u._id));
 
     // ---- Confirm handler (type-safe via switch) ----
@@ -248,12 +377,11 @@ export function UsersPage() {
             case "promote":
                 roleMutation.mutate(confirmAction.payload);
                 break;
+            case "promote-creator":
+                promoteCreatorMutation.mutate(confirmAction.payload.userId);
+                break;
         }
-    }, [confirmAction, bulkActionMutation, deleteMutation, roleMutation, hardDelete]);
-
-    // ---- Pagination ----
-    const totalPages = pagination?.total_pages ?? 1;
-    const paginationRange = usePaginationRange(totalPages, page);
+    }, [confirmAction, bulkActionMutation, deleteMutation, roleMutation, promoteCreatorMutation, hardDelete]);
 
     // ---- Render ----
     if (!isAdmin) {
@@ -276,6 +404,45 @@ export function UsersPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Stats Panel */}
+            {statsData && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                            <Users className="w-4 h-4 text-indigo-500" />
+                            <span className="text-xs text-neutral-500 uppercase tracking-wider font-semibold">Total</span>
+                        </div>
+                        <div className="text-2xl font-bold text-neutral-900">{statsData.total?.toLocaleString() ?? "—"}</div>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                            <TrendingUp className="w-4 h-4 text-emerald-500" />
+                            <span className="text-xs text-neutral-500 uppercase tracking-wider font-semibold">Active</span>
+                        </div>
+                        <div className="text-2xl font-bold text-emerald-700">{(statsData.by_status?.active ?? 0).toLocaleString()}</div>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                            <Star className="w-4 h-4 text-teal-500" />
+                            <span className="text-xs text-neutral-500 uppercase tracking-wider font-semibold">Creators</span>
+                        </div>
+                        <div className="text-2xl font-bold text-teal-700">{statsData.creators?.toLocaleString() ?? "—"}</div>
+                        {(statsData.creators_by_status?.suspended ?? 0) > 0 && (
+                            <div className="text-xs text-amber-600 mt-1 font-medium">
+                                {statsData.creators_by_status?.suspended} suspended
+                            </div>
+                        )}
+                    </div>
+                    <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                            <TrendingUp className="w-4 h-4 text-blue-500" />
+                            <span className="text-xs text-neutral-500 uppercase tracking-wider font-semibold">New (7d)</span>
+                        </div>
+                        <div className="text-2xl font-bold text-blue-700">{(statsData.new_last_7_days ?? 0).toLocaleString()}</div>
+                    </div>
+                </div>
+            )}
 
             {/* Toolbar */}
             <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 space-y-3">
@@ -406,7 +573,9 @@ export function UsersPage() {
                             <tbody className="divide-y divide-neutral-50">
                                 {filteredUsers.map((u) => {
                                     const sc = statusConfig[u.status] || { label: u.status, dot: "bg-neutral-400", bg: "bg-neutral-50 text-neutral-600 border-neutral-200" };
-                                    const rc = roleConfig[u.role] || { label: u.role, bg: "bg-neutral-50 text-neutral-600 border-neutral-200" };
+                                    const ROLE_PRIORITY = ["super_admin", "admin", "finance", "moderator", "creator", "user"];
+                                    const primaryRole = ROLE_PRIORITY.find(r => (u.role as readonly string[] | undefined)?.includes(r)) || u.role?.[0] || "user";
+                                    const rc = roleConfig[primaryRole] || { label: primaryRole, bg: "bg-neutral-50 text-neutral-600 border-neutral-200" };
                                     return (
                                         <tr
                                             key={u._id}
@@ -448,6 +617,22 @@ export function UsersPage() {
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
                                                     <button
+                                                        onClick={() => setPointsUser(u)}
+                                                        title="Manage points"
+                                                        className="p-1.5 rounded-lg text-neutral-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                                    >
+                                                        <Coins className="w-4 h-4" />
+                                                    </button>
+                                                    {!u.is_creator && (
+                                                        <button
+                                                            onClick={() => setConfirmAction({ type: "promote-creator", payload: { userId: u._id, name: `${u.first_name} ${u.last_name}` } })}
+                                                            title="Promote to creator"
+                                                            className="p-1.5 rounded-lg text-neutral-400 hover:text-teal-600 hover:bg-teal-50 transition-colors"
+                                                        >
+                                                            <Star className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    <button
                                                         onClick={() => setPromotingUser(u)}
                                                         title="Change role"
                                                         className="p-1.5 rounded-lg text-neutral-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
@@ -472,47 +657,23 @@ export function UsersPage() {
                 )}
 
                 {/* Pagination */}
-                {pagination && pagination.total_pages > 1 && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-100 bg-neutral-50/30">
-                        <span className="text-sm text-neutral-500">
-                            Page <span className="font-medium text-neutral-700">{pagination.page}</span> of <span className="font-medium text-neutral-700">{pagination.total_pages}</span>
-                            <span className="ml-2 text-neutral-400">({pagination.total} total)</span>
-                        </span>
-                        <div className="flex items-center gap-1">
-                            <button
-                                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                disabled={page <= 1}
-                                className="p-2 rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            >
-                                <ChevronLeft className="w-4 h-4" />
-                            </button>
-                            {paginationRange.map((p, idx) =>
-                                p === "..." ? (
-                                    <span key={`ellipsis-${idx}`} className="px-1 text-neutral-400 text-sm">…</span>
-                                ) : (
-                                    <button
-                                        key={p}
-                                        onClick={() => setPage(p)}
-                                        className={`min-w-[36px] h-9 rounded-lg text-sm font-medium transition-all ${p === page
-                                            ? "bg-indigo-600 text-white shadow-sm"
-                                            : "text-neutral-600 hover:bg-neutral-100 border border-neutral-200"
-                                            }`}
-                                    >
-                                        {p}
-                                    </button>
-                                )
-                            )}
-                            <button
-                                onClick={() => setPage((p) => Math.min(pagination.total_pages, p + 1))}
-                                disabled={page >= pagination.total_pages}
-                                className="p-2 rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            >
-                                <ChevronRight className="w-4 h-4" />
-                            </button>
-                        </div>
-                    </div>
-                )}
+                <Pagination
+                    page={page}
+                    totalPages={pagination?.total_pages ?? 1}
+                    total={pagination?.total ?? 0}
+                    onPageChange={setPage}
+                />
             </div>
+
+            {/* Points Modal */}
+            {pointsUser && (
+                <PointsModal
+                    userId={pointsUser._id}
+                    userName={`${pointsUser.first_name} ${pointsUser.last_name}`}
+                    currentPoints={pointsUser.points_earned}
+                    onClose={() => setPointsUser(null)}
+                />
+            )}
 
             {/* Role Promotion Modal */}
             {promotingUser && (
@@ -521,23 +682,29 @@ export function UsersPage() {
                         <h3 className="text-lg font-bold text-neutral-900 mb-1">Change Role</h3>
                         <p className="text-sm text-neutral-500 mb-5 flex items-center gap-2">
                             {promotingUser.first_name} {promotingUser.last_name}
-                            <Badge label={promotingUser.role} styles={roleConfig[promotingUser.role]?.bg} />
+                            <Badge
+                                label={promotingUser.role?.join(", ") ?? "user"}
+                                styles={roleConfig[["super_admin","admin","finance","moderator","creator","user"].find(r => (promotingUser.role as readonly string[] | undefined)?.includes(r)) ?? "user"]?.bg ?? ""}
+                            />
                         </p>
                         <div className="space-y-2">
                             {PROMOTABLE_ROLES.map((role) => (
                                 <button
                                     key={role}
-                                    disabled={promotingUser.role === role || roleMutation.isPending}
-                                    onClick={() => setConfirmAction({ type: "promote", payload: { userId: promotingUser._id, role } })}
+                                    disabled={promotingUser.role?.includes(role) || roleMutation.isPending}
+                                    onClick={() => {
+                                        setPromotingUser(null);
+                                        setConfirmAction({ type: "promote", payload: { userId: promotingUser._id, role } });
+                                    }}
                                     className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all
-                                        ${promotingUser.role === role
+                                        ${promotingUser.role?.includes(role)
                                             ? "border-indigo-300 bg-indigo-50 text-indigo-700 cursor-default"
                                             : "border-neutral-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-neutral-700"
                                         }
                                         disabled:opacity-50`}
                                 >
                                     <span className="capitalize">{role.replace("_", " ")}</span>
-                                    {promotingUser.role === role && <span className="text-xs text-indigo-500">Current</span>}
+                                    {promotingUser.role?.includes(role) && <span className="text-xs text-indigo-500">Current</span>}
                                 </button>
                             ))}
                         </div>
@@ -566,7 +733,6 @@ export function UsersPage() {
                 onCancel={() => setConfirmAction(null)}
                 isPending={bulkActionMutation.isPending || deleteMutation.isPending}
             >
-                {/* Hard delete toggle for single-user deletion only */}
                 {confirmAction?.type === "single-delete" && (
                     <label className="flex items-center gap-2 mt-3 mb-1 px-1 cursor-pointer select-none">
                         <input
@@ -592,7 +758,7 @@ export function UsersPage() {
                 isPending={bulkActionMutation.isPending}
             />
 
-            {/* Promote Confirmation */}
+            {/* Promote Role Confirmation */}
             <ConfirmModal
                 open={confirmAction?.type === "promote"}
                 title="Change Role"
@@ -600,8 +766,20 @@ export function UsersPage() {
                 confirmLabel="Change Role"
                 confirmStyle="bg-indigo-600 hover:bg-indigo-700"
                 onConfirm={executeConfirmedAction}
-                onCancel={() => setConfirmAction(null)}
+                onCancel={() => { setConfirmAction(null); setPromotingUser(null); }}
                 isPending={roleMutation.isPending}
+            />
+
+            {/* Promote to Creator Confirmation */}
+            <ConfirmModal
+                open={confirmAction?.type === "promote-creator"}
+                title="Promote to Creator"
+                message={`This will promote "${confirmAction?.type === "promote-creator" ? confirmAction.payload.name : ""}" to creator status, bypassing the application workflow. This action cannot be reversed automatically.`}
+                confirmLabel="Promote to Creator"
+                confirmStyle="bg-teal-600 hover:bg-teal-700"
+                onConfirm={executeConfirmedAction}
+                onCancel={() => setConfirmAction(null)}
+                isPending={promoteCreatorMutation.isPending}
             />
 
             {/* Loading overlay for mutations */}
@@ -613,3 +791,4 @@ export function UsersPage() {
         </div>
     );
 }
+

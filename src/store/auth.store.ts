@@ -86,7 +86,8 @@ export const useAuthStore = create<AuthStore>()(
 
                     // RBAC Check
                     // RBAC Check
-                    if (!ALLOWED_ADMIN_ROLES.includes(user.role as any)) {
+                    const hasAdminRole = user.role?.some(r => (ALLOWED_ADMIN_ROLES as readonly string[]).includes(r));
+                    if (!hasAdminRole) {
                         set({
                             user, // Set user temporarily so we know who it is, or maybe just fail authentication?
                             // Actually, keeping them authenticated but marking them as unauthorized for specific routes might be better,

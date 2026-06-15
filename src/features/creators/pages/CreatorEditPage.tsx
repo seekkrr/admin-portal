@@ -1,67 +1,60 @@
-import { type ReactNode, useCallback } from "react";
+import { type ReactNode, useCallback, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-    ArrowLeft, RefreshCw, Award, DollarSign, Eye,
-    TrendingUp, CreditCard, Shield, CheckCircle2,
-    AlertTriangle, Edit2,
+    ArrowLeft, RefreshCw, Award, DollarSign,
+    TrendingUp, Shield, CheckCircle2,
+    AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Badge } from "@/features/users/components/Badge";
-import { ConfirmModal } from "@/features/users/components/ConfirmModal";
+import { Badge } from "@/components/ui/Badge";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { AccessDenied } from "@components/AccessDenied";
 import { useAuthStore } from "@store/auth.store";
 import { creatorsService } from "../services/creators.service";
-import { PayoutForm } from "../components/PayoutForm";
-import type { PayoutAccountRequest } from "../services/creators.service";
-import { useState } from "react";
 
 // ---- Creator verification statuses ----
-const CREATOR_STATUSES = ["pending", "approved", "rejected", "suspended"] as const;
+const CREATOR_STATUSES = ["active", "suspended", "rejected"] as const;
 
 const statusConfig: Record<string, { label: string; dot: string; bg: string }> = {
-    pending: { label: "Pending", dot: "bg-amber-500", bg: "bg-amber-50 text-amber-700 border-amber-200" },
-    approved: { label: "Approved", dot: "bg-emerald-500", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    active: { label: "Active", dot: "bg-emerald-500", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
     rejected: { label: "Rejected", dot: "bg-red-500", bg: "bg-red-50 text-red-700 border-red-200" },
     suspended: { label: "Suspended", dot: "bg-neutral-500", bg: "bg-neutral-100 text-neutral-700 border-neutral-300" },
 };
 
-// ---- Discriminated union for confirm actions ----
 type ConfirmAction =
-    | { type: "status-change"; payload: { status: "pending" | "approved" | "rejected" | "suspended" } };
+    | { type: "status-change"; payload: { status: "active" | "rejected" | "suspended" } }
+    | { type: "verify"; payload: { is_verified: boolean } };
 
 const ALLOWED_ROLES = ["admin", "super_admin", "finance"];
 
 export function CreatorEditPage() {
-    const { userId } = useParams<{ userId: string }>();
+    const { creatorId: creatorIdParam } = useParams<{ creatorId: string }>();
+    const creatorId = creatorIdParam ?? "";
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { user: currentUser } = useAuthStore();
-    const hasAccess = !!currentUser && ALLOWED_ROLES.includes(currentUser.role);
+    const hasAccess = !!currentUser && currentUser.role?.some(r => ALLOWED_ROLES.includes(r));
 
-    const [editingPayout, setEditingPayout] = useState(false);
     const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
 
-    // ---- Fetch creator details ----
-    const { data, isLoading, error } = useQuery({
-        queryKey: ["creator-detail", userId],
-        queryFn: () => creatorsService.getCreatorDetails(userId!),
-        enabled: !!userId,
+    // ---- Fetch creator by creator ID ----
+    const { data: creator, isLoading, error } = useQuery({
+        queryKey: ["creator-detail", creatorId],
+        queryFn: () => creatorsService.getCreator(creatorId),
+        enabled: !!creatorId,
     });
 
-    const creator = data?.creator_profile;
-    const user = data?.user_profile;
-    const stats = data?.stats;
-    const payout = data?.payout_account;
-    const sc = creator ? statusConfig[creator.status] ?? statusConfig.pending : null;
+    const sc = creator ? statusConfig[creator.status] ?? statusConfig.active : null;
+    const displayName = creator?.name ?? creatorId ?? "Creator";
 
-    // ---- Status mutation ----
-    const statusMutation = useMutation({
-        mutationFn: ({ status }: { status: "pending" | "approved" | "rejected" | "suspended" }) =>
-            creatorsService.updateCreatorStatus(userId!, status),
+    // ---- Update mutation (status + is_verified) ----
+    const updateMutation = useMutation({
+        mutationFn: (updates: { status?: string; is_verified?: boolean }) =>
+            creatorsService.updateCreator(creatorId, updates),
         onSuccess: () => {
-            toast.success("Creator status updated");
-            queryClient.invalidateQueries({ queryKey: ["creator-detail", userId] });
+            toast.success("Creator updated");
+            queryClient.invalidateQueries({ queryKey: ["creator-detail", creatorId] });
             queryClient.invalidateQueries({ queryKey: ["admin-creators"] });
             setConfirmAction(null);
         },
@@ -71,48 +64,14 @@ export function CreatorEditPage() {
         },
     });
 
-    // ---- Payout mutations ----
-    const addPayoutMutation = useMutation({
-        mutationFn: (data: PayoutAccountRequest) =>
-            creatorsService.addPayoutAccount(userId!, data),
-        onSuccess: () => {
-            toast.success("Payout account added");
-            queryClient.invalidateQueries({ queryKey: ["creator-detail", userId] });
-            setEditingPayout(false);
-        },
-        onError: (err: Error) => toast.error(err.message),
-    });
-
-    const updatePayoutMutation = useMutation({
-        mutationFn: (data: PayoutAccountRequest) =>
-            creatorsService.updatePayoutAccount(userId!, data),
-        onSuccess: () => {
-            toast.success("Payout account updated");
-            queryClient.invalidateQueries({ queryKey: ["creator-detail", userId] });
-            setEditingPayout(false);
-        },
-        onError: (err: Error) => toast.error(err.message),
-    });
-
-    const handlePayoutSubmit = useCallback(
-        (data: PayoutAccountRequest) => {
-            if (payout) {
-                updatePayoutMutation.mutate(data);
-            } else {
-                addPayoutMutation.mutate(data);
-            }
-        },
-        [payout, addPayoutMutation, updatePayoutMutation]
-    );
-
     const executeConfirmedAction = useCallback(() => {
         if (!confirmAction) return;
         if (confirmAction.type === "status-change") {
-            statusMutation.mutate({ status: confirmAction.payload.status });
+            updateMutation.mutate({ status: confirmAction.payload.status });
+        } else if (confirmAction.type === "verify") {
+            updateMutation.mutate({ is_verified: confirmAction.payload.is_verified });
         }
-    }, [confirmAction, statusMutation]);
-
-    const payoutPending = addPayoutMutation.isPending || updatePayoutMutation.isPending;
+    }, [confirmAction, updateMutation]);
 
     // ---- Render ----
     if (!hasAccess) {
@@ -127,7 +86,7 @@ export function CreatorEditPage() {
         );
     }
 
-    if (error || !data) {
+    if (error || !creator) {
         return (
             <div className="flex flex-col items-center justify-center py-32 text-red-500 gap-3">
                 <AlertTriangle className="w-8 h-8" />
@@ -153,9 +112,7 @@ export function CreatorEditPage() {
                     <ArrowLeft className="w-5 h-5" />
                 </button>
                 <div className="flex-1">
-                    <h1 className="text-2xl font-bold text-neutral-900">
-                        {user?.first_name} {user?.last_name}
-                    </h1>
+                    <h1 className="text-2xl font-bold text-neutral-900">{displayName}</h1>
                     <div className="flex items-center gap-2 mt-1">
                         {sc && (
                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${sc.bg}`}>
@@ -163,10 +120,10 @@ export function CreatorEditPage() {
                                 {sc.label}
                             </span>
                         )}
-                        {creator?.is_verified && (
+                        {creator.is_verified && (
                             <Badge label="Verified" styles="bg-emerald-50 text-emerald-700 border-emerald-200" />
                         )}
-                        <span className="text-xs text-neutral-400 font-mono ml-2">{userId}</span>
+                        <span className="text-xs text-neutral-400 font-mono ml-2">{creatorId}</span>
                     </div>
                 </div>
             </div>
@@ -180,17 +137,17 @@ export function CreatorEditPage() {
                     <StatCard
                         icon={<Award className="w-5 h-5 text-indigo-500" />}
                         label="Total Quests"
-                        value={stats?.total_quests ?? 0}
+                        value={creator.total_quests ?? 0}
                     />
                     <StatCard
                         icon={<DollarSign className="w-5 h-5 text-emerald-500" />}
                         label="Total Earnings"
-                        value={`₹${(stats?.total_earnings ?? 0).toLocaleString("en-IN")}`}
+                        value={`₹${(creator.total_earnings ?? 0).toLocaleString("en-IN")}`}
                     />
                     <StatCard
-                        icon={<Eye className="w-5 h-5 text-violet-500" />}
-                        label="Impressions"
-                        value={(stats?.impressions ?? 0).toLocaleString()}
+                        icon={<Award className="w-5 h-5 text-violet-500" />}
+                        label="Rating"
+                        value={creator.rating ?? "—"}
                     />
                 </div>
             </section>
@@ -200,14 +157,14 @@ export function CreatorEditPage() {
                 <h2 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider mb-4 flex items-center gap-2">
                     <Shield className="w-4 h-4" /> Verification Status
                 </h2>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                     {CREATOR_STATUSES.map((status) => {
                         const cfg = statusConfig[status];
-                        const isCurrent = creator?.status === status;
+                        const isCurrent = creator.status === status;
                         return (
                             <button
                                 key={status}
-                                disabled={isCurrent || statusMutation.isPending}
+                                disabled={isCurrent || updateMutation.isPending}
                                 onClick={() =>
                                     setConfirmAction({
                                         type: "status-change",
@@ -232,73 +189,52 @@ export function CreatorEditPage() {
                         );
                     })}
                 </div>
-            </section>
 
-            {/* Payout Management */}
-            <section className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-2">
-                        <CreditCard className="w-4 h-4" /> Payout Account
-                    </h2>
-                    {payout && !editingPayout && (
-                        <button
-                            onClick={() => setEditingPayout(true)}
-                            className="inline-flex items-center gap-1.5 text-sm text-teal-600 hover:text-teal-700 font-medium"
-                        >
-                            <Edit2 className="w-3.5 h-3.5" /> Edit
-                        </button>
-                    )}
+                {/* Verification toggle */}
+                <div className="pt-4 border-t border-neutral-100">
+                    <button
+                        disabled={updateMutation.isPending}
+                        onClick={() => setConfirmAction({ type: "verify", payload: { is_verified: !creator.is_verified } })}
+                        className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors disabled:opacity-50 ${
+                            creator.is_verified
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                : "border-neutral-200 text-neutral-700 hover:bg-neutral-50"
+                        }`}
+                    >
+                        <CheckCircle2 className="w-4 h-4" />
+                        {creator.is_verified ? "Verified — click to unverify" : "Not verified — click to verify"}
+                    </button>
                 </div>
-
-                {editingPayout || !payout ? (
-                    <PayoutForm
-                        existingPayout={payout ?? null}
-                        isPending={payoutPending}
-                        onSubmit={handlePayoutSubmit}
-                        onCancel={() => {
-                            if (payout) {
-                                setEditingPayout(false);
-                            } else {
-                                navigate("/creators");
-                            }
-                        }}
-                    />
-                ) : (
-                    <div className="bg-neutral-50 rounded-xl border border-neutral-200 p-5 space-y-3 text-sm">
-                        <PayoutRow label="Method" value={<span className="capitalize">{payout.method}</span>} />
-                        {payout.method === "bank" && payout.bank_details && (
-                            <>
-                                <PayoutRow label="Account Holder" value={payout.bank_details.account_holder} />
-                                <PayoutRow label="Account Number" value={<span className="font-mono">••{String(payout.bank_details.account_number).slice(-4)}</span>} />
-                                <PayoutRow label="IFSC Code" value={<span className="font-mono">{payout.bank_details.ifsc_code}</span>} />
-                            </>
-                        )}
-                        {payout.method === "upi" && payout.upi_id && (
-                            <PayoutRow label="UPI ID" value={<span className="font-mono">{payout.upi_id}</span>} />
-                        )}
-                        <PayoutRow label="Currency" value={payout.currency} />
-                    </div>
-                )}
             </section>
 
             {/* Status Change Confirmation Modal */}
             <ConfirmModal
                 open={confirmAction?.type === "status-change"}
                 title="Change Creator Status"
-                message={`You are about to change this creator's status to "${confirmAction?.type === "status-change"
-                    ? confirmAction.payload.status
-                    : ""
-                    }". This will take effect immediately.`}
+                message={`Change this creator's status to "${confirmAction?.type === "status-change" ? confirmAction.payload.status : ""}"?`}
                 confirmLabel="Change Status"
                 confirmStyle="bg-teal-600 hover:bg-teal-700"
                 onConfirm={executeConfirmedAction}
                 onCancel={() => setConfirmAction(null)}
-                isPending={statusMutation.isPending}
+                isPending={updateMutation.isPending}
                 theme="warning"
             />
 
-            {/* Loading overlay for mutations */}
-            {(statusMutation.isPending || payoutPending) && !confirmAction && (
+            <ConfirmModal
+                open={confirmAction?.type === "verify"}
+                title={confirmAction?.type === "verify" && confirmAction.payload.is_verified ? "Verify Creator" : "Unverify Creator"}
+                message={confirmAction?.type === "verify" && confirmAction.payload.is_verified
+                    ? "Mark this creator as verified? They will be eligible for payouts."
+                    : "Remove verification from this creator?"}
+                confirmLabel={confirmAction?.type === "verify" && confirmAction.payload.is_verified ? "Verify" : "Unverify"}
+                confirmStyle="bg-emerald-600 hover:bg-emerald-700"
+                onConfirm={executeConfirmedAction}
+                onCancel={() => setConfirmAction(null)}
+                isPending={updateMutation.isPending}
+            />
+
+            {/* Loading overlay */}
+            {updateMutation.isPending && !confirmAction && (
                 <div className="fixed inset-0 z-40 bg-white/60 flex items-center justify-center">
                     <RefreshCw className="w-6 h-6 text-teal-600 animate-spin" />
                 </div>
@@ -322,12 +258,3 @@ function StatCard({ icon, label, value }: { icon: ReactNode; label: string; valu
     );
 }
 
-// ---- Payout Row ----
-function PayoutRow({ label, value }: { label: string; value: ReactNode }) {
-    return (
-        <div className="flex justify-between items-center">
-            <span className="text-neutral-500">{label}</span>
-            <span className="font-medium text-neutral-800">{value}</span>
-        </div>
-    );
-}
