@@ -232,7 +232,6 @@ export function ExploreMap({ questId, detail, focusMarkerId }: ExploreMapProps) 
                 map.setConfigProperty("basemap", "showTransitLabels", false);
             } catch { /* non-standard style */ }
             map.setFog(TOD_THEMES.dusk.fog);
-            try { map.setLights(TOD_THEMES.dusk.lights); } catch { /* lights unsupported */ }
             try {
                 map.addSource("mapbox-dem", {
                     type: "raster-dem", url: "mapbox://mapbox.mapbox-terrain-dem-v1", tileSize: 512, maxzoom: 14,
@@ -262,8 +261,8 @@ export function ExploreMap({ questId, detail, focusMarkerId }: ExploreMapProps) 
     useEffect(() => {
         const map = mapRef.current;
         if (!map || !mapReady) return;
+        // Native Standard preset drives time-of-day colors AND 3D-building shadows.
         try { map.setConfigProperty("basemap", "lightPreset", theme.lightPreset); } catch { /* ignore */ }
-        try { map.setLights(theme.lights); } catch { /* lights unsupported */ }
         map.setFog(theme.fog);
     }, [theme, mapReady]);
 
