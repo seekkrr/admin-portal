@@ -1,6 +1,7 @@
 import { api } from "@/services/api";
 import { API_ENDPOINTS } from "@/config/api";
 import type { User } from "@/types";
+import { rolesForTarget } from "../roles";
 
 // ---- Response Types ----
 
@@ -143,10 +144,12 @@ export const usersService = {
         return response.data.user;
     },
 
-    updateUserRole: async (userId: string, role: string): Promise<User> => {
+    updateUserRole: async (userId: string, target: string, current: string[] = []): Promise<User> => {
+        // Send the full cumulative ladder, not just the picked tier — replacing
+        // the array with a single role would drop "user" and any lower tiers.
         const response = await api.put<{ success: boolean; user: User }>(
             API_ENDPOINTS.CORE.USER_BY_ID(userId),
-            { role: [role] }
+            { role: rolesForTarget(target, current) }
         );
         return response.data.user;
     },

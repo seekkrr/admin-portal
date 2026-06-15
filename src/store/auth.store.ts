@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { ALLOWED_ADMIN_ROLES, type User, type AuthTokens } from "@/types";
+import { ALLOWED_ADMIN_ROLES, normalizeUser, type User, type AuthTokens } from "@/types";
 import { authService } from "@services/auth.service";
 import { authStorage } from "@services/api";
 
@@ -125,6 +125,13 @@ export const useAuthStore = create<AuthStore>()(
                 user: state.user,
                 isAuthenticated: state.isAuthenticated,
             }),
+            // A user persisted by an older build may have `role` as a string;
+            // normalize on rehydration so the route guard's `role.some(...)`
+            // never throws before checkAuth() re-fetches.
+            merge: (persisted, current) => {
+                const p = (persisted ?? {}) as Partial<AuthState>;
+                return { ...current, ...p, user: p.user ? normalizeUser(p.user) : current.user };
+            },
         }
     )
 );

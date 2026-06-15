@@ -16,6 +16,20 @@ export interface User {
     updated_at: string;
 }
 
+/**
+ * Backend role shape is inconsistent: V2 `/auth/verify` may return `role` as a
+ * single string (e.g. "admin") OR an array. The whole portal assumes an array
+ * (`user.role.some(...)`). Coerce here at the boundary so every consumer is
+ * safe — a string-typed role from prod was white-screening the route guard
+ * with "role.some is not a function".
+ */
+export function normalizeUser<T extends { role?: unknown } | null | undefined>(user: T): T {
+    if (!user || typeof user !== "object") return user;
+    const raw = (user as { role?: unknown }).role;
+    const role = Array.isArray(raw) ? raw : raw === null || raw === undefined ? [] : [raw];
+    return { ...(user as object), role } as T;
+}
+
 export interface UserProfile {
     _id: string;
     bio?: string;
