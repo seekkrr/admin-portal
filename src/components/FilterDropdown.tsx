@@ -64,7 +64,7 @@ export function FilterDropdown({ options, value, onChange, icon, placeholder, th
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
             </button>
             {open && (
-                <div className="absolute top-full mt-1.5 left-0 z-30 min-w-[190px] bg-white rounded-xl border border-neutral-200/80 shadow-xl ring-1 ring-neutral-900/5 p-1 origin-top-left animate-scale-in" role="listbox">
+                <div className="absolute top-full mt-1.5 left-0 z-30 min-w-[190px] max-h-[320px] overflow-y-auto bg-white rounded-xl border border-neutral-200/80 shadow-xl ring-1 ring-neutral-900/5 p-1 origin-top-left animate-scale-in" role="listbox">
                     {options.map((opt) => {
                         const isSel = value === opt.value;
                         return (

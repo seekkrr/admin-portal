@@ -2,13 +2,13 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
     UserPlus, AlertTriangle,
-    ChevronLeft, ChevronRight, Filter, Search, X,
+    Filter, Search, X,
 } from "lucide-react";
 import { useAuthStore } from "@store/auth.store";
 import { AccessDenied } from "@components/AccessDenied";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { FilterDropdown } from "@/components/FilterDropdown";
-import { usePaginationRange } from "@/hooks/usePagination";
+import { Pagination } from "@/components/ui/Pagination";
 import { creatorApplicationsService } from "../services/creator-applications.service";
 import { ApplicationDetailModal } from "../components/ApplicationDetailModal";
 import type { DropdownOption } from "@/components/FilterDropdown";
@@ -84,8 +84,7 @@ export function CreatorApplicationsPage() {
     const hasFilters = !!(searchInput || statusFilter);
 
     // ---- Pagination ----
-    const totalPages = pagination?.total_pages ?? 1;
-    const paginationRange = usePaginationRange(totalPages, page);
+
 
     // ---- Render ----
     if (!hasAccess) {
@@ -225,45 +224,14 @@ export function CreatorApplicationsPage() {
                 )}
 
                 {/* Pagination */}
-                {pagination && pagination.total_pages > 1 && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-100 bg-neutral-50/30">
-                        <span className="text-sm text-neutral-500">
-                            Page <span className="font-medium text-neutral-700">{pagination.page}</span> of <span className="font-medium text-neutral-700">{pagination.total_pages}</span>
-                            <span className="ml-2 text-neutral-400">({pagination.total} total)</span>
-                        </span>
-                        <div className="flex items-center gap-1">
-                            <button
-                                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                disabled={page <= 1}
-                                className="p-2 rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            >
-                                <ChevronLeft className="w-4 h-4" />
-                            </button>
-                            {paginationRange.map((p, idx) =>
-                                p === "..." ? (
-                                    <span key={`ellipsis-${idx}`} className="px-1 text-neutral-400 text-sm">…</span>
-                                ) : (
-                                    <button
-                                        key={p}
-                                        onClick={() => setPage(p as number)}
-                                        className={`min-w-[36px] h-9 rounded-lg text-sm font-medium transition-all ${p === page
-                                            ? "bg-indigo-600 text-white shadow-sm"
-                                            : "text-neutral-600 hover:bg-neutral-100 border border-neutral-200"
-                                            }`}
-                                    >
-                                        {p}
-                                    </button>
-                                )
-                            )}
-                            <button
-                                onClick={() => setPage((p) => Math.min(pagination.total_pages, p + 1))}
-                                disabled={page >= pagination.total_pages}
-                                className="p-2 rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            >
-                                <ChevronRight className="w-4 h-4" />
-                            </button>
-                        </div>
-                    </div>
+                {pagination && (
+                    <Pagination
+                        page={page}
+                        totalPages={pagination.total_pages}
+                        total={pagination.total}
+                        onPageChange={setPage}
+                        theme="indigo"
+                    />
                 )}
             </div>
 

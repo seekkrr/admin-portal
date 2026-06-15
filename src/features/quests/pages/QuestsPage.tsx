@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-    Search, Compass, Trash2, ChevronLeft, ChevronRight,
+    Search, Compass, Trash2,
     RefreshCw, X, Filter, Eye, MapPin, CheckCircle, XCircle, AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -12,7 +12,7 @@ import { questsService } from "../services/quests.service";
 import { formatDuration } from "../utils/formatters";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { FilterDropdown } from "@/components/FilterDropdown";
-import { usePaginationRange } from "@/hooks/usePagination";
+import { Pagination } from "@/components/ui/Pagination";
 import { QuestDetailModal } from "../components/QuestDetailModal";
 import { QuestActionModal, type QuestActionType } from "../components/QuestActionModal";
 import { regionsService } from "@/features/regions/services/regions.service";
@@ -164,16 +164,16 @@ export function QuestsPage() {
     const pagination = data?.pagination;
 
     // ---- Regions (for id → name resolution + filter dropdown) ----
-    const { data: regionsData } = useQuery({
+    const { data: allRegions } = useQuery({
         queryKey: ["admin-regions-lookup"],
-        queryFn: () => regionsService.list({ page: 1, page_size: 100 }),
+        queryFn: () => regionsService.listAll(),
         staleTime: 5 * 60_000,
     });
 
     const REGION_OPTIONS = useMemo<DropdownOption[]>(() => [
         { value: "", label: "All Regions" },
-        ...(regionsData?.regions ?? []).map((r) => ({ value: r.id, label: r.name })),
-    ], [regionsData]);
+        ...(allRegions ?? []).map((r) => ({ value: r.id, label: r.name })),
+    ], [allRegions]);
 
     // ---- Client-side instant filter ----
     const filteredQuests = useMemo(() => {
@@ -271,8 +271,7 @@ export function QuestsPage() {
     }, [confirmAction, deleteMutation, hardDelete]);
 
     // ---- Pagination ----
-    const totalPages = displayPagination?.total_pages ?? 1;
-    const paginationRange = usePaginationRange(totalPages, page);
+
 
     // ---- Render ----
     if (!hasAccess) {
@@ -524,45 +523,14 @@ export function QuestsPage() {
                 )}
 
                 {/* Pagination */}
-                {displayPagination && displayPagination.total_pages > 1 && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-100 bg-neutral-50/30">
-                        <span className="text-sm text-neutral-500">
-                            Page <span className="font-medium text-neutral-700">{displayPagination.page}</span> of <span className="font-medium text-neutral-700">{displayPagination.total_pages}</span>
-                            <span className="ml-2 text-neutral-400">({displayPagination.total} total)</span>
-                        </span>
-                        <div className="flex items-center gap-1">
-                            <button
-                                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                disabled={page <= 1}
-                                className="p-2 rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            >
-                                <ChevronLeft className="w-4 h-4" />
-                            </button>
-                            {paginationRange.map((p, idx) =>
-                                p === "..." ? (
-                                    <span key={`ellipsis-${idx}`} className="px-1 text-neutral-400 text-sm">…</span>
-                                ) : (
-                                    <button
-                                        key={p}
-                                        onClick={() => setPage(p)}
-                                        className={`min-w-[36px] h-9 rounded-lg text-sm font-medium transition-all ${p === page
-                                            ? "bg-violet-600 text-white shadow-sm"
-                                            : "text-neutral-600 hover:bg-neutral-100 border border-neutral-200"
-                                            }`}
-                                    >
-                                        {p}
-                                    </button>
-                                )
-                            )}
-                            <button
-                                onClick={() => setPage((p) => Math.min(displayPagination?.total_pages ?? 1, p + 1))}
-                                disabled={page >= (displayPagination?.total_pages ?? 1)}
-                                className="p-2 rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            >
-                                <ChevronRight className="w-4 h-4" />
-                            </button>
-                        </div>
-                    </div>
+                {displayPagination && (
+                    <Pagination
+                        page={displayPagination.page}
+                        totalPages={displayPagination.total_pages}
+                        total={displayPagination.total}
+                        onPageChange={setPage}
+                        theme="violet"
+                    />
                 )}
             </div>
 

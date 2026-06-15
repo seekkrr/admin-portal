@@ -3,8 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { markersService } from "../services/markers.service";
 import { FilterDropdown } from "@/components/FilterDropdown";
-import { usePaginationRange } from "@/hooks/usePagination";
-import { Inbox, ChevronLeft, ChevronRight, ArrowLeft, Filter, Check, X } from "lucide-react";
+import { Pagination } from "@/components/ui/Pagination";
+import { Inbox, ArrowLeft, Filter, Check, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { Badge } from "@/components/ui/Badge";
@@ -62,12 +62,8 @@ export function MarkerApplicationsPage() {
     });
 
     const applications = data?.applications ?? [];
-    const hasPrev = (data?.page || 1) > 1;
-    const hasNext = (data?.page || 1) < (data?.total_pages || 1);
-    const paginationRange = usePaginationRange(
-        data?.total_pages || 1,
-        data?.page || 1
-    );
+
+
 
     if (isLoading) return <LoadingFallback message="Loading applications..." />;
 
@@ -210,47 +206,14 @@ export function MarkerApplicationsPage() {
                         </table>
                     </div>
 
-                    {data && data.total_pages > 1 && (
-                        <div className="p-4 border-t border-neutral-200 flex items-center justify-between bg-white">
-                            <span className="text-sm text-neutral-500">
-                                Showing page {data.page} of {data.total_pages} ({data.total} total)
-                            </span>
-                            <div className="flex items-center gap-1">
-                                <button
-                                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                    disabled={!hasPrev}
-                                    className="p-2 border border-neutral-200 rounded-lg hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <ChevronLeft className="w-4 h-4" />
-                                </button>
-                                {paginationRange.map((pageNumber, i) =>
-                                    pageNumber === "..." ? (
-                                        <span key={`ellipsis-${i}`} className="px-3 py-2 text-neutral-400">
-                                            ...
-                                        </span>
-                                    ) : (
-                                        <button
-                                            key={pageNumber}
-                                            onClick={() => setPage(pageNumber as number)}
-                                            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                                page === pageNumber
-                                                    ? "bg-orange-50 text-orange-600 font-semibold"
-                                                    : "text-neutral-600 hover:bg-neutral-100"
-                                            }`}
-                                        >
-                                            {pageNumber}
-                                        </button>
-                                    )
-                                )}
-                                <button
-                                    onClick={() => setPage((p) => p + 1)}
-                                    disabled={!hasNext}
-                                    className="p-2 border border-neutral-200 rounded-lg hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <ChevronRight className="w-4 h-4" />
-                                </button>
-                            </div>
-                        </div>
+                    {data && (
+                        <Pagination
+                            page={data.page}
+                            totalPages={data.total_pages}
+                            total={data.total}
+                            onPageChange={setPage}
+                            theme="orange"
+                        />
                     )}
                 </div>
         </div>

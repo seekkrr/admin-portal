@@ -20,6 +20,25 @@ export const regionsService = {
         return data;
     },
 
+    listAll: async (params: ListRegionsParams = {}): Promise<Region[]> => {
+        let allRegions: Region[] = [];
+        let page = 1;
+        let hasMore = true;
+
+        while (hasMore) {
+            const data = await regionsService.list({ ...params, page, page_size: 100 });
+            if (data.regions && data.regions.length > 0) {
+                allRegions = [...allRegions, ...data.regions];
+            }
+            if (page >= (data.total_pages || 1)) {
+                hasMore = false;
+            } else {
+                page++;
+            }
+        }
+        return allRegions;
+    },
+
     search: async (q: string, page = 1, page_size = 20): Promise<RegionsListResponse> => {
         const qs = new URLSearchParams();
         qs.append("q", q);

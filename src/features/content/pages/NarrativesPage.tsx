@@ -6,8 +6,6 @@ import {
     BookOpen,
     Search,
     CheckCircle2,
-    ChevronLeft,
-    ChevronRight,
     Paperclip,
     Activity,
     Eye,
@@ -21,7 +19,7 @@ import { LoadingFallback } from "@components/LoadingFallback";
 import { useAuthStore } from "@store/auth.store";
 import { narrativesService } from "../services/narratives.service";
 import type { AdminNarrative, NarrativeStatus, NarrativeAttachType, VoicePersona } from "@/types";
-import { usePaginationRange } from "@/hooks/usePagination";
+import { Pagination } from "@/components/ui/Pagination";
 import { FilterDropdown } from "@/components/FilterDropdown";
 import { Badge } from "@/components/ui/Badge";
 import { playVoicePreview, PERSONAS } from "../components/voicePersonas";
@@ -259,7 +257,6 @@ function ReviewQueueTab({
 
     const narratives = data?.narratives ?? [];
     const totalPages = data?.total_pages ?? 1;
-    const paginationRange = usePaginationRange(totalPages, page);
 
     const sel = useBulkSelection(narratives.map((n) => n._id));
     const [confirmBulk, setConfirmBulk] = useState<null | "approve" | "delete">(null);
@@ -400,49 +397,13 @@ function ReviewQueueTab({
                 </div>
 
                 {totalPages > 1 && (
-                    <div className="p-4 border-t border-neutral-100 flex items-center justify-between bg-white">
-                        <span className="text-sm text-neutral-500">
-                            Showing page {page} of {totalPages}
-                        </span>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                disabled={page <= 1}
-                                className="p-2 border border-neutral-200 rounded-xl hover:bg-neutral-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <ChevronLeft className="w-4 h-4" />
-                            </button>
-                            {paginationRange.map((pageNumber, idx) => {
-                                if (pageNumber === "...") {
-                                    return (
-                                        <span key={`ellipsis-${idx}`} className="px-2 py-1 text-neutral-500">
-                                            ...
-                                        </span>
-                                    );
-                                }
-                                return (
-                                    <button
-                                        key={pageNumber}
-                                        onClick={() => setPage(pageNumber as number)}
-                                        className={`px-3 py-1 border rounded-xl text-sm transition-colors ${
-                                            pageNumber === page
-                                                ? "bg-orange-600 border-orange-600 text-white"
-                                                : "border-neutral-200 text-neutral-600 hover:bg-neutral-100"
-                                        }`}
-                                    >
-                                        {pageNumber}
-                                    </button>
-                                );
-                            })}
-                            <button
-                                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                                disabled={page >= totalPages}
-                                className="p-2 border border-neutral-200 rounded-xl hover:bg-neutral-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <ChevronRight className="w-4 h-4" />
-                            </button>
-                        </div>
-                    </div>
+                    <Pagination
+                        page={page}
+                        totalPages={totalPages}
+                        total={data?.total ?? 0}
+                        onPageChange={setPage}
+                        theme="orange"
+                    />
                 )}
             </div>
 
@@ -517,7 +478,6 @@ function AllNarrativesTab({
 
     const narratives = data?.narratives ?? [];
     const totalPages = data?.total_pages ?? 1;
-    const paginationRange = usePaginationRange(totalPages, page);
 
     const sel = useBulkSelection(narratives.map((n) => n._id));
     const invalidate = () => {
@@ -681,49 +641,13 @@ function AllNarrativesTab({
                 )}
 
                 {totalPages > 1 && (
-                    <div className="p-4 border-t border-neutral-100 flex items-center justify-between bg-white">
-                        <span className="text-sm text-neutral-500">
-                            Showing page {page} of {totalPages}
-                        </span>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                disabled={page <= 1}
-                                className="p-2 border border-neutral-200 rounded-xl hover:bg-neutral-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <ChevronLeft className="w-4 h-4" />
-                            </button>
-                            {paginationRange.map((pageNumber, idx) => {
-                                if (pageNumber === "...") {
-                                    return (
-                                        <span key={`ellipsis-${idx}`} className="px-2 py-1 text-neutral-500">
-                                            ...
-                                        </span>
-                                    );
-                                }
-                                return (
-                                    <button
-                                        key={pageNumber}
-                                        onClick={() => setPage(pageNumber as number)}
-                                        className={`px-3 py-1 border rounded-xl text-sm transition-colors ${
-                                            pageNumber === page
-                                                ? "bg-orange-600 border-orange-600 text-white"
-                                                : "border-neutral-200 text-neutral-600 hover:bg-neutral-100"
-                                        }`}
-                                    >
-                                        {pageNumber}
-                                    </button>
-                                );
-                            })}
-                            <button
-                                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                                disabled={page >= totalPages}
-                                className="p-2 border border-neutral-200 rounded-xl hover:bg-neutral-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <ChevronRight className="w-4 h-4" />
-                            </button>
-                        </div>
-                    </div>
+                    <Pagination
+                        page={page}
+                        totalPages={totalPages}
+                        total={data?.total ?? 0}
+                        onPageChange={setPage}
+                        theme="orange"
+                    />
                 )}
             </div>
 

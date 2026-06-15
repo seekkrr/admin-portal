@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { regionsService } from "../services/regions.service";
 import { GeoMap } from "@components/maps/GeoMap";
 import { config } from "@/config/env";
-import type { RegionType, RegionsListResponse, CreateRegionPayload, GeoPolygon } from "@/types";
+import type { RegionType, Region, CreateRegionPayload, GeoPolygon } from "@/types";
 
 interface RegionCreateModalProps {
     open: boolean;
@@ -98,9 +98,9 @@ export function RegionCreateModal({ open, onClose, onSuccess }: RegionCreateModa
         staleTime: 5 * 60 * 1000,
     });
 
-    const citiesQuery = useQuery<RegionsListResponse>({
+    const citiesQuery = useQuery<Region[]>({
         queryKey: ["admin-regions-cities"],
-        queryFn: () => regionsService.list({ type: "city", page_size: 100 }),
+        queryFn: () => regionsService.listAll({ type: "city" }),
         enabled: open && cType === "hotspot",
         staleTime: 5 * 60 * 1000,
     });
@@ -356,7 +356,7 @@ export function RegionCreateModal({ open, onClose, onSuccess }: RegionCreateModa
                                 <option value="">
                                     {citiesQuery.isLoading ? "Loading cities…" : "— Select a city —"}
                                 </option>
-                                {(citiesQuery.data?.regions ?? []).map((c) => (
+                                {(citiesQuery.data ?? []).map((c) => (
                                     <option key={c.id} value={c.id}>
                                         {c.name}
                                     </option>

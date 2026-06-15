@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { RefreshCw, AlertTriangle, Trophy, Flag } from "lucide-react";
+import { RefreshCw, AlertTriangle, Trophy, BookOpen, Play } from "lucide-react";
 import { config } from "@/config/env";
 import { useQuestExperience } from "../../hooks/useQuestExperience";
 import { ExperiencePanel } from "./ExperiencePanel";
@@ -13,10 +13,10 @@ import { TOD_THEMES, TIME_ORDER, timeOfDayForLongitude, type TimeOfDay } from ".
 import type { FeatureCollection } from "geojson";
 import type { V2QuestDetail, ExperienceMarker, ExperienceNarrative, GeoPolygon } from "@/types";
 
-// Up-close, immersive 3D camera (slight bearing gives the cinematic "game" angle).
-const FOCUS_ZOOM = 17;
-const PITCH = 55;
-const BEARING = -17;
+// Up-close, immersive 3D camera (high pitch + bearing = cinematic "game" angle).
+const FOCUS_ZOOM = 17.4;
+const PITCH = 62;
+const BEARING = -22;
 
 // Marker fills are FIXED (not time-of-day) so they stay high-contrast on any basemap.
 const FILL_START = "linear-gradient(145deg,#059669,#10b981)";   // emerald — start
@@ -39,12 +39,16 @@ function injectPulseCSS() {
             0%,100% { box-shadow: 0 3px 10px rgba(0,0,0,0.5), 0 0 8px 2px rgba(168,85,247,0.55), 0 0 0 0 rgba(168,85,247,0.45); }
             50%     { box-shadow: 0 3px 10px rgba(0,0,0,0.5), 0 0 16px 4px rgba(168,85,247,0.9), 0 0 0 8px rgba(168,85,247,0); }
         }
-        .sk-marker { cursor: pointer; transition: transform 0.15s ease; }
+        @keyframes sk-pop { 0% { transform: scale(0.35); } 55% { transform: scale(1.28); } 100% { transform: scale(1); } }
+        .sk-marker { cursor: pointer; transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1); }
         .sk-marker:hover { transform: scale(1.16) !important; z-index: 4; }
-        .sk-marker-active { transform: scale(1.3) !important; z-index: 6; }
+        .sk-marker-active { transform: scale(1.32) !important; z-index: 6; }
         .sk-pin-circle { animation: sk-pulse 2.4s ease-in-out infinite; }
-        .sk-marker-active .sk-pin-circle { animation: none;
+        .sk-marker-active .sk-pin-circle { animation: sk-pop 0.5s cubic-bezier(0.34,1.56,0.64,1);
             box-shadow: 0 0 0 4px rgba(255,255,255,0.75), 0 4px 14px rgba(0,0,0,0.6), 0 0 24px 7px rgba(168,85,247,0.95); }
+        .sk-blur-veil { position:absolute; inset:0; pointer-events:none; z-index:5;
+            backdrop-filter: blur(4.5px); -webkit-backdrop-filter: blur(4.5px);
+            opacity:0; transition: opacity 0.5s ease; }
         .sk-popup .mapboxgl-popup-content { padding:0; background:transparent; box-shadow:none; }
         .sk-popup .mapboxgl-popup-close-button { display:none; }
         .sk-popup .mapboxgl-popup-tip { border-width: 9px; }
@@ -75,40 +79,6 @@ function routeDistanceKm(coords: [number, number][]): number {
     return total;
 }
 
-type PlacedMarker = ExperienceMarker & { coordinates: NonNullable<ExperienceMarker["coordinates"]> };
-
-/** A closed ring approximating a circle of `radiusM` metres around a point. */
-function ringCircle(lng: number, lat: number, radiusM: number, n = 56): [number, number][] {
-    const dLat = radiusM / 111320;
-    const dLng = radiusM / (111320 * Math.cos((lat * Math.PI) / 180));
-    const ring: [number, number][] = [];
-    for (let i = 0; i <= n; i++) {
-        const a = (i / n) * 2 * Math.PI;
-        ring.push([lng + dLng * Math.cos(a), lat + dLat * Math.sin(a)]);
-    }
-    return ring;
-}
-
-/** Fog-of-war: a dark polygon over the whole quest area with "windows" punched
- *  out around every discovered marker. */
-function fogFeature(markers: PlacedMarker[], discovered: Set<string>, startId: string | null) {
-    if (markers.length === 0) return null;
-    let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
-    for (const m of markers) {
-        minLng = Math.min(minLng, m.coordinates.lng); maxLng = Math.max(maxLng, m.coordinates.lng);
-        minLat = Math.min(minLat, m.coordinates.lat); maxLat = Math.max(maxLat, m.coordinates.lat);
-    }
-    const pad = 0.04;
-    const outer: [number, number][] = [
-        [minLng - pad, minLat - pad], [maxLng + pad, minLat - pad],
-        [maxLng + pad, maxLat + pad], [minLng - pad, maxLat + pad], [minLng - pad, minLat - pad],
-    ];
-    const holes = markers
-        .filter((m) => discovered.has(m.marker_id) || m.marker_id === startId)
-        .map((m) => ringCircle(m.coordinates.lng, m.coordinates.lat, 120));
-    return { type: "Feature" as const, properties: {}, geometry: { type: "Polygon" as const, coordinates: [outer, ...holes] } };
-}
-
 interface ExploreMapProps {
     questId: string;
     detail: V2QuestDetail;
@@ -117,16 +87,22 @@ interface ExploreMapProps {
 
 export function ExploreMap({ questId, detail, focusMarkerId }: ExploreMapProps) {
     const mapContainer = useRef<HTMLDivElement>(null);
+    const veilRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<mapboxgl.Map | null>(null);
     const markerEls = useRef<Map<string, HTMLDivElement>>(new Map());
     const markerObjs = useRef<mapboxgl.Marker[]>([]);
     const dashRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const completedRef = useRef(false);
+    const awaitingFinaleRef = useRef(false);
+    const finaleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [mapReady, setMapReady] = useState(false);
     const [activeMarker, setActiveMarker] = useState<ExperienceMarker | null>(null);
     const [discovered, setDiscovered] = useState<Set<string>>(new Set());
     const [completedTasks, setCompletedTasks] = useState<Map<string, number>>(new Map());
+    const [hintsUsed, setHintsUsed] = useState<Map<string, number>>(new Map());
     const [showComplete, setShowComplete] = useState(false);
+    const [showIntro, setShowIntro] = useState(true);
     const hasFitRef = useRef(false);
 
     const experience = useQuestExperience(questId, detail, true);
@@ -148,7 +124,12 @@ export function ExploreMap({ questId, detail, focusMarkerId }: ExploreMapProps) 
     const narrativeByMarker = useMemo(() => {
         const m = new Map<string, ExperienceNarrative>();
         for (const n of experience.narratives) {
-            if (n.attach_type === "marker" && n.attach_id) m.set(n.attach_id, n);
+            if (n.attach_type !== "marker" || !n.attach_id) continue;
+            // A marker can carry more than one narrative (e.g. a stale pre-seed
+            // placeholder alongside the polished one). Prefer the narrative that
+            // actually has audio so the real story always wins.
+            const existing = m.get(n.attach_id);
+            if (!existing || (!existing.audio_url && n.audio_url)) m.set(n.attach_id, n);
         }
         return m;
     }, [experience.narratives]);
@@ -189,22 +170,46 @@ export function ExploreMap({ questId, detail, focusMarkerId }: ExploreMapProps) 
     }, [focusMarkerId, mapReady, placed, focusMarker]);
 
     const tour = useGuidedTour(placed, (m) => focusMarker(m));
+    // These are stable across renders (useGuidedTour memoises them), so effects can
+    // depend on them without re-running every render.
+    const { isPlaying: tourPlaying, next: tourNext, stop: tourStop } = tour;
 
     const onTaskComplete = useCallback((taskId: string, points: number) => {
         setCompletedTasks((prev) => (prev.has(taskId) ? prev : new Map(prev).set(taskId, points)));
     }, []);
-    const score = useMemo(() => Array.from(completedTasks.values()).reduce((a, b) => a + b, 0), [completedTasks]);
+    // Revealing a hint costs points — charged once per task.
+    const onHintUsed = useCallback((taskId: string, cost: number) => {
+        setHintsUsed((prev) => (prev.has(taskId) ? prev : new Map(prev).set(taskId, cost)));
+    }, []);
+    const score = useMemo(() => {
+        const earned = Array.from(completedTasks.values()).reduce((a, b) => a + b, 0);
+        const spent = Array.from(hintsUsed.values()).reduce((a, b) => a + b, 0);
+        return Math.max(0, earned - spent);
+    }, [completedTasks, hintsUsed]);
     const discoveredCount = useMemo(
         () => placed.filter((m) => discovered.has(m.marker_id) || m.marker_id === startMarkerId).length,
         [placed, discovered, startMarkerId]
     );
 
+    // Reveal the celebration overlay (clears any pending finale safety-net timer).
+    const showCelebration = useCallback(() => {
+        if (finaleTimerRef.current) { clearTimeout(finaleTimerRef.current); finaleTimerRef.current = null; }
+        awaitingFinaleRef.current = false;
+        setShowComplete(true);
+    }, []);
+
     // Auto-play: advance to the next stop only after the narration finishes (+1s).
+    // When the LAST stop's narration ends, celebrate instead of advancing.
     const handleNarrationEnded = useCallback(() => {
-        if (!tour.isPlaying) return;
+        if (awaitingFinaleRef.current) {
+            if (finaleTimerRef.current) clearTimeout(finaleTimerRef.current);
+            finaleTimerRef.current = setTimeout(showCelebration, 1200);
+            return;
+        }
+        if (!tourPlaying) return;
         if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
-        advanceTimerRef.current = setTimeout(() => tour.next(), 1000);
-    }, [tour.isPlaying, tour.next]);
+        advanceTimerRef.current = setTimeout(() => tourNext(), 1000);
+    }, [tourPlaying, tourNext, showCelebration]);
 
     // Init map
     useEffect(() => {
@@ -227,6 +232,7 @@ export function ExploreMap({ questId, detail, focusMarkerId }: ExploreMapProps) 
                 map.setConfigProperty("basemap", "showTransitLabels", false);
             } catch { /* non-standard style */ }
             map.setFog(TOD_THEMES.dusk.fog);
+            try { map.setLights(TOD_THEMES.dusk.lights); } catch { /* lights unsupported */ }
             try {
                 map.addSource("mapbox-dem", {
                     type: "raster-dem", url: "mapbox://mapbox.mapbox-terrain-dem-v1", tileSize: 512, maxzoom: 14,
@@ -241,6 +247,7 @@ export function ExploreMap({ questId, detail, focusMarkerId }: ExploreMapProps) 
         return () => {
             if (dashRef.current) { clearInterval(dashRef.current); dashRef.current = null; }
             if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
+            if (finaleTimerRef.current) { clearTimeout(finaleTimerRef.current); finaleTimerRef.current = null; }
             objs.forEach((m) => m.remove());
             markerObjs.current = [];
             els.clear();
@@ -256,6 +263,7 @@ export function ExploreMap({ questId, detail, focusMarkerId }: ExploreMapProps) 
         const map = mapRef.current;
         if (!map || !mapReady) return;
         try { map.setConfigProperty("basemap", "lightPreset", theme.lightPreset); } catch { /* ignore */ }
+        try { map.setLights(theme.lights); } catch { /* lights unsupported */ }
         map.setFog(theme.fog);
     }, [theme, mapReady]);
 
@@ -356,48 +364,66 @@ export function ExploreMap({ questId, detail, focusMarkerId }: ExploreMapProps) 
         });
     }, [activeMarker]);
 
-    // Fog of war: dark overlay with windows around discovered markers.
+    // Focus vignette ("fog"): keep a crisp radius around the active marker and
+    // softly blur + slightly darken everything outside it for suspense. Updates
+    // as the map pans/zooms so the clear window tracks the marker.
     useEffect(() => {
         const map = mapRef.current;
-        if (!map || !mapReady) return;
-        const feat = fogFeature(placed, discovered, startMarkerId);
-        if (!feat) return;
-        const src = map.getSource("fog") as mapboxgl.GeoJSONSource | undefined;
-        if (src) { src.setData(feat); return; }
-        map.addSource("fog", { type: "geojson", data: feat });
-        map.addLayer({ id: "fog-layer", type: "fill", source: "fog", slot: "middle",
-            paint: { "fill-color": "#06040f", "fill-opacity": 0.6 } });
-    }, [mapReady, placed, discovered, startMarkerId]);
+        const veil = veilRef.current;
+        if (!map || !veil || !mapReady) return;
+        const R0 = 175, BAND = 175;
+        const startT = performance.now();
+        let raf = 0;
+        const update = () => {
+            if (!activeMarker?.coordinates) { veil.style.opacity = "0"; return; }
+            const ease = Math.min(1, (performance.now() - startT) / 650);
+            const r0 = 45 + (R0 - 45) * ease;   // iris expands open on unlock
+            const r1 = r0 + BAND;
+            const p = map.project([activeMarker.coordinates.lng, activeMarker.coordinates.lat]);
+            const at = `circle at ${Math.round(p.x)}px ${Math.round(p.y)}px`;
+            const mask = `radial-gradient(${at}, transparent ${Math.round(r0)}px, #000 ${Math.round(r1)}px)`;
+            veil.style.opacity = "1";
+            veil.style.maskImage = mask;
+            veil.style.setProperty("-webkit-mask-image", mask);
+            veil.style.background = `radial-gradient(${at}, rgba(7,5,16,0) ${Math.round(r0)}px, rgba(7,5,16,0.42) ${Math.round(r1)}px)`;
+            if (ease < 1) raf = requestAnimationFrame(update);
+        };
+        update();
+        map.on("move", update);
+        map.on("zoom", update);
+        return () => { cancelAnimationFrame(raf); map.off("move", update); map.off("zoom", update); };
+    }, [activeMarker, mapReady]);
 
-    // Reveal: undiscovered markers are dimmed and masked with "?".
-    useEffect(() => {
-        markerEls.current.forEach((wrap, id) => {
-            const circle = wrap.querySelector(".sk-pin-circle") as HTMLDivElement | null;
-            const m = placed.find((x) => x.marker_id === id);
-            const isDisc = discovered.has(id) || id === startMarkerId;
-            if (circle) circle.textContent = isDisc ? String(m?.order ?? "") : "?";
-            wrap.style.opacity = isDisc ? "1" : "0.55";
-            wrap.style.filter = isDisc ? "none" : "grayscale(0.7) brightness(0.85)";
-        });
-    }, [discovered, placed, startMarkerId, activeMarker]);
-
-    // Auto-play fallback: markers with no narration advance after a readable dwell.
+    // Auto-play dwell: stops WITH narration advance when the audio ends (onEnded);
+    // we keep only a long safety net here. Silent stops use a short readable dwell.
     useEffect(() => {
         if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
-        if (!tour.isPlaying || !activeMarker) return;
+        if (!tourPlaying || !activeMarker) return;
         const narr = narrativeByMarker.get(activeMarker.marker_id);
-        if (!narr?.audio_url) {
-            advanceTimerRef.current = setTimeout(() => tour.next(), 5000);
-        }
-    }, [activeMarker, tour.isPlaying, tour.next, narrativeByMarker]);
+        const delay = narr?.audio_url ? 45000 : 6000;
+        advanceTimerRef.current = setTimeout(() => tourNext(), delay);
+    }, [activeMarker, tourPlaying, tourNext, narrativeByMarker]);
 
-    // Quest complete when every stop has been discovered.
+    // Quest complete when every stop has been discovered — but let the final
+    // narration finish before celebrating (handleNarrationEnded fires the overlay;
+    // the timer here is a safety net if the last stop has no/short audio).
     useEffect(() => {
-        if (placed.length > 0 && discoveredCount >= placed.length && !showComplete) {
-            setShowComplete(true);
-            tour.stop();
+        if (placed.length > 0 && discoveredCount >= placed.length && !completedRef.current) {
+            completedRef.current = true;
+            tourStop();
+            awaitingFinaleRef.current = true;
+            const narr = activeMarker ? narrativeByMarker.get(activeMarker.marker_id) : null;
+            const fallback = narr?.audio_url ? 30000 : 3500;
+            if (finaleTimerRef.current) clearTimeout(finaleTimerRef.current);
+            finaleTimerRef.current = setTimeout(showCelebration, fallback);
         }
-    }, [discoveredCount, placed.length, showComplete, tour.stop]);
+    }, [discoveredCount, placed.length, tourStop, activeMarker, narrativeByMarker, showCelebration]);
+
+    // If the player closes the final stop's panel while we're waiting on its
+    // narration, celebrate immediately rather than stalling on the safety net.
+    useEffect(() => {
+        if (awaitingFinaleRef.current && !activeMarker) showCelebration();
+    }, [activeMarker, showCelebration]);
 
     // Region boundary
     useEffect(() => {
@@ -452,6 +478,19 @@ export function ExploreMap({ questId, detail, focusMarkerId }: ExploreMapProps) 
         <div className="relative rounded-2xl overflow-hidden border border-violet-900/30"
              style={{ height: 620, background: theme.pageBg }}>
             <div ref={mapContainer} className="w-full h-full" />
+            <div ref={veilRef} className="sk-blur-veil" />
+
+            {/* Score / progress */}
+            {!experience.isLoading && placed.length > 0 && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3
+                                bg-black/70 backdrop-blur-md rounded-full border border-violet-700/40 px-4 py-1.5 text-xs shadow-lg">
+                    <span className="flex items-center gap-1 text-amber-300 font-semibold">
+                        <Trophy className="w-3.5 h-3.5" /> {score} pts
+                    </span>
+                    <span className="w-px h-3.5 bg-white/15" />
+                    <span className="text-emerald-300 font-medium">{discoveredCount}/{placed.length} stops</span>
+                </div>
+            )}
 
             {experience.isLoading && (
                 <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2
@@ -503,8 +542,34 @@ export function ExploreMap({ questId, detail, focusMarkerId }: ExploreMapProps) 
                     narrative={narrativeByMarker.get(activeMarker.marker_id) ?? null}
                     onClose={() => { tour.stop(); setActiveMarker(null); }}
                     onTaskComplete={onTaskComplete}
+                    onHintUsed={onHintUsed}
                     onAudioEnded={handleNarrationEnded}
                 />
+            )}
+
+            {/* Quest intro — sets the scene before you begin. Clicking elsewhere
+                dismisses it and drops you into free / manual exploration. */}
+            {showIntro && !activeMarker && !experience.isLoading && briefingNarratives.length > 0 && (
+                <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/65 backdrop-blur-sm p-6"
+                     onClick={() => setShowIntro(false)}>
+                    <div onClick={(e) => e.stopPropagation()}
+                        className="max-w-md rounded-3xl bg-gradient-to-br from-violet-950/95 to-fuchsia-950/90
+                                    border border-violet-500/30 shadow-2xl p-7 text-center">
+                        <BookOpen className="w-10 h-10 text-amber-300 mx-auto mb-3" />
+                        <h3 className="text-xl font-bold text-white leading-tight">{detail.title}</h3>
+                        <p className="text-sm text-violet-100/90 mt-3 leading-relaxed">
+                            {briefingNarratives[0]?.content ?? "Begin your journey through this quest."}
+                        </p>
+                        <button onClick={() => { setShowIntro(false); tour.start(); }}
+                            className="mt-6 px-6 py-2.5 rounded-xl bg-violet-600 text-white font-semibold hover:bg-violet-700 transition inline-flex items-center gap-2">
+                            <Play className="w-4 h-4" /> Begin Quest
+                        </button>
+                        <button onClick={() => setShowIntro(false)}
+                            className="block mx-auto mt-3 text-xs text-violet-300/60 hover:text-violet-200 transition">
+                            Explore freely instead
+                        </button>
+                    </div>
+                </div>
             )}
 
             {/* Quest Complete celebration */}

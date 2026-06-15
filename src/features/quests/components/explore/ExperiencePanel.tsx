@@ -6,9 +6,12 @@ interface ExperiencePanelProps {
     marker: ExperienceMarker;
     narrative: ExperienceNarrative | null;
     onClose: () => void;
+    onTaskComplete?: (taskId: string, points: number) => void;
+    onHintUsed?: (taskId: string, cost: number) => void;
+    onAudioEnded?: () => void;
 }
 
-export function ExperiencePanel({ marker, narrative, onClose }: ExperiencePanelProps) {
+export function ExperiencePanel({ marker, narrative, onClose, onTaskComplete, onHintUsed, onAudioEnded }: ExperiencePanelProps) {
     const heroImg = narrative?.media?.[0] ?? marker.images[0] ?? null;
     return (
         <div className="absolute top-3 bottom-[84px] left-3 z-30 w-[372px] max-w-[88%] flex flex-col
@@ -62,7 +65,7 @@ export function ExperiencePanel({ marker, narrative, onClose }: ExperiencePanelP
                                 <div className="flex items-center gap-2 pt-1">
                                     <Volume2 className="w-4 h-4 text-amber-400 flex-shrink-0" />
                                     <audio key={narrative.id} src={narrative.audio_url} autoPlay controls
-                                        className="h-8 w-full rounded-full" style={{ colorScheme: "dark" }} />
+                                        onEnded={onAudioEnded} className="h-8 w-full rounded-full" style={{ colorScheme: "dark" }} />
                                 </div>
                             )}
                         </div>
@@ -81,7 +84,9 @@ export function ExperiencePanel({ marker, narrative, onClose }: ExperiencePanelP
                             <CheckSquare className="w-3 h-3" /> Tasks ({marker.tasks.length})
                         </p>
                         {marker.tasks.length > 0
-                            ? marker.tasks.map((t) => <TaskPlayer key={t._id} task={t} />)
+                            ? marker.tasks.map((t) => <TaskPlayer key={t._id} task={t}
+                                onComplete={onTaskComplete ? () => onTaskComplete(t._id, t.base_points) : undefined}
+                                onHint={onHintUsed ? (cost) => onHintUsed(t._id, cost) : undefined} />)
                             : <p className="text-xs text-neutral-500 italic">No tasks at this stop.</p>}
                     </div>
                 </div>

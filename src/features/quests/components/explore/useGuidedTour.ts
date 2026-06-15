@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { ExperienceMarker } from "@/types";
 
 export interface GuidedTour {
@@ -12,46 +12,47 @@ export interface GuidedTour {
 }
 
 /**
- * Drives a marker-by-marker cinematic tour. On each step it calls `onFocus`
- * with the marker (the map flies + opens its card). When playing, it advances
- * automatically every `dwellMs`.
+ * Drives a marker-by-marker cinematic tour. On each step it calls `onFocus`.
+ * Advancement is driven externally by the consumer (e.g. when the narration
+ * audio ends) — there is intentionally no internal dwell timer.
  */
 export function useGuidedTour(
     markers: ExperienceMarker[],
     onFocus: (marker: ExperienceMarker, index: number) => void,
-    dwellMs = 5200
 ): GuidedTour {
     const [isPlaying, setIsPlaying] = useState(false);
     const [activeIndex, setActiveIndex] = useState(-1);
-    const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const playable = markers.filter((m) => m.coordinates);
+    // Stable across renders so consumers can safely depend on the callbacks.
+    const playable = useMemo(() => markers.filter((m) => m.coordinates), [markers]);
+    const playableRef = useRef(playable);
+    playableRef.current = playable;
+    const onFocusRef = useRef(onFocus);
+    onFocusRef.current = onFocus;
 
     const focusIndex = useCallback((index: number) => {
-        const m = playable[index];
+        const m = playableRef.current[index];
         if (!m) return;
         setActiveIndex(index);
-        onFocus(m, index);
-    }, [playable, onFocus]);
-
-    const stop = useCallback(() => {
-        setIsPlaying(false);
-        if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+        onFocusRef.current(m, index);
     }, []);
 
+    const stop = useCallback(() => setIsPlaying(false), []);
+
     const start = useCallback(() => {
-        if (playable.length === 0) return;
+        if (playableRef.current.length === 0) return;
         setIsPlaying(true);
         focusIndex(0);
-    }, [playable.length, focusIndex]);
+    }, [focusIndex]);
 
     const next = useCallback(() => {
         setActiveIndex((i) => {
-            const ni = Math.min(i + 1, playable.length - 1);
+            if (i >= playableRef.current.length - 1) { setIsPlaying(false); return i; }
+            const ni = i + 1;
             focusIndex(ni);
             return ni;
         });
-    }, [playable.length, focusIndex]);
+    }, [focusIndex]);
 
     const prev = useCallback(() => {
         setActiveIndex((i) => {
@@ -65,14 +66,6 @@ export function useGuidedTour(
         stop();
         focusIndex(index);
     }, [stop, focusIndex]);
-
-    // Auto-advance while playing
-    useEffect(() => {
-        if (!isPlaying) return;
-        if (activeIndex >= playable.length - 1) { setIsPlaying(false); return; }
-        timer.current = setTimeout(() => focusIndex(activeIndex + 1), dwellMs);
-        return () => { if (timer.current) clearTimeout(timer.current); };
-    }, [isPlaying, activeIndex, playable.length, dwellMs, focusIndex]);
 
     return { isPlaying, activeIndex, start, stop, next, prev, goTo };
 }

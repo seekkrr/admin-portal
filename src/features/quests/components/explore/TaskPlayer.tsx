@@ -9,15 +9,25 @@ function optionClass(picked: number | null, index: number, answer: number): stri
     return "bg-white/5 text-neutral-500 border-transparent";
 }
 
-export function TaskPlayer({ task }: { task: ExperienceTask }) {
+export function TaskPlayer({ task, onComplete, onHint }: { task: ExperienceTask; onComplete?: () => void; onHint?: (cost: number) => void }) {
     const [done, setDone] = useState(false);
+    const markDone = () => { setDone(true); if (onComplete) onComplete(); };
     const [picked, setPicked] = useState<number | null>(null);
     const [checked, setChecked] = useState<Set<string>>(new Set());
     const [showHint, setShowHint] = useState(false);
+    const [hintCharged, setHintCharged] = useState(false);
 
     const quiz = task.quiz_data;
     const items = task.collection_items;
     const hint = task.hints[0];
+
+    const revealHint = () => {
+        setShowHint((s) => !s);
+        if (!hintCharged) {
+            setHintCharged(true);
+            if (hint && onHint) onHint(hint.cost);
+        }
+    };
 
     return (
         <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
@@ -36,7 +46,7 @@ export function TaskPlayer({ task }: { task: ExperienceTask }) {
                             <button
                                 key={i}
                                 disabled={picked !== null}
-                                onClick={() => { setPicked(i); if (i === quiz.correct_answer) setDone(true); }}
+                                onClick={() => { setPicked(i); if (i === quiz.correct_answer) markDone(); }}
                                 className={`text-left text-xs px-2.5 py-1.5 rounded-lg border transition ${optionClass(picked, i, quiz.correct_answer)}`}
                             >
                                 {opt}{picked !== null && i === quiz.correct_answer ? "  ✓" : ""}
@@ -61,7 +71,7 @@ export function TaskPlayer({ task }: { task: ExperienceTask }) {
                                 onClick={() => setChecked((prev) => {
                                     const n = new Set(prev);
                                     if (n.has(it)) n.delete(it); else n.add(it);
-                                    if (n.size === items.length) setDone(true);
+                                    if (n.size === items.length) markDone();
                                     return n;
                                 })}
                                 className={`w-full flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-lg transition ${on ? "bg-emerald-500/20 text-emerald-200" : "bg-white/5 text-neutral-300 hover:bg-white/10"}`}
@@ -82,7 +92,7 @@ export function TaskPlayer({ task }: { task: ExperienceTask }) {
                         <Camera className="w-3.5 h-3.5" /> Capture a photo to complete this challenge.
                     </p>
                     {!done && (
-                        <button onClick={() => setDone(true)}
+                        <button onClick={markDone}
                             className="text-xs px-3 py-1.5 rounded-lg bg-violet-600 text-white hover:bg-violet-700 transition">
                             Mark as captured
                         </button>
@@ -91,16 +101,18 @@ export function TaskPlayer({ task }: { task: ExperienceTask }) {
             )}
 
             {!quiz && !items && !task.photo_requirements && !done && (
-                <button onClick={() => setDone(true)}
+                <button onClick={markDone}
                     className="text-xs px-3 py-1.5 rounded-lg bg-violet-600 text-white hover:bg-violet-700 transition">
                     Mark complete
                 </button>
             )}
 
             {hint && !done && (
-                <button onClick={() => setShowHint((s) => !s)}
+                <button onClick={revealHint}
                     className="text-[11px] text-amber-300/80 flex items-center gap-1 hover:text-amber-200">
-                    <HelpCircle className="w-3 h-3" /> {showHint ? hint.text : `Reveal hint (−${hint.cost} pts)`}
+                    <HelpCircle className="w-3 h-3" /> {showHint
+                        ? hint.text
+                        : hintCharged ? `Hide hint (−${hint.cost} pts charged)` : `Reveal hint (−${hint.cost} pts)`}
                 </button>
             )}
 

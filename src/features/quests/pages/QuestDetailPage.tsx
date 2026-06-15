@@ -17,7 +17,10 @@ import { QuestActionModal, type QuestActionType } from "../components/QuestActio
 import { ReviewHistory } from "../components/ReviewHistory";
 import { config } from "@/config/env";
 
-import { ExploreMap } from "../components/explore/ExploreMap";
+// Lazy-loaded so the heavy mapbox-gl bundle (~1.7 MB) is only fetched when the
+// Explore tab is actually opened, not on every quest detail view.
+const ExploreMap = React.lazy(() =>
+    import("../components/explore/ExploreMap").then((m) => ({ default: m.ExploreMap })));
 import { MarkerPlaylist } from "../components/detail/MarkerPlaylist";
 import type { CloudinaryAsset, UpdateQuestPayload } from "@/types";
 
@@ -770,7 +773,16 @@ export function QuestDetailPage() {
             )}
 
             {activeTab === "explore" && (
-                <ExploreMap questId={questId} detail={quest} focusMarkerId={focusMarkerId} />
+                <React.Suspense fallback={
+                    <div className="flex items-center justify-center h-[600px] rounded-2xl bg-[#080614] border border-violet-900/40">
+                        <div className="flex items-center gap-3 text-violet-300">
+                            <RefreshCw className="w-5 h-5 animate-spin" />
+                            <span className="text-sm">Loading immersive map…</span>
+                        </div>
+                    </div>
+                }>
+                    <ExploreMap questId={questId} detail={quest} focusMarkerId={focusMarkerId} />
+                </React.Suspense>
             )}
 
             {/* ── Modals ── */}

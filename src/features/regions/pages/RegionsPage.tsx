@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
-import { Globe, Search, MapPin, Plus, Map, Eye, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Globe, Search, MapPin, Plus, Map, Eye, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { regionsService } from "../services/regions.service";
 import { LoadingFallback } from "@components/LoadingFallback";
@@ -12,7 +12,7 @@ import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Badge } from "@/components/ui/Badge";
 import { useBulkSelection, runBulk } from "@/hooks/useBulkSelection";
 import { RegionCreateModal } from "../components/RegionCreateModal";
-import { usePaginationRange } from "@/hooks/usePagination";
+import { Pagination } from "@/components/ui/Pagination";
 
 type TypeFilter = "all" | RegionType;
 const EDIT_ROLES = ["admin", "super_admin"];
@@ -62,10 +62,7 @@ export function RegionsPage() {
 
 
 
-    const paginationRange = usePaginationRange(
-        data?.total_pages ?? 1,
-        data?.page ?? page
-    );
+
 
     const deleteMutation = useMutation({
         mutationFn: (id: string) => regionsService.remove(id, false),
@@ -94,8 +91,7 @@ export function RegionsPage() {
 
     const totalPages = data?.total_pages ?? 1;
     const currentPage = data?.page ?? page;
-    const hasPrev = currentPage > 1;
-    const hasNext = currentPage < totalPages;
+
 
     if (isLoading) return <LoadingFallback message="Loading regions..." />;
 
@@ -294,49 +290,13 @@ export function RegionsPage() {
                 </div>
 
                 {totalPages > 1 && (
-                    <div className="p-4 border-t border-neutral-100 flex items-center justify-between bg-white">
-                        <span className="text-sm text-neutral-500">
-                            Showing page {currentPage} of {totalPages}
-                        </span>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                disabled={!hasPrev}
-                                className="p-2 border border-neutral-200 rounded-xl hover:bg-neutral-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <ChevronLeft className="w-4 h-4" />
-                            </button>
-                            {paginationRange.map((pageNumber, idx) => {
-                                if (pageNumber === "...") {
-                                    return (
-                                        <span key={`ellipsis-${idx}`} className="px-2 py-1 text-neutral-500">
-                                            ...
-                                        </span>
-                                    );
-                                }
-                                return (
-                                    <button
-                                        key={pageNumber}
-                                        onClick={() => setPage(pageNumber as number)}
-                                        className={`px-3 py-1 border rounded-xl text-sm transition-colors ${
-                                            pageNumber === currentPage
-                                                ? "bg-cyan-600 border-cyan-600 text-white"
-                                                : "border-neutral-200 text-neutral-600 hover:bg-neutral-100"
-                                        }`}
-                                    >
-                                        {pageNumber}
-                                    </button>
-                                );
-                            })}
-                            <button
-                                onClick={() => setPage((p) => p + 1)}
-                                disabled={!hasNext}
-                                className="p-2 border border-neutral-200 rounded-xl hover:bg-neutral-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <ChevronRight className="w-4 h-4" />
-                            </button>
-                        </div>
-                    </div>
+                    <Pagination
+                        page={currentPage}
+                        totalPages={totalPages}
+                        total={data?.total ?? regions.length}
+                        onPageChange={setPage}
+                        theme="cyan"
+                    />
                 )}
             </div>
 
