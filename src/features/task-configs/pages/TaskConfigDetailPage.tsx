@@ -219,11 +219,11 @@ export function TaskConfigDetailPage() {
             </Card>
 
             {/* Type-specific config objects */}
-            <JsonSection title="Photo requirements" value={task.photo_requirements} />
-            <JsonSection title="QR data" value={task.qr_data} />
-            <JsonSection title="Quiz data" value={task.quiz_data} />
-            <JsonSection title="Game config" value={task.game_config} />
-            <JsonSection title="Collection items" value={task.collection_items} />
+            <PhotoRequirementsSection value={task.photo_requirements} />
+            <QrDataSection value={task.qr_data} />
+            <QuizDataSection value={task.quiz_data} />
+            <GameConfigSection value={task.game_config} />
+            <CollectionItemsSection value={task.collection_items} />
             <SocialTaskSection value={task.social_task} />
             <HintsSection value={task.hints} />
 
@@ -410,22 +410,107 @@ function DetailRow({ label, value }: { label: string; value: string | null }) {
     );
 }
 
-function JsonSection({ title, value }: { title: string; value: unknown }) {
-    const isEmpty =
-        value === null ||
-        value === undefined ||
-        (Array.isArray(value) && value.length === 0) ||
-        (typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0);
-    if (isEmpty) return null;
+function KVSection({ title, entries }: { title: string; entries: [string, unknown][] }) {
     return (
         <Card padding="none" className="overflow-hidden">
             <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
                 <h3 className="text-base font-semibold">{title}</h3>
             </div>
+            <div className="p-6 space-y-3 text-sm">
+                {entries.map(([key, val]) => (
+                    <div key={key} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
+                        <span className="w-36 shrink-0 font-medium text-neutral-500 capitalize">{key.replace(/_/g, " ")}</span>
+                        <span className="text-neutral-800 break-words">
+                            {val === null || val === undefined ? "—" : typeof val === "object"
+                                ? <pre className="text-xs font-mono bg-neutral-50 rounded px-2 py-1 overflow-x-auto">{JSON.stringify(val, null, 2)}</pre>
+                                : String(val)}
+                        </span>
+                    </div>
+                ))}
+            </div>
+        </Card>
+    );
+}
+
+function PhotoRequirementsSection({ value }: { value: unknown }) {
+    if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length === 0) return null;
+    const pr = value as Record<string, unknown>;
+    const entries: [string, unknown][] = [];
+    if (pr.min_photos !== undefined) entries.push(["Min photos", pr.min_photos]);
+    if (pr.max_photos !== undefined) entries.push(["Max photos", pr.max_photos]);
+    if (pr.description !== undefined) entries.push(["Description", pr.description]);
+    Object.entries(pr).filter(([k]) => !["min_photos","max_photos","description"].includes(k)).forEach(e => entries.push(e));
+    return <KVSection title="Photo requirements" entries={entries} />;
+}
+
+function QrDataSection({ value }: { value: unknown }) {
+    if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length === 0) return null;
+    const qr = value as Record<string, unknown>;
+    const entries: [string, unknown][] = [];
+    if (qr.code !== undefined) entries.push(["Code", qr.code]);
+    if (qr.expected_value !== undefined) entries.push(["Expected value", qr.expected_value]);
+    Object.entries(qr).filter(([k]) => !["code","expected_value"].includes(k)).forEach(e => entries.push(e));
+    return <KVSection title="QR data" entries={entries} />;
+}
+
+function QuizDataSection({ value }: { value: unknown }) {
+    if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length === 0) return null;
+    const quiz = value as Record<string, unknown>;
+    const question = quiz.question as string | undefined;
+    const options = Array.isArray(quiz.options) ? quiz.options as string[] : [];
+    if (!question && options.length === 0) return null;
+    return (
+        <Card padding="none" className="overflow-hidden">
+            <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
+                <h3 className="text-base font-semibold">Quiz data</h3>
+            </div>
+            <div className="p-6 space-y-3 text-sm">
+                {question && (
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
+                        <span className="w-36 shrink-0 font-medium text-neutral-500">Question</span>
+                        <span className="text-neutral-800">{question}</span>
+                    </div>
+                )}
+                {options.length > 0 && (
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
+                        <span className="w-36 shrink-0 font-medium text-neutral-500">Options</span>
+                        <ol className="list-decimal list-inside space-y-1 text-neutral-800">
+                            {options.map((opt, i) => <li key={i}>{opt}</li>)}
+                        </ol>
+                    </div>
+                )}
+            </div>
+        </Card>
+    );
+}
+
+function GameConfigSection({ value }: { value: unknown }) {
+    if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length === 0) return null;
+    return <KVSection title="Game config" entries={Object.entries(value as Record<string, unknown>)} />;
+}
+
+function CollectionItemsSection({ value }: { value: unknown }) {
+    if (!value || !Array.isArray(value) || value.length === 0) return null;
+    return (
+        <Card padding="none" className="overflow-hidden">
+            <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
+                <h3 className="text-base font-semibold">Collection items ({value.length})</h3>
+            </div>
             <div className="p-6">
-                <pre className="text-xs font-mono text-neutral-700 bg-neutral-50 rounded-xl p-4 overflow-x-auto whitespace-pre-wrap break-words">
-                    {JSON.stringify(value, null, 2)}
-                </pre>
+                <ol className="space-y-2 text-sm list-none">
+                    {value.map((item, i) => (
+                        <li key={i} className="rounded-xl border border-neutral-100 bg-neutral-50 px-4 py-2.5">
+                            <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider mr-2">#{i + 1}</span>
+                            {typeof item === "object" && item !== null
+                                ? Object.entries(item as Record<string, unknown>).map(([k, v]) => (
+                                    <span key={k} className="mr-3 text-neutral-700">
+                                        <span className="text-neutral-500 capitalize">{k.replace(/_/g, " ")}: </span>{String(v)}
+                                    </span>
+                                ))
+                                : <span className="text-neutral-700">{String(item)}</span>}
+                        </li>
+                    ))}
+                </ol>
             </div>
         </Card>
     );

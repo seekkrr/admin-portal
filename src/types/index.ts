@@ -146,6 +146,7 @@ export interface QuestListEntry {
     points: number | null;
     duration_minutes: number | null;
     region_id: string | null;
+    region_name?: string | null;
     status: QuestStatus;
     view_count: number;
     average_rating: number | null;
@@ -1510,4 +1511,88 @@ export interface CreatorPayoutSummary {
     total_paid: number;
     pending_balance: number;
     payouts: Payout[];
+}
+
+// ── Admin immersive experience (GET /quests/{id}/experience) ──
+export interface ExperienceCoordinates { lat: number; lng: number }
+
+export interface ExperienceTask {
+    _id: string;
+    task_type: string;
+    title: string;
+    description: string | null;
+    quiz_data: { question: string; options: string[]; correct_answer: number } | null;
+    collection_items: string[] | null;
+    photo_requirements: Record<string, unknown> | null;
+    qr_data: Record<string, unknown> | null;
+    social_task: Record<string, unknown> | null;
+    game_config: Record<string, unknown> | null;
+    hints: { text: string; cost: number }[];
+    base_points: number;
+    marker_id: string | null;
+}
+
+export interface ExperienceMarker {
+    marker_id: string;
+    name: string | null;
+    category: string | null;
+    description: string | null;
+    coordinates: ExperienceCoordinates | null;
+    order: number | null;
+    is_required: boolean;
+    tags: string[];
+    images: string[];
+    things_to_do_text: string | null;
+    things_to_do_image_url: string | null;
+    address: string | null;
+    opens_at: string | null;
+    closes_at: string | null;
+    min_expense: number | null;
+    max_expense: number | null;
+    website_url: string | null;
+    contact: string | null;
+    map_url: string | null;
+    tasks: ExperienceTask[];
+}
+
+export interface ExperienceNarrative {
+    id: string;
+    title: string | null;
+    subtitle: string | null;
+    content: string | null;
+    trigger_location: { type: "Point"; coordinates: [number, number] } | null;
+    trigger_radius_m: number | null;
+    voice_persona: string | null;
+    audio_status: string | null;
+    audio_url: string | null;
+    media: string[];
+    is_mandatory: boolean;
+    sequence_order: number | null;
+    attach_type: string;
+    attach_id: string;
+}
+
+export interface ExperienceRegion {
+    id: string;
+    name: string | null;
+    bbox: GeoPolygon | number[] | null;
+    center_point: { type: "Point"; coordinates: [number, number] } | null;
+    crowd_meter: Record<string, number>;
+}
+
+export interface ExperienceAchievement {
+    id: string;
+    name: string | null;
+    icon_url: string | null;
+    xp_reward: number | null;
+}
+
+export interface AdminQuestExperience {
+    quest: Record<string, unknown>;
+    markers: ExperienceMarker[];
+    orphan_tasks: ExperienceTask[];
+    narratives: ExperienceNarrative[];
+    region: ExperienceRegion | null;
+    achievement: ExperienceAchievement | null;
+    start_point: { marker_id: string; name: string | null; lat: number | null; lng: number | null } | null;
 }

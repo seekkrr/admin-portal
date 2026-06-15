@@ -170,12 +170,6 @@ export function QuestsPage() {
         staleTime: 5 * 60_000,
     });
 
-    const regionNameById = useMemo(() => {
-        const map = new Map<string, string>();
-        (regionsData?.regions ?? []).forEach((r) => map.set(r.id, r.name));
-        return map;
-    }, [regionsData]);
-
     const REGION_OPTIONS = useMemo<DropdownOption[]>(() => [
         { value: "", label: "All Regions" },
         ...(regionsData?.regions ?? []).map((r) => ({ value: r.id, label: r.name })),
@@ -447,7 +441,7 @@ export function QuestsPage() {
                                                     )}
                                                 </div>
                                                 <div className="text-[11px] text-neutral-400 mt-0.5">
-                                                    {(quest.region_id && regionNameById.get(quest.region_id)) || "No region"}
+                                                    {quest.region_name || "No region"}
                                                 </div>
                                             </td>
                                             <td className="px-4 py-3">

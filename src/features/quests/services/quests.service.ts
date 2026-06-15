@@ -5,6 +5,7 @@ import type {
     V2QuestDetail,
     QuestReviewRecord,
     UpdateQuestPayload,
+    AdminQuestExperience,
 } from "@/types";
 
 // ---- List params ----
@@ -95,6 +96,14 @@ export const questsService = {
             API_ENDPOINTS.QUESTS.BY_ID(questId)
         );
         return data.quest;
+    },
+
+    /** Staff-only consolidated immersive payload (markers w/ coords, tasks, narratives, region) */
+    getExperience: async (questId: string): Promise<AdminQuestExperience> => {
+        const { data } = await api.get<{ success: boolean; experience: AdminQuestExperience }>(
+            API_ENDPOINTS.QUESTS.EXPERIENCE(questId)
+        );
+        return data.experience;
     },
 
     /** Review action history for a quest */

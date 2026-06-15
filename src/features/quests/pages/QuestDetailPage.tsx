@@ -6,7 +6,7 @@ import {
     DollarSign, Lightbulb, Trophy,
     MapPin, Layers, Compass, Trash2, History, UserCircle,
     Image as ImageIcon, Plus, Upload, X, Check, Pencil,
-    ChevronDown, Clock,
+    Clock, IndianRupee, Award, HelpCircle, Activity, Tags, Eye, Star,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@store/auth.store";
@@ -16,8 +16,9 @@ import { questsService } from "../services/quests.service";
 import { QuestActionModal, type QuestActionType } from "../components/QuestActionModal";
 import { ReviewHistory } from "../components/ReviewHistory";
 import { config } from "@/config/env";
-import { formatDuration } from "../utils/formatters";
+
 import { ExploreMap } from "../components/explore/ExploreMap";
+import { MarkerPlaylist } from "../components/detail/MarkerPlaylist";
 import type { CloudinaryAsset, UpdateQuestPayload } from "@/types";
 
 // ---- RBAC ----
@@ -38,25 +39,40 @@ const STATUS_CONFIG: Record<string, { dot: string; bg: string }> = {
 };
 
 // ---- Section wrapper ----
-function Section({ title, icon, children }: {
-    title: string; icon?: React.ReactNode; children: React.ReactNode;
+function Section({ title, icon, children, className = "" }: {
+    title: string; icon?: React.ReactNode; children: React.ReactNode; className?: string;
 }) {
     return (
-        <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-5">
-            <h3 className="text-sm font-semibold text-neutral-700 uppercase tracking-wider mb-4 flex items-center gap-2">
+        <div className={`bg-white rounded-2xl border border-neutral-200 shadow-sm p-6 flex flex-col ${className}`}>
+            <h3 className="text-sm font-semibold text-neutral-700 uppercase tracking-wider mb-5 flex items-center gap-2 flex-shrink-0">
                 {icon}<span>{title}</span>
             </h3>
-            {children}
+            <div className="flex-1 flex flex-col">
+                {children}
+            </div>
         </div>
     );
 }
 
 // ---- Static info row ----
-function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
+function InfoRow({ label, value, icon }: { label: string; value: React.ReactNode; icon?: React.ReactNode }) {
+    if (icon) {
+        return (
+            <div className="flex items-center gap-3 p-3 rounded-xl border border-neutral-200 bg-white shadow-sm">
+                <div className="w-8 h-8 rounded-lg bg-neutral-50 flex items-center justify-center text-neutral-500 flex-shrink-0">
+                    {icon}
+                </div>
+                <div className="flex flex-col flex-1 min-w-0">
+                    <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">{label}</span>
+                    <span className="text-sm font-semibold text-neutral-900 break-words leading-tight line-clamp-2">{value ?? <span className="text-neutral-400 italic font-normal">—</span>}</span>
+                </div>
+            </div>
+        );
+    }
     return (
-        <div className="flex items-start gap-2 text-sm">
-            <span className="text-neutral-400 font-medium w-32 flex-shrink-0">{label}</span>
-            <span className="text-neutral-700">{value ?? <span className="text-neutral-400 italic">—</span>}</span>
+        <div className="flex flex-col gap-1">
+            <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">{label}</span>
+            <span className="text-sm font-medium text-neutral-900 break-words">{value ?? <span className="text-neutral-400 italic font-normal">—</span>}</span>
         </div>
     );
 }
@@ -65,45 +81,105 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 function EditableRow({
     label, value, fieldKey, editingField, editValue, canEdit,
     onStart, onChange, onSave, onCancel, inputType = "text",
+    icon,
 }: {
     label: string; value: React.ReactNode; fieldKey: string;
     editingField: string | null; editValue: string; canEdit: boolean;
     onStart: () => void; onChange: (v: string) => void;
     onSave: () => void; onCancel: () => void;
     inputType?: "text" | "number";
+    icon?: React.ReactNode;
 }) {
     if (editingField === fieldKey) {
         return (
-            <div className="flex items-center gap-2 text-sm">
-                <span className="text-neutral-400 font-medium w-32 flex-shrink-0">{label}</span>
-                <input
-                    type={inputType}
-                    value={editValue}
-                    onChange={(e) => onChange(e.target.value)}
-                    autoFocus
-                    className="flex-1 bg-neutral-50 rounded-lg border border-neutral-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-violet-200"
-                    onKeyDown={(e) => {
-                        if (e.key === "Enter") onSave();
-                        if (e.key === "Escape") onCancel();
-                    }}
-                />
-                <button onClick={onSave} className="p-1 text-emerald-600 hover:bg-emerald-50 rounded">
-                    <Check className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={onCancel} className="p-1 text-red-500 hover:bg-red-50 rounded">
-                    <X className="w-3.5 h-3.5" />
-                </button>
+            <div className={`flex flex-col gap-1.5 p-3 rounded-xl border border-violet-200 bg-violet-50/50 shadow-sm ${icon ? "col-span-full sm:col-span-1" : ""}`}>
+                <span className="text-xs font-semibold text-violet-600 uppercase tracking-wider">{label}</span>
+                <div className="flex items-center gap-2">
+                    <input
+                        type={inputType}
+                        value={editValue}
+                        onChange={(e) => onChange(e.target.value)}
+                        autoFocus
+                        className="flex-1 w-full bg-white rounded-lg border border-violet-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-sm"
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") onSave();
+                            if (e.key === "Escape") onCancel();
+                        }}
+                    />
+                    <button onClick={onSave} className="p-1.5 text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm">
+                        <Check className="w-4 h-4" />
+                    </button>
+                    <button onClick={onCancel} className="p-1.5 text-neutral-600 bg-white border border-neutral-200 hover:bg-neutral-50 rounded-lg shadow-sm">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
             </div>
         );
     }
+    
+    if (icon) {
+        return (
+            <div
+                className={`group relative flex items-center gap-3 p-3 rounded-xl border border-neutral-200 bg-white shadow-sm ${canEdit ? "cursor-pointer hover:border-violet-300 hover:shadow-md transition-all" : ""}`}
+                onClick={canEdit ? onStart : undefined}
+            >
+                <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center text-violet-600 flex-shrink-0">
+                    {icon}
+                </div>
+                <div className="flex flex-col flex-1 min-w-0 pr-8">
+                    <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">{label}</span>
+                    <span className="text-sm font-semibold text-neutral-900 break-words leading-tight line-clamp-2">{value ?? <span className="text-neutral-400 italic font-normal">—</span>}</span>
+                </div>
+                {canEdit && (
+                    <div className="absolute top-1/2 -translate-y-1/2 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="p-1.5 bg-violet-100 text-violet-600 rounded-lg">
+                            <Pencil className="w-3 h-3" />
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
     return (
         <div
-            className={`flex items-start gap-2 text-sm group/row ${canEdit ? "cursor-pointer hover:bg-neutral-50 rounded-lg px-1 -mx-1 py-0.5 transition-colors" : ""}`}
+            className={`flex flex-col gap-1 group/row ${canEdit ? "cursor-pointer hover:bg-neutral-50 rounded-xl p-2 -m-2 transition-all border border-transparent hover:border-neutral-200/60" : ""}`}
             onClick={canEdit ? onStart : undefined}
         >
-            <span className="text-neutral-400 font-medium w-32 flex-shrink-0">{label}</span>
-            <span className="text-neutral-700 flex-1">{value ?? <span className="text-neutral-400 italic">—</span>}</span>
-            {canEdit && <Pencil className="w-3 h-3 text-neutral-300 group-hover/row:text-violet-500 flex-shrink-0 mt-0.5 transition-colors" />}
+            <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">{label}</span>
+            <div className="flex items-start justify-between gap-2">
+                <span className="text-sm font-medium text-neutral-900 break-words">{value ?? <span className="text-neutral-400 italic font-normal">—</span>}</span>
+                {canEdit && <Pencil className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover/row:opacity-100 transition-opacity flex-shrink-0 mt-0.5" />}
+            </div>
+        </div>
+    );
+}
+
+// ---- Crowd Meter bar ----
+const MONTH_ORDER = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function CrowdMeterBar({ meter }: { meter: Record<string, number> }) {
+    const entries = Object.entries(meter).sort(
+        (a, b) => MONTH_ORDER.indexOf(a[0]) - MONTH_ORDER.indexOf(b[0])
+    );
+    const max = Math.max(...entries.map(([, v]) => v), 1);
+    return (
+        <div>
+            <span className="text-neutral-400 font-medium text-sm w-32 inline-block flex-shrink-0 mb-2">Crowd meter</span>
+            <div className="flex items-end gap-1.5 mt-1">
+                {entries.map(([month, val]) => {
+                    const pct = Math.round((val / max) * 100);
+                    const color = pct > 70 ? "bg-red-400" : pct > 40 ? "bg-amber-400" : "bg-emerald-400";
+                    return (
+                        <div key={month} className="flex flex-col items-center gap-0.5 flex-1">
+                            <span className="text-[9px] text-neutral-500 font-medium">{val}</span>
+                            <div className="w-full rounded-t" style={{ height: `${Math.max(6, pct * 0.6)}px` }} title={`${month}: ${val}`}>
+                                <div className={`w-full h-full rounded-t ${color}`} />
+                            </div>
+                            <span className="text-[9px] text-neutral-400">{month}</span>
+                        </div>
+                    );
+                })}
+            </div>
         </div>
     );
 }
@@ -129,7 +205,7 @@ export function QuestDetailPage() {
     const [editValue, setEditValue] = useState("");
     const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
     const [uploadingMedia, setUploadingMedia] = useState(false);
-    const [markersExpanded, setMarkersExpanded] = useState(false);
+    const [focusMarkerId, setFocusMarkerId] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => { if (!deleteConfirm) setHardDelete(false); }, [deleteConfirm]);
@@ -239,6 +315,11 @@ export function QuestDetailPage() {
     };
     const cancelEdit = () => { setEditingField(null); setEditValue(""); };
 
+    const handleShowOnMap = useCallback((markerId: string) => {
+        setFocusMarkerId(markerId);
+        setActiveTab("explore");
+    }, []);
+
     // ---- Media upload ----
     const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
@@ -304,14 +385,14 @@ export function QuestDetailPage() {
         );
     }
 
-    const sc = STATUS_CONFIG[quest.status] ?? { dot: "bg-neutral-400", bg: "bg-neutral-50 text-neutral-600 border-neutral-200" };
-
     // Available action buttons based on current status
     const showApprove = canApprove && quest.status === "Under Review";
     const showRequestChanges = canApprove && quest.status === "Under Review";
     const showReject = canApprove && (quest.status === "Under Review" || quest.status === "Changes Requested");
     const showPause = canApprove && quest.status === "Published";
     const showUnpause = canApprove && quest.status === "Paused";
+
+    const sc = STATUS_CONFIG[quest.status] ?? { dot: "bg-neutral-400", bg: "bg-neutral-50 text-neutral-600 border-neutral-200" };
 
     return (
         <div className="animate-fade-in mx-auto max-w-5xl space-y-4 pb-10">
@@ -341,42 +422,32 @@ export function QuestDetailPage() {
                 {/* Action buttons */}
                 <div className="flex gap-2 flex-wrap">
                     {showApprove && (
-                        <button
-                            onClick={() => setActionModal({ action: "approve" })}
-                            className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition-colors"
-                        >
+                        <button onClick={() => setActionModal({ action: "approve" })}
+                            className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition-colors">
                             Approve
                         </button>
                     )}
                     {showRequestChanges && (
-                        <button
-                            onClick={() => setActionModal({ action: "requestChanges" })}
-                            className="px-4 py-2 rounded-xl bg-orange-100 text-orange-700 border border-orange-200 text-sm font-medium hover:bg-orange-200 transition-colors"
-                        >
+                        <button onClick={() => setActionModal({ action: "requestChanges" })}
+                            className="px-4 py-2 rounded-xl bg-orange-100 text-orange-700 border border-orange-200 text-sm font-medium hover:bg-orange-200 transition-colors">
                             Request Changes
                         </button>
                     )}
                     {showReject && (
-                        <button
-                            onClick={() => setActionModal({ action: "reject" })}
-                            className="px-4 py-2 rounded-xl bg-red-100 text-red-700 border border-red-200 text-sm font-medium hover:bg-red-200 transition-colors"
-                        >
+                        <button onClick={() => setActionModal({ action: "reject" })}
+                            className="px-4 py-2 rounded-xl bg-red-100 text-red-700 border border-red-200 text-sm font-medium hover:bg-red-200 transition-colors">
                             Reject
                         </button>
                     )}
                     {showPause && (
-                        <button
-                            onClick={() => setActionModal({ action: "pause" })}
-                            className="px-4 py-2 rounded-xl bg-amber-100 text-amber-700 border border-amber-200 text-sm font-medium hover:bg-amber-200 transition-colors"
-                        >
+                        <button onClick={() => setActionModal({ action: "pause" })}
+                            className="px-4 py-2 rounded-xl bg-amber-100 text-amber-700 border border-amber-200 text-sm font-medium hover:bg-amber-200 transition-colors">
                             Pause
                         </button>
                     )}
                     {showUnpause && (
-                        <button
-                            onClick={() => setActionModal({ action: "unpause" })}
-                            className="px-4 py-2 rounded-xl bg-emerald-100 text-emerald-700 border border-emerald-200 text-sm font-medium hover:bg-emerald-200 transition-colors"
-                        >
+                        <button onClick={() => setActionModal({ action: "unpause" })}
+                            className="px-4 py-2 rounded-xl bg-emerald-100 text-emerald-700 border border-emerald-200 text-sm font-medium hover:bg-emerald-200 transition-colors">
                             Unpause
                         </button>
                     )}
@@ -409,107 +480,104 @@ export function QuestDetailPage() {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         {/* Quest Info */}
                         <Section title="Quest Info" icon={<Compass className="w-4 h-4" />}>
-                            <div className="space-y-3">
-                                <EditableRow
-                                    label="Title" value={quest.title} fieldKey="title"
-                                    editingField={editingField} editValue={editValue} canEdit={canEdit}
-                                    onStart={() => startEdit("title", quest.title ?? "")}
-                                    onChange={setEditValue}
-                                    onSave={() => updateMutation.mutate({ title: editValue })}
-                                    onCancel={cancelEdit}
-                                />
-                                {/* Description (multi-line edit) */}
-                                <div className="text-sm">
-                                    <div className="flex items-center justify-between mb-1">
-                                        <span className="text-neutral-400 font-medium text-sm">Description</span>
-                                        {canEdit && editingField !== "description" && (
-                                            <button
-                                                onClick={() => startEdit("description", quest.description ?? "")}
-                                                className="text-neutral-300 hover:text-violet-500 transition-colors"
-                                            >
-                                                <Pencil className="w-3.5 h-3.5" />
-                                            </button>
+                            <div className="flex flex-col h-full">
+                                <div className="space-y-6 mb-6">
+                                    {/* Title Edit Logic */}
+                                    <div className="group/title relative">
+                                        {editingField === "title" ? (
+                                            <div className="flex flex-col gap-2 p-4 bg-violet-50/50 rounded-xl border border-violet-200 shadow-sm">
+                                                <div className="text-[10px] font-bold text-violet-600 uppercase tracking-wider">Edit Title</div>
+                                                <div className="flex items-center gap-2">
+                                                    <input value={editValue} onChange={(e) => setEditValue(e.target.value)} className="flex-1 bg-white border border-violet-200 rounded-lg px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-sm" autoFocus />
+                                                    <button onClick={() => updateMutation.mutate({ title: editValue })} className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm transition-colors"><Check className="w-4 h-4"/></button>
+                                                    <button onClick={cancelEdit} className="p-2 bg-white hover:bg-neutral-50 text-neutral-600 border border-neutral-200 rounded-lg shadow-sm transition-colors"><X className="w-4 h-4"/></button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className={`flex items-start gap-3 ${canEdit ? "cursor-pointer hover:bg-neutral-50 p-2 -m-2 rounded-xl transition-colors" : ""}`} onClick={() => canEdit && startEdit("title", quest.title ?? "")}>
+                                                <h3 className="text-xl sm:text-2xl font-extrabold text-neutral-900 leading-snug tracking-tight">
+                                                    {quest.title || "Untitled Quest"}
+                                                </h3>
+                                                {canEdit && <Pencil className="w-4 h-4 text-neutral-400 opacity-0 group-hover/title:opacity-100 transition-opacity mt-1.5 flex-shrink-0" />}
+                                            </div>
                                         )}
                                     </div>
-                                    {editingField === "description" ? (
-                                        <div className="space-y-2">
-                                            <textarea
-                                                value={editValue}
-                                                onChange={(e) => setEditValue(e.target.value)}
-                                                rows={4}
-                                                className="w-full text-sm bg-neutral-50 rounded-lg border border-neutral-200 p-3 focus:outline-none focus:ring-2 focus:ring-violet-200 resize-y"
-                                                autoFocus
-                                            />
-                                            <div className="flex gap-1">
-                                                <button
-                                                    onClick={() => updateMutation.mutate({ description: editValue })}
-                                                    className="px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium hover:bg-violet-700 flex items-center gap-1"
-                                                >
-                                                    <Check className="w-3 h-3" /> Save
-                                                </button>
-                                                <button
-                                                    onClick={cancelEdit}
-                                                    className="px-3 py-1.5 rounded-lg border border-neutral-200 text-neutral-600 text-xs font-medium flex items-center gap-1"
-                                                >
-                                                    <X className="w-3 h-3" /> Cancel
-                                                </button>
+
+                                    {/* Description Edit Logic */}
+                                    <div className="group/desc relative">
+                                        {editingField === "description" ? (
+                                            <div className="flex flex-col gap-2 p-4 bg-violet-50/50 rounded-xl border border-violet-200 shadow-sm">
+                                                <div className="text-[10px] font-bold text-violet-600 uppercase tracking-wider">Edit Description</div>
+                                                <textarea rows={4} value={editValue} onChange={(e) => setEditValue(e.target.value)} className="w-full bg-white border border-violet-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-sm resize-y" autoFocus />
+                                                <div className="flex justify-end gap-2 mt-1">
+                                                    <button onClick={cancelEdit} className="px-4 py-2 bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-50 rounded-lg text-sm font-medium shadow-sm transition-colors">Cancel</button>
+                                                    <button onClick={() => updateMutation.mutate({ description: editValue })} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-1.5"><Check className="w-4 h-4"/> Save Changes</button>
+                                                </div>
                                             </div>
-                                        </div>
-                                    ) : (
-                                        <p className="text-neutral-700 text-sm leading-relaxed line-clamp-4">
-                                            {quest.description || <span className="text-neutral-400 italic">No description</span>}
-                                        </p>
-                                    )}
+                                        ) : (
+                                            <div className={`relative ${canEdit ? "cursor-pointer hover:bg-neutral-50 p-2 -m-2 rounded-xl transition-colors" : ""}`} onClick={() => canEdit && startEdit("description", quest.description ?? "")}>
+                                                <p className="text-[15px] text-neutral-600 leading-relaxed pr-8">
+                                                    {quest.description || <span className="italic text-neutral-400 font-normal">No description provided.</span>}
+                                                </p>
+                                                {canEdit && <Pencil className="absolute top-2 right-2 w-4 h-4 text-neutral-400 opacity-0 group-hover/desc:opacity-100 transition-opacity bg-neutral-50 rounded flex-shrink-0" />}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-1 pt-1 border-t border-neutral-100">
-                                    <EditableRow
-                                        label="Price (₹)" value={quest.price > 0 ? `₹${quest.price.toLocaleString("en-IN")}` : "Free"}
-                                        fieldKey="price" editingField={editingField} editValue={editValue} canEdit={canEdit}
-                                        onStart={() => startEdit("price", quest.price)}
-                                        onChange={setEditValue}
-                                        onSave={() => updateMutation.mutate({ price: Number(editValue) })}
-                                        onCancel={cancelEdit} inputType="number"
-                                    />
-                                    <EditableRow
-                                        label="Points" value={quest.points}
-                                        fieldKey="points" editingField={editingField} editValue={editValue} canEdit={canEdit}
-                                        onStart={() => startEdit("points", quest.points ?? 0)}
-                                        onChange={setEditValue}
-                                        onSave={() => updateMutation.mutate({ points: Number(editValue) })}
-                                        onCancel={cancelEdit} inputType="number"
-                                    />
-                                    <EditableRow
-                                        label="Duration (min)" value={quest.duration_minutes ? `${quest.duration_minutes} min` : null}
-                                        fieldKey="duration_minutes" editingField={editingField} editValue={editValue} canEdit={canEdit}
-                                        onStart={() => startEdit("duration_minutes", quest.duration_minutes ?? 0)}
-                                        onChange={setEditValue}
-                                        onSave={() => updateMutation.mutate({ duration_minutes: Number(editValue) })}
-                                        onCancel={cancelEdit} inputType="number"
-                                    />
-                                    <EditableRow
-                                        label="Hints" value={quest.hints_allowed}
-                                        fieldKey="hints_allowed" editingField={editingField} editValue={editValue} canEdit={canEdit}
-                                        onStart={() => startEdit("hints_allowed", quest.hints_allowed ?? 0)}
-                                        onChange={setEditValue}
-                                        onSave={() => updateMutation.mutate({ hints_allowed: Number(editValue) })}
-                                        onCancel={cancelEdit} inputType="number"
-                                    />
-                                    <InfoRow label="Difficulty" value={quest.difficulty ? quest.difficulty.charAt(0).toUpperCase() + quest.difficulty.slice(1) : null} />
-                                    <InfoRow label="Theme" value={(quest.theme ?? []).join(", ") || null} />
-                                    <InfoRow label="Views" value={quest.view_count?.toLocaleString()} />
-                                    <InfoRow label="Rating" value={quest.average_rating ? `${quest.average_rating.toFixed(1)} ⭐` : null} />
-                                    <InfoRow label="Completions" value={quest.completion_count} />
-                                    <InfoRow label="Duration" value={quest.duration_minutes ? formatDuration(quest.duration_minutes) : null} />
+                                <div className="bg-neutral-50/80 border-t border-neutral-100 p-6 -mx-6 -mb-6 rounded-b-2xl mt-auto">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <EditableRow
+                                            icon={<IndianRupee className="w-4 h-4" />}
+                                            label="Price" value={quest.price > 0 ? `₹${quest.price.toLocaleString("en-IN")}` : "Free"}
+                                            fieldKey="price" editingField={editingField} editValue={editValue} canEdit={canEdit}
+                                            onStart={() => startEdit("price", quest.price)}
+                                            onChange={setEditValue}
+                                            onSave={() => updateMutation.mutate({ price: Number(editValue) })}
+                                            onCancel={cancelEdit} inputType="number"
+                                        />
+                                        <EditableRow
+                                            icon={<Award className="w-4 h-4" />}
+                                            label="Points" value={quest.points}
+                                            fieldKey="points" editingField={editingField} editValue={editValue} canEdit={canEdit}
+                                            onStart={() => startEdit("points", quest.points ?? 0)}
+                                            onChange={setEditValue}
+                                            onSave={() => updateMutation.mutate({ points: Number(editValue) })}
+                                            onCancel={cancelEdit} inputType="number"
+                                        />
+                                        <EditableRow
+                                            icon={<Clock className="w-4 h-4" />}
+                                            label="Duration" value={quest.duration_minutes ? `${quest.duration_minutes} min` : null}
+                                            fieldKey="duration_minutes" editingField={editingField} editValue={editValue} canEdit={canEdit}
+                                            onStart={() => startEdit("duration_minutes", quest.duration_minutes ?? 0)}
+                                            onChange={setEditValue}
+                                            onSave={() => updateMutation.mutate({ duration_minutes: Number(editValue) })}
+                                            onCancel={cancelEdit} inputType="number"
+                                        />
+                                        <EditableRow
+                                            icon={<HelpCircle className="w-4 h-4" />}
+                                            label="Hints" value={quest.hints_allowed}
+                                            fieldKey="hints_allowed" editingField={editingField} editValue={editValue} canEdit={canEdit}
+                                            onStart={() => startEdit("hints_allowed", quest.hints_allowed ?? 0)}
+                                            onChange={setEditValue}
+                                            onSave={() => updateMutation.mutate({ hints_allowed: Number(editValue) })}
+                                            onCancel={cancelEdit} inputType="number"
+                                        />
+                                        <InfoRow icon={<Activity className="w-4 h-4" />} label="Difficulty" value={quest.difficulty ? quest.difficulty.charAt(0).toUpperCase() + quest.difficulty.slice(1) : null} />
+                                        <InfoRow icon={<Tags className="w-4 h-4" />} label="Theme" value={(quest.theme ?? []).join(", ") || null} />
+                                        <InfoRow icon={<Eye className="w-4 h-4" />} label="Views" value={quest.view_count?.toLocaleString()} />
+                                        <InfoRow icon={<Star className="w-4 h-4 text-amber-500" />} label="Rating" value={quest.average_rating ? `${quest.average_rating.toFixed(1)}` : null} />
+
+                                    </div>
                                 </div>
                             </div>
                         </Section>
 
                         {/* Right column */}
-                        <div className="space-y-4">
+                        <div className="flex flex-col gap-4 h-full">
                             {/* Region */}
                             <Section title="Region" icon={<MapPin className="w-4 h-4" />}>
-                                <div className="space-y-2">
+                                <div className="flex flex-col gap-4">
                                     <InfoRow label="Name" value={
                                         quest.region_summary?.id ? (
                                             <Link to={`/regions/${quest.region_summary.id}`} className="text-violet-600 hover:underline">
@@ -517,15 +585,9 @@ export function QuestDetailPage() {
                                             </Link>
                                         ) : quest.region_summary?.name
                                     } />
-                                    <InfoRow label="Crowd meter" value={
-                                        quest.region_summary?.crowd_meter
-                                            ? Object.entries(quest.region_summary.crowd_meter)
-                                                .sort((a, b) => b[0].localeCompare(a[0]))
-                                                .slice(0, 3)
-                                                .map(([m, v]) => `${m}: ${v}`)
-                                                .join(" · ")
-                                            : null
-                                    } />
+                                    {quest.region_summary?.crowd_meter && Object.keys(quest.region_summary.crowd_meter).length > 0 && (
+                                        <CrowdMeterBar meter={quest.region_summary.crowd_meter} />
+                                    )}
                                 </div>
                             </Section>
 
@@ -584,8 +646,8 @@ export function QuestDetailPage() {
 
                             {/* Pricing details */}
                             {(quest.min_expense !== null || quest.max_expense !== null) && (
-                                <Section title="Estimated Expense" icon={<DollarSign className="w-4 h-4" />}>
-                                    <div className="space-y-1">
+                                <Section title="Estimated Expense" icon={<DollarSign className="w-4 h-4" />} className="flex-1">
+                                    <div className="grid grid-cols-2 gap-4">
                                         <InfoRow label="Min" value={quest.min_expense !== null ? `₹${quest.min_expense}` : null} />
                                         <InfoRow label="Max" value={quest.max_expense !== null ? `₹${quest.max_expense}` : null} />
                                     </div>
@@ -606,53 +668,11 @@ export function QuestDetailPage() {
 
                     {/* Markers playlist */}
                     <Section title={`Markers (${quest.total_markers})`} icon={<Layers className="w-4 h-4" />}>
-                        {quest.marker_summaries.length === 0 ? (
-                            <p className="text-sm text-neutral-400 italic">No markers in playlist</p>
-                        ) : (
-                            <div className="space-y-2">
-                                {(markersExpanded ? quest.marker_summaries : quest.marker_summaries.slice(0, 5))
-                                    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-                                    .map((m, i) => (
-                                        <div
-                                            key={m.marker_id}
-                                            className="flex items-center gap-3 p-3 bg-neutral-50 rounded-xl border border-neutral-100"
-                                        >
-                                            <span className="w-7 h-7 rounded-full bg-violet-100 text-violet-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
-                                                {m.order ?? i + 1}
-                                            </span>
-                                            <div className="flex-1 min-w-0">
-                                                <Link
-                                                    to={`/markers/${m.marker_id}`}
-                                                    className="text-sm font-medium text-neutral-800 hover:text-violet-600 transition-colors truncate block"
-                                                >
-                                                    {m.name || "Unnamed marker"}
-                                                </Link>
-                                                <p className="text-xs text-neutral-400 mt-0.5">
-                                                    {m.category && <span>{m.category} · </span>}
-                                                    {m.is_required ? "Required" : "Optional"}
-                                                    {m.tags.length > 0 && ` · ${m.tags.slice(0, 3).join(", ")}`}
-                                                </p>
-                                            </div>
-                                            {m.images[0]?.secure_url && (
-                                                <img
-                                                    src={m.images[0].secure_url}
-                                                    alt=""
-                                                    className="w-10 h-10 rounded-lg object-cover flex-shrink-0 border border-neutral-200"
-                                                />
-                                            )}
-                                        </div>
-                                    ))}
-                                {quest.marker_summaries.length > 5 && (
-                                    <button
-                                        onClick={() => setMarkersExpanded(!markersExpanded)}
-                                        className="flex items-center gap-1 text-sm text-violet-600 hover:text-violet-800 transition-colors mt-1"
-                                    >
-                                        <ChevronDown className={`w-4 h-4 transition-transform ${markersExpanded ? "rotate-180" : ""}`} />
-                                        {markersExpanded ? "Show less" : `Show ${quest.marker_summaries.length - 5} more`}
-                                    </button>
-                                )}
-                            </div>
-                        )}
+                        <MarkerPlaylist
+                            markers={quest.marker_summaries}
+                            startMarkerId={quest.start_point?.marker_id ?? null}
+                            onShowOnMap={handleShowOnMap}
+                        />
                     </Section>
 
                     {/* Keywords */}
@@ -750,7 +770,7 @@ export function QuestDetailPage() {
             )}
 
             {activeTab === "explore" && (
-                <ExploreMap questId={questId} detail={quest} />
+                <ExploreMap questId={questId} detail={quest} focusMarkerId={focusMarkerId} />
             )}
 
             {/* ── Modals ── */}

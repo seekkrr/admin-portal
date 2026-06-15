@@ -15,6 +15,7 @@ export const API_ENDPOINTS = {
         REJECT: (id: string) => `/api/v2/quests/${id}/reject`,
         PAUSE: (id: string) => `/api/v2/quests/${id}/pause`,
         UNPAUSE: (id: string) => `/api/v2/quests/${id}/unpause`,
+        EXPERIENCE: (id: string) => `/api/v2/quests/${id}/experience`,
     },
     CREATORS: {
         LIST: "/api/v2/creators",

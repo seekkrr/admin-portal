@@ -132,7 +132,7 @@ interface TaskConfigForm {
     quiz_options: string;
     quiz_correct_answer: string;
     qr_expected_value: string;
-    photo_requirements: string;
+    photo_min_photos: string;
 }
 
 const EMPTY_TASK_FORM: TaskConfigForm = {
@@ -147,7 +147,7 @@ const EMPTY_TASK_FORM: TaskConfigForm = {
     quiz_options: "",
     quiz_correct_answer: "",
     qr_expected_value: "",
-    photo_requirements: "",
+    photo_min_photos: "",
 };
 
 function taskConfigToForm(t: TaskConfig): TaskConfigForm {
@@ -166,8 +166,8 @@ function taskConfigToForm(t: TaskConfig): TaskConfigForm {
         quiz_options: options,
         quiz_correct_answer: typeof quiz.correct_answer === "string" ? quiz.correct_answer : "",
         qr_expected_value: typeof qr.expected_value === "string" ? qr.expected_value : "",
-        photo_requirements: t.photo_requirements
-            ? JSON.stringify(t.photo_requirements, null, 2)
+        photo_min_photos: t.photo_requirements
+            ? String((t.photo_requirements as Record<string, unknown>).min_photos ?? "")
             : "",
     };
 }
@@ -299,18 +299,9 @@ function TaskConfigsTab({ canManage }: { canManage: boolean }) {
                 typeFields.qr_data = { expected_value: form.qr_expected_value.trim() };
             }
         } else if (form.task_type === "photo_challenge") {
-            const raw = form.photo_requirements.trim();
-            if (raw) {
-                try {
-                    const parsed = JSON.parse(raw);
-                    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-                        typeFields.photo_requirements = parsed as Record<string, unknown>;
-                    } else {
-                        typeFields.photo_requirements = { description: raw };
-                    }
-                } catch {
-                    typeFields.photo_requirements = { description: raw };
-                }
+            const minPhotos = parseInt(form.photo_min_photos, 10);
+            if (!isNaN(minPhotos) && minPhotos > 0) {
+                typeFields.photo_requirements = { min_photos: minPhotos };
             }
         }
 
@@ -656,14 +647,15 @@ function TaskConfigsTab({ canManage }: { canManage: boolean }) {
                                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                                     Photo requirements
                                 </p>
-                                <Field label="JSON object, or plain text used as description">
-                                    <textarea
-                                        rows={3}
-                                        className={`${inputClass} resize-none font-mono text-xs`}
-                                        placeholder='{ "description": "Photo with the landmark" }'
-                                        value={form.photo_requirements}
+                                <Field label="Min photos required">
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        className={inputClass}
+                                        placeholder="e.g. 1"
+                                        value={form.photo_min_photos}
                                         onChange={(e) =>
-                                            setForm({ ...form, photo_requirements: e.target.value })
+                                            setForm({ ...form, photo_min_photos: e.target.value })
                                         }
                                     />
                                 </Field>
@@ -1296,49 +1288,62 @@ export function EvaluateModal({
     reward: StepReward;
     onClose: () => void;
 }) {
-    const [contextJson, setContextJson] = useState("{}");
+    // Derive unique context fields from bonus_conditions so the user gets labelled inputs
+    const contextFields: string[] = Array.from(
+        new Set((reward.bonus_conditions ?? []).map((c) => c.field).filter(Boolean))
+    );
+    const initialValues = Object.fromEntries(contextFields.map((f) => [f, ""]));
+    const [fieldValues, setFieldValues] = useState<Record<string, string>>(initialValues);
     const [result, setResult] = useState<RewardEvaluation | null>(null);
 
     const evaluateMutation = useMutation({
         mutationFn: (context: Record<string, unknown>) =>
             stepRewardsService.evaluate(reward._id, context),
-        onSuccess: (res) => {
-            setResult(res);
-        },
+        onSuccess: (res) => setResult(res),
         onError: (e: Error) => toast.error(e.message || "Failed to evaluate reward"),
     });
 
     const handleEvaluate = () => {
-        let parsed: Record<string, unknown>;
-        try {
-            const obj = JSON.parse(contextJson || "{}");
-            if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
-                toast.error("Context must be a JSON object");
-                return;
-            }
-            parsed = obj as Record<string, unknown>;
-        } catch {
-            toast.error("Invalid JSON context");
-            return;
+        const context: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(fieldValues)) {
+            if (v === "") continue;
+            const num = Number(v);
+            context[k] = isNaN(num) ? v : num;
         }
-        evaluateMutation.mutate(parsed);
+        evaluateMutation.mutate(context);
     };
 
     return (
         <ModalShell title="Evaluate Reward" onClose={onClose}>
             <div className="space-y-4">
-                <p className="text-sm text-neutral-500">
-                    Context: <span className="font-mono text-neutral-700">{reward.context_type}</span> ·{" "}
-                    <span className="font-mono text-neutral-700">{reward.context_id}</span>
-                </p>
-                <Field label="Context (JSON object)">
-                    <textarea
-                        rows={6}
-                        className={`${inputClass} resize-none font-mono text-xs`}
-                        value={contextJson}
-                        onChange={(e) => setContextJson(e.target.value)}
-                    />
-                </Field>
+                <div className="flex flex-wrap gap-2 text-xs text-neutral-500">
+                    <span>Context type: <span className="font-mono text-neutral-700 bg-neutral-100 px-1.5 py-0.5 rounded">{reward.context_type}</span></span>
+                    <span>·</span>
+                    <span>Base: <span className="font-semibold text-neutral-700">{reward.base_points} pts</span></span>
+                    {(reward.bonus_conditions?.length ?? 0) > 0 && (
+                        <><span>·</span><span>{reward.bonus_conditions?.length ?? 0} bonus condition{(reward.bonus_conditions?.length ?? 0) !== 1 ? "s" : ""}</span></>
+                    )}
+                </div>
+
+                {contextFields.length === 0 ? (
+                    <p className="text-sm text-neutral-400 italic">No bonus conditions — result will equal base points ({reward.base_points} pts).</p>
+                ) : (
+                    <div className="space-y-3">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Context values</p>
+                        {contextFields.map((field) => (
+                            <Field key={field} label={field.replace(/_/g, " ")}>
+                                <input
+                                    type="number"
+                                    className={inputClass}
+                                    placeholder="enter a value"
+                                    value={fieldValues[field] ?? ""}
+                                    onChange={(e) => setFieldValues((prev) => ({ ...prev, [field]: e.target.value }))}
+                                />
+                            </Field>
+                        ))}
+                    </div>
+                )}
+
                 <div className="flex justify-end">
                     <button
                         onClick={handleEvaluate}
