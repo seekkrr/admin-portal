@@ -10,6 +10,7 @@ import { useAuthStore } from "@store/auth.store";
 import { AccessDenied } from "@components/AccessDenied";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { usersService } from "../services/users.service";
+import { isRedundantRoleChange, effectiveRole } from "../roles";
 import { creatorsService } from "@/features/creators/services/creators.service";
 import { Badge } from "@/components/ui/Badge";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -60,7 +61,7 @@ type ConfirmAction =
     | { type: "suspend"; payload: { ids: string[] } }
     | { type: "bulk-delete"; payload: { ids: string[] } }
     | { type: "single-delete"; payload: { userId: string } }
-    | { type: "promote"; payload: { userId: string; role: string } }
+    | { type: "promote"; payload: { userId: string; role: string; current: string[] } }
     | { type: "promote-creator"; payload: { userId: string; name: string } };
 
 // ---- Filter Dropdown Options ----
@@ -285,8 +286,8 @@ export function UsersPage() {
     });
 
     const roleMutation = useMutation({
-        mutationFn: ({ userId, role }: { userId: string; role: string }) =>
-            usersService.updateUserRole(userId, role),
+        mutationFn: ({ userId, role, current }: { userId: string; role: string; current: string[] }) =>
+            usersService.updateUserRole(userId, role, current),
         onSuccess: () => {
             toast.success("Role updated successfully");
             queryClient.invalidateQueries({ queryKey: ["admin-users"] });
@@ -683,30 +684,33 @@ export function UsersPage() {
                         <p className="text-sm text-neutral-500 mb-5 flex items-center gap-2">
                             {promotingUser.first_name} {promotingUser.last_name}
                             <Badge
-                                label={promotingUser.role?.join(", ") ?? "user"}
-                                styles={roleConfig[["super_admin","admin","finance","moderator","creator","user"].find(r => (promotingUser.role as readonly string[] | undefined)?.includes(r)) ?? "user"]?.bg ?? ""}
+                                label={effectiveRole(promotingUser.role ?? []).replace("_", " ")}
+                                styles={roleConfig[effectiveRole(promotingUser.role ?? [])]?.bg ?? ""}
                             />
                         </p>
                         <div className="space-y-2">
-                            {PROMOTABLE_ROLES.map((role) => (
+                            {PROMOTABLE_ROLES.map((role) => {
+                                const isCurrent = effectiveRole(promotingUser.role ?? []) === role;
+                                return (
                                 <button
                                     key={role}
-                                    disabled={promotingUser.role?.includes(role) || roleMutation.isPending}
+                                    disabled={isRedundantRoleChange(role, promotingUser.role ?? []) || roleMutation.isPending}
                                     onClick={() => {
+                                        setConfirmAction({ type: "promote", payload: { userId: promotingUser._id, role, current: promotingUser.role ?? [] } });
                                         setPromotingUser(null);
-                                        setConfirmAction({ type: "promote", payload: { userId: promotingUser._id, role } });
                                     }}
                                     className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all
-                                        ${promotingUser.role?.includes(role)
+                                        ${isCurrent
                                             ? "border-indigo-300 bg-indigo-50 text-indigo-700 cursor-default"
                                             : "border-neutral-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-neutral-700"
                                         }
                                         disabled:opacity-50`}
                                 >
                                     <span className="capitalize">{role.replace("_", " ")}</span>
-                                    {promotingUser.role?.includes(role) && <span className="text-xs text-indigo-500">Current</span>}
+                                    {isCurrent && <span className="text-xs text-indigo-500">Current</span>}
                                 </button>
-                            ))}
+                                );
+                            })}
                         </div>
                         <button
                             onClick={() => setPromotingUser(null)}

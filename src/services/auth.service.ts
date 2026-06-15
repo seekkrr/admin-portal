@@ -1,6 +1,6 @@
 import { api, authStorage } from "./api";
 import { API_ENDPOINTS } from "@config/api";
-import type { AuthTokens, User } from "@/types";
+import { normalizeUser, type AuthTokens, type User } from "@/types";
 
 export interface AuthMeResponse {
     user: User;
@@ -31,7 +31,7 @@ export const authService = {
         const response = await api.get<{ user: User }>(API_ENDPOINTS.AUTH.VERIFY);
 
         return {
-            user: response.data.user,
+            user: normalizeUser(response.data.user),
         };
     },
 
