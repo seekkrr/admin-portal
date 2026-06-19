@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { markersService } from "../services/markers.service";
@@ -14,6 +14,9 @@ import {
     IndianRupee,
     Image as ImageIcon,
     Edit2,
+    Navigation,
+    Footprints,
+    Car,
 } from "lucide-react";
 import { useAuthStore } from "@store/auth.store";
 import { GeoMap } from "@/components/maps/GeoMap";
@@ -364,6 +367,36 @@ export function MarkerDetailPage() {
                 </Card>
             )}
 
+            {!isEditing && marker.center_distance && (
+                <Card padding="none" className="overflow-hidden">
+                    <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
+                        <h3 className="text-base font-semibold flex items-center gap-2">
+                            <Navigation className="w-4 h-4 text-orange-600" />
+                            Distance to region centre
+                        </h3>
+                    </div>
+                    <div className="p-6 space-y-4 text-sm">
+                        <CenterDistanceRow
+                            icon={<Footprints className="w-4 h-4" />}
+                            label="Walking"
+                            distance={fmtDistance(marker.center_distance.walk_distance_m)}
+                            duration={fmtDuration(marker.center_distance.walk_duration_s)}
+                        />
+                        <CenterDistanceRow
+                            icon={<Car className="w-4 h-4" />}
+                            label="Driving"
+                            distance={fmtDistance(marker.center_distance.drive_distance_m)}
+                            duration={fmtDuration(marker.center_distance.drive_duration_s)}
+                        />
+                        {marker.center_distance.computed_at && (
+                            <p className="text-xs text-neutral-400 pt-1">
+                                Computed {new Date(marker.center_distance.computed_at).toLocaleString()}
+                            </p>
+                        )}
+                    </div>
+                </Card>
+            )}
+
             {!isEditing && (
                 <Card padding="none" className="overflow-hidden">
                     <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
@@ -593,6 +626,43 @@ export function MarkerDetailPage() {
                     </label>
                 )}
             </ConfirmModal>
+        </div>
+    );
+}
+
+function fmtDistance(m: number | null | undefined): string | null {
+    if (m === null || m === undefined) return null;
+    if (m >= 1000) return `${(m / 1000).toFixed(1)} km`;
+    return `${Math.round(m)} m`;
+}
+
+function fmtDuration(s: number | null | undefined): string | null {
+    if (s === null || s === undefined) return null;
+    const totalMin = Math.round(s / 60);
+    if (totalMin < 1) return "<1 min";
+    if (totalMin < 60) return `${totalMin} min`;
+    const h = Math.floor(totalMin / 60);
+    const min = totalMin % 60;
+    return min ? `${h} h ${min} min` : `${h} h`;
+}
+
+function CenterDistanceRow({
+    icon,
+    label,
+    distance,
+    duration,
+}: {
+    icon: ReactNode;
+    label: string;
+    distance: string | null;
+    duration: string | null;
+}) {
+    const parts = [distance, duration].filter(Boolean) as string[];
+    return (
+        <div className="flex items-center gap-3 text-neutral-700">
+            <span className="text-orange-600 shrink-0">{icon}</span>
+            <span className="font-medium text-neutral-500 w-28 shrink-0">{label}</span>
+            <span className="text-neutral-800">{parts.length ? parts.join(" · ") : "—"}</span>
         </div>
     );
 }

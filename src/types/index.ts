@@ -573,8 +573,19 @@ export interface Marker {
     source: string | null;
     created_by: string | null;
     usage_count: number;
+    center_distance: MarkerCenterDistance | null;
     created_at: string | null;
     updated_at: string | null;
+}
+
+export interface MarkerCenterDistance {
+    region_id: string | null;
+    center: [number, number] | null;
+    walk_distance_m: number | null;
+    walk_duration_s: number | null;
+    drive_distance_m: number | null;
+    drive_duration_s: number | null;
+    computed_at: string | null;
 }
 
 export interface MarkerApplication {
