@@ -13,6 +13,9 @@ import {
     X,
     AudioLines,
     Play,
+    Plus,
+    ChevronRight,
+    Link2,
 } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { LoadingFallback } from "@components/LoadingFallback";
@@ -23,6 +26,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { FilterDropdown } from "@/components/FilterDropdown";
 import { Badge } from "@/components/ui/Badge";
 import { playVoicePreview, PERSONAS } from "../components/voicePersonas";
+import { CreateNarrativeModal } from "../components/CreateNarrativeModal";
 import { useBulkSelection, runBulk } from "@/hooks/useBulkSelection";
 
 const CAN_MODERATE_ROLES = ["admin", "super_admin", "moderator"];
@@ -49,6 +53,7 @@ export function NarrativesPage() {
 
     const [tab, setTab] = useState<TabKey>("queue");
     const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
+    const [createOpen, setCreateOpen] = useState(false);
 
     const deleteMutation = useMutation({
         mutationFn: (id: string) => narrativesService.remove(id),
@@ -62,8 +67,8 @@ export function NarrativesPage() {
     });
 
     return (
-        <div className="p-6 max-w-[1400px] mx-auto animate-fade-in space-y-6">
-            <div className="flex justify-between items-center">
+        <div className="max-w-[1400px] mx-auto animate-fade-in space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center shadow-sm text-white">
                         <BookOpen className="h-5 w-5" />
@@ -75,25 +80,34 @@ export function NarrativesPage() {
                         <p className="mt-1 text-sm text-neutral-500">Review, moderate and publish quest narratives</p>
                     </div>
                 </div>
+                {canModerate && (
+                    <button
+                        onClick={() => setCreateOpen(true)}
+                        className="inline-flex items-center gap-2 rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-orange-700 active:scale-95"
+                    >
+                        <Plus className="h-4 w-4" />
+                        New Narrative
+                    </button>
+                )}
             </div>
 
-            <div className="flex gap-1 border-b border-neutral-200">
+            <div className="flex gap-1 bg-neutral-100 rounded-xl p-1 w-fit">
                 <button
                     onClick={() => setTab("queue")}
-                    className={`-mb-px border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                         tab === "queue"
-                            ? "border-orange-600 text-orange-600"
-                            : "border-transparent text-neutral-500 hover:text-neutral-800"
+                            ? "bg-white shadow-sm text-neutral-900"
+                            : "text-neutral-500 hover:text-neutral-700"
                     }`}
                 >
                     Review Queue
                 </button>
                 <button
                     onClick={() => setTab("all")}
-                    className={`-mb-px border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                         tab === "all"
-                            ? "border-orange-600 text-orange-600"
-                            : "border-transparent text-neutral-500 hover:text-neutral-800"
+                            ? "bg-white shadow-sm text-neutral-900"
+                            : "text-neutral-500 hover:text-neutral-700"
                     }`}
                 >
                     All Narratives
@@ -123,6 +137,8 @@ export function NarrativesPage() {
                 onCancel={() => setConfirmDelete(null)}
                 isPending={deleteMutation.isPending}
             />
+
+            <CreateNarrativeModal open={createOpen} onClose={() => setCreateOpen(false)} />
         </div>
     );
 }
@@ -134,6 +150,7 @@ function NarrativeRow({
     onCheck,
     canModerate,
     onDelete,
+    indent,
 }: {
     n: AdminNarrative;
     selectable?: boolean;
@@ -141,9 +158,10 @@ function NarrativeRow({
     onCheck?: (id: string, checked: boolean) => void;
     canModerate?: boolean;
     onDelete?: (id: string, name: string) => void;
+    indent?: boolean;
 }) {
     return (
-        <tr className="group hover:bg-neutral-50/80 hover:shadow-sm hover:-translate-y-[1px] transition-all duration-200">
+        <tr className={`group hover:bg-neutral-50/80 transition-colors duration-150 ${indent ? "bg-neutral-50/40" : ""}`}>
             {selectable && (
                 <td className="whitespace-nowrap px-4 py-4">
                     <input
@@ -155,8 +173,24 @@ function NarrativeRow({
                 </td>
             )}
             <td className="px-4 py-4">
-                <Link to={`/narratives/${n._id}`} className="block">
-                    <div className="font-medium text-neutral-900">{n.title || "Untitled"}</div>
+                <Link to={`/narratives/${n._id}`} className={`block ${indent ? "pl-8" : ""}`}>
+                    <div className="flex items-center gap-2 font-medium text-neutral-900">
+                        {indent && n.sequence_order !== null && (
+                            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-100 px-1.5 text-[10px] font-bold text-orange-700">
+                                {n.sequence_order}
+                            </span>
+                        )}
+                        {!indent && n.chain_id && (
+                            <span
+                                title="Part of a chain"
+                                className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700"
+                            >
+                                <Link2 className="h-3 w-3" />
+                                {n.sequence_order !== null ? `#${n.sequence_order}` : "chain"}
+                            </span>
+                        )}
+                        {n.title || "Untitled"}
+                    </div>
                     {n.subtitle && <div className="mt-0.5 text-xs text-neutral-500">{n.subtitle}</div>}
                 </Link>
             </td>
@@ -237,6 +271,97 @@ function NarrativeRow({
     );
 }
 
+
+// Groups a page of narratives into chains (chain_id set, >1 member) and
+// loose rows (standalone or a chain with a single member on this page).
+interface ChainGroup {
+    chain_id: string;
+    members: AdminNarrative[];
+}
+
+function groupByChain(narratives: AdminNarrative[]): {
+    chains: ChainGroup[];
+    loose: AdminNarrative[];
+} {
+    const byChain = new Map<string, AdminNarrative[]>();
+    const loose: AdminNarrative[] = [];
+    for (const n of narratives) {
+        if (n.chain_id) {
+            const arr = byChain.get(n.chain_id) ?? [];
+            arr.push(n);
+            byChain.set(n.chain_id, arr);
+        } else {
+            loose.push(n);
+        }
+    }
+    const chains: ChainGroup[] = [];
+    for (const [chain_id, members] of byChain.entries()) {
+        if (members.length > 1) {
+            members.sort((a, b) => (a.sequence_order ?? 0) - (b.sequence_order ?? 0));
+            chains.push({ chain_id, members });
+        } else {
+            // A lone chain member on this page renders as a normal row.
+            loose.push(...members);
+        }
+    }
+    return { chains, loose };
+}
+
+function ChainGroupRows({
+    group,
+    colSpan,
+    selectable,
+    selected,
+    onCheck,
+    canModerate,
+    onDelete,
+}: {
+    group: ChainGroup;
+    colSpan: number;
+    selectable?: boolean;
+    selected?: Set<string>;
+    onCheck?: (id: string, checked: boolean) => void;
+    canModerate?: boolean;
+    onDelete?: (id: string, name: string) => void;
+}) {
+    const [expanded, setExpanded] = useState(true);
+    const headTitle = group.members[0]?.title || "Untitled";
+    return (
+        <>
+            <tr className="bg-neutral-50/60 border-y border-neutral-100">
+                <td colSpan={colSpan} className="px-4 py-2.5">
+                    <button
+                        type="button"
+                        onClick={() => setExpanded((e) => !e)}
+                        className="inline-flex items-center gap-2.5 text-sm font-medium text-neutral-700 hover:text-neutral-900 transition-colors"
+                    >
+                        <ChevronRight
+                            className={`h-4 w-4 text-neutral-400 transition-transform duration-150 ${expanded ? "rotate-90" : ""}`}
+                        />
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white border border-neutral-200 text-xs font-semibold text-neutral-600 shadow-sm">
+                            <Link2 className="h-3.5 w-3.5 text-neutral-400" />
+                            Chain of {group.members.length}
+                        </div>
+                        <span className="font-normal text-neutral-500">— {headTitle}</span>
+                    </button>
+                </td>
+            </tr>
+            {expanded &&
+                group.members.map((m) => (
+                    <NarrativeRow
+                        key={m._id}
+                        n={m}
+                        indent
+                        selectable={selectable}
+                        checked={selected?.has(m._id)}
+                        onCheck={onCheck}
+                        canModerate={canModerate}
+                        onDelete={onDelete}
+                    />
+                ))}
+        </>
+    );
+}
 
 function ReviewQueueTab({
     canModerate,
@@ -370,7 +495,7 @@ function ReviewQueueTab({
                                 )}
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-neutral-200 bg-white">
+                        <tbody className="bg-white divide-y divide-neutral-200">
                             {narratives.map((n) => (
                                 <NarrativeRow
                                     key={n._id}
@@ -478,6 +603,7 @@ function AllNarrativesTab({
 
     const narratives = data?.narratives ?? [];
     const totalPages = data?.total_pages ?? 1;
+    const { chains, loose } = groupByChain(narratives);
 
     const sel = useBulkSelection(narratives.map((n) => n._id));
     const invalidate = () => {
@@ -530,7 +656,7 @@ function AllNarrativesTab({
                             placeholder="Search narratives..."
                             value={searchInput}
                             onChange={(e) => setSearchInput(e.target.value)}
-                            className="w-full rounded-xl py-2.5 px-4 pl-10 border border-neutral-200 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-orange-500"
+                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                         />
                         {searchInput && (
                             <button
@@ -613,8 +739,20 @@ function AllNarrativesTab({
                                     )}
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-neutral-200 bg-white">
-                                {narratives.map((n) => (
+                            <tbody className="bg-white divide-y divide-neutral-200">
+                                {chains.map((group) => (
+                                    <ChainGroupRows
+                                        key={group.chain_id}
+                                        group={group}
+                                        colSpan={canModerate ? 9 : 7}
+                                        selectable={canModerate}
+                                        selected={sel.selected}
+                                        onCheck={sel.toggle}
+                                        canModerate={canModerate}
+                                        onDelete={onDelete}
+                                    />
+                                ))}
+                                {loose.map((n) => (
                                     <NarrativeRow
                                         key={n._id}
                                         n={n}

@@ -747,8 +747,80 @@ export interface UpdateNarrativePayload {
     trigger_radius_m?: number;
     is_mandatory?: boolean;
     is_unlocked?: boolean;
+    chain_id?: string;
     sequence_order?: number;
     media?: string[];
+}
+
+// Create payload (POST /narratives). Mirrors CreateNarrativeBody on the
+// backend. attach_type/attach_id/title are required; everything else optional.
+export interface CreateNarrativePayload {
+    title: string;
+    attach_type: NarrativeAttachType;
+    attach_id: string;
+    content?: string;
+    subtitle?: string;
+    trigger_location?: GeoPoint;
+    trigger_radius_m?: number;
+    voice_persona?: VoicePersona;
+    media?: string[];
+    is_mandatory?: boolean;
+    is_unlocked?: boolean;
+    // Append onto an EXISTING chain: real ObjectId chain_id from the summary,
+    // plus the slot to occupy.
+    chain_id?: string;
+    sequence_order?: number;
+    // Chain onto an existing STANDALONE narrative (its `_id`); the backend mints
+    // a chain and back-patches both narratives.
+    chain_with?: string;
+    // Save-as-Draft → "draft"; Submit → "approved". Defaults to "draft".
+    status?: "draft" | "under_review" | "approved";
+}
+
+// ── Attach-summary / conflict detection ────────────────────────────────────
+// Real backend endpoint:
+//   GET /api/v2/narratives/attach-summary?attach_type=<>&attach_id=<>
+// "active" narratives = status draft|under_review|approved (archived/rejected
+// excluded). Used by the Create modal's pre-check to surface duplicate-
+// attachment conflicts and to drive the chain/edit decision.
+
+// One existing narrative chain attached to the target.
+export interface NarrativeChainSummary {
+    chain_id: string;
+    // Human label for the chain (typically the first narrative's title).
+    label: string;
+    // First narrative in the chain — the "edit existing" navigation target.
+    first_narrative_id: string;
+    // Number of active narratives in this chain.
+    count: number;
+    // Highest sequence_order currently used in the chain.
+    max_sequence_order: number;
+    // Sequence order to use when appending the next narrative.
+    next_sequence_order: number;
+}
+
+// A standalone (un-chained) active narrative on the target.
+export interface NarrativeStandaloneSummary {
+    _id: string;
+    title: string;
+    status: NarrativeStatus;
+    sequence_order: number | null;
+}
+
+export interface NarrativeAttachSummary {
+    success: boolean;
+    attach_type: NarrativeAttachType;
+    attach_id: string;
+    // Total active narratives on the target.
+    active_count: number;
+    // True when active_count > 0.
+    has_conflict: boolean;
+    // True when any active narrative already belongs to a chain.
+    is_chain: boolean;
+    // Existing chains attached to the target.
+    chains: NarrativeChainSummary[];
+    // Active narratives attached to the target with no chain.
+    standalone: NarrativeStandaloneSummary[];
 }
 
 // Reviews — backend ReviewService._serialize keeps `_id` (string)

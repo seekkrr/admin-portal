@@ -50,6 +50,8 @@ export const API_ENDPOINTS = {
         BY_ID: (id: string) => `/api/v2/narratives/${id}`,
         BY_QUEST: (questId: string) => `/api/v2/narratives/by-attach/quest/${questId}`,
         BY_ATTACH: (attachType: string, attachId: string) => `/api/v2/narratives/by-attach/${attachType}/${attachId}`,
+        // Conflict pre-check. Query with ?attach_type=<>&attach_id=<>.
+        ATTACH_SUMMARY: "/api/v2/narratives/attach-summary",
         APPROVE: (id: string) => `/api/v2/narratives/${id}/approve`,
         REJECT: (id: string) => `/api/v2/narratives/${id}/reject`,
         ARCHIVE: (id: string) => `/api/v2/narratives/${id}/archive`,
