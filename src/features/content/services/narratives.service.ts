@@ -7,6 +7,9 @@ import type {
     NarrativeAudioStatusResponse,
     BulkApproveResponse,
     UpdateNarrativePayload,
+    CreateNarrativePayload,
+    NarrativeAttachType,
+    NarrativeAttachSummary,
 } from "@/types";
 
 export const narrativesService = {
@@ -16,6 +19,33 @@ export const narrativesService = {
             if (v !== undefined && v !== "") qs.append(k, String(v));
         });
         const { data } = await api.get(`${API_ENDPOINTS.NARRATIVES.BASE}?${qs}`);
+        return data;
+    },
+
+    // Create a narrative. Stays intentionally simple: POST and return the new
+    // narrative. The shared axios interceptor already converts any error into a
+    // bare `new Error(message)`, which is all the callers need for a generic
+    // toast — the conflict UX is driven by attachSummary(), not error parsing.
+    create: async (payload: CreateNarrativePayload): Promise<AdminNarrative> => {
+        const { data } = await api.post(API_ENDPOINTS.NARRATIVES.CREATE, payload);
+        return data.narrative;
+    },
+
+    // Conflict pre-check. Hits the real backend attach-summary endpoint and
+    // returns its shape verbatim: active_count / has_conflict / is_chain plus
+    // the chains[] and standalone[] the Create modal uses to drive the chain /
+    // edit-existing decision.
+    attachSummary: async (
+        attachType: NarrativeAttachType,
+        attachId: string,
+    ): Promise<NarrativeAttachSummary> => {
+        const qs = new URLSearchParams({
+            attach_type: attachType,
+            attach_id: attachId,
+        });
+        const { data } = await api.get<NarrativeAttachSummary>(
+            `${API_ENDPOINTS.NARRATIVES.ATTACH_SUMMARY}?${qs}`,
+        );
         return data;
     },
 
