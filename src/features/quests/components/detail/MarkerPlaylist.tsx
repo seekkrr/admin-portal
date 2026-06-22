@@ -25,7 +25,7 @@ export function MarkerPlaylist({ markers, startMarkerId, onShowOnMap }: MarkerPl
                         {m.order ?? i + 1}
                     </span>
                     {m.images?.[0]?.secure_url && (
-                        <img src={m.images[0].secure_url} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0 border border-neutral-200" />
+                        <img src={m.images?.[0]?.secure_url} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0 border border-neutral-200" />
                     )}
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">

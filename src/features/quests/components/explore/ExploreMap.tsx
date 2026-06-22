@@ -406,6 +406,13 @@ export function ExploreMap({ questId, detail, focusMarkerId }: ExploreMapProps) 
         // real advance); silent stops use a short readable dwell.
         const delay = hasAudio ? 45000 * (narrs?.length ?? 1) : 6000;
         advanceTimerRef.current = setTimeout(() => tourNext(), delay);
+
+        return () => {
+            if (advanceTimerRef.current) {
+                clearTimeout(advanceTimerRef.current);
+                advanceTimerRef.current = null;
+            }
+        };
     }, [activeMarker, tourPlaying, tourNext, narrativeByMarker]);
 
     // Quest complete when every stop has been discovered — but let the final
@@ -422,6 +429,13 @@ export function ExploreMap({ questId, detail, focusMarkerId }: ExploreMapProps) 
             if (finaleTimerRef.current) clearTimeout(finaleTimerRef.current);
             finaleTimerRef.current = setTimeout(showCelebration, fallback);
         }
+
+        return () => {
+            if (finaleTimerRef.current) {
+                clearTimeout(finaleTimerRef.current);
+                finaleTimerRef.current = null;
+            }
+        };
     }, [discoveredCount, placed.length, tourStop, activeMarker, narrativeByMarker, showCelebration]);
 
     // If the player closes the final stop's panel while we're waiting on its
@@ -543,6 +557,7 @@ export function ExploreMap({ questId, detail, focusMarkerId }: ExploreMapProps) 
 
             {activeMarker && (
                 <ExperiencePanel
+                    key={activeMarker.marker_id}
                     marker={activeMarker}
                     narratives={narrativeByMarker.get(activeMarker.marker_id) ?? []}
                     onClose={() => { tour.stop(); setActiveMarker(null); }}

@@ -57,7 +57,7 @@ export function MarkerOverlayCard({ marker, onClose }: MarkerOverlayCardProps) {
                         shadow-2xl overflow-hidden">
             {marker.images?.[0] && (
                 <div className="relative h-32 flex-shrink-0 overflow-hidden">
-                    <img src={marker.images[0]} alt="" className="w-full h-full object-cover" />
+                    <img src={marker.images?.[0]} alt="" className="w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-gradient-to-t from-neutral-900 to-transparent" />
                     <div className="absolute bottom-2 left-3 right-8">
                         <p className="text-white font-bold text-sm truncate">{marker.name}</p>

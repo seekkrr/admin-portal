@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { X, Volume2, Sparkles, CheckSquare, MapPin, ChevronLeft, ChevronRight } from "lucide-react";
 import { TaskPlayer } from "./TaskPlayer";
 import type { ExperienceMarker, ExperienceNarrative } from "@/types";
@@ -15,11 +15,21 @@ interface ExperiencePanelProps {
 
 export function ExperiencePanel({ marker, narratives, onClose, onTaskComplete, onHintUsed, onChainComplete }: ExperiencePanelProps) {
     const [chainIndex, setChainIndex] = useState(0);
+    const audioTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Reset chain position when the marker (stop) changes.
     useEffect(() => { setChainIndex(0); }, [marker.marker_id]);
 
     const current = narratives[chainIndex] ?? null;
+
+    useEffect(() => {
+        return () => {
+            if (audioTimeoutRef.current) {
+                clearTimeout(audioTimeoutRef.current);
+                audioTimeoutRef.current = null;
+            }
+        };
+    }, [current]);
     const isChain = narratives.length > 1;
     const isLast = chainIndex >= narratives.length - 1;
 
@@ -35,7 +45,7 @@ export function ExperiencePanel({ marker, narratives, onClose, onTaskComplete, o
     const handleAudioEnded = useCallback(() => {
         if (!isLast) {
             // Auto-advance to next narrative in the chain after a brief pause.
-            setTimeout(() => goNext(), 600);
+            audioTimeoutRef.current = setTimeout(() => goNext(), 600);
         } else {
             onChainComplete?.();
         }
