@@ -19,7 +19,7 @@ export function TaskPlayer({ task, onComplete, onHint }: { task: ExperienceTask;
 
     const quiz = task.quiz_data;
     const items = task.collection_items;
-    const hint = task.hints[0];
+    const hint = task.hints?.[0] ?? null;
 
     const revealHint = () => {
         setShowHint((s) => !s);

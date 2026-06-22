@@ -55,9 +55,9 @@ export function MarkerOverlayCard({ marker, onClose }: MarkerOverlayCardProps) {
         <div className="relative w-[320px] max-h-[340px] flex flex-col
                         bg-[rgba(17,17,21,0.96)] backdrop-blur-md rounded-2xl border border-violet-700/40
                         shadow-2xl overflow-hidden">
-            {marker.images[0] && (
+            {marker.images?.[0] && (
                 <div className="relative h-32 flex-shrink-0 overflow-hidden">
-                    <img src={marker.images[0]} alt="" className="w-full h-full object-cover" />
+                    <img src={marker.images?.[0]} alt="" className="w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-gradient-to-t from-neutral-900 to-transparent" />
                     <div className="absolute bottom-2 left-3 right-8">
                         <p className="text-white font-bold text-sm truncate">{marker.name}</p>
@@ -66,7 +66,7 @@ export function MarkerOverlayCard({ marker, onClose }: MarkerOverlayCardProps) {
                 </div>
             )}
             <div className="p-3 space-y-2 overflow-y-auto">
-                {!marker.images[0] && (
+                {!marker.images?.[0] && (
                     <div className="flex items-center gap-2">
                         <MapPin className="w-4 h-4 text-violet-400 flex-shrink-0" />
                         <div>

@@ -1665,6 +1665,7 @@ export interface ExperienceNarrative {
     media: string[];
     is_mandatory: boolean;
     sequence_order: number | null;
+    chain_id: string | null;
     attach_type: string;
     attach_id: string;
 }
