@@ -119,17 +119,19 @@ export function ExploreMap({ questId, detail, focusMarkerId }: ExploreMapProps) 
     );
     const startMarkerId = experience.startPoint?.marker_id ?? null;
 
-    // Map each marker to its attached narrative (for the left ExperiencePanel),
-    // and keep quest/region narratives separately for the briefing drawer.
+    // Map each marker to its attached narratives (chain support: a marker can
+    // carry multiple narratives that play sequentially, ordered by sequence_order).
     const narrativeByMarker = useMemo(() => {
-        const m = new Map<string, ExperienceNarrative>();
+        const m = new Map<string, ExperienceNarrative[]>();
         for (const n of experience.narratives) {
             if (n.attach_type !== "marker" || !n.attach_id) continue;
-            // A marker can carry more than one narrative (e.g. a stale pre-seed
-            // placeholder alongside the polished one). Prefer the narrative that
-            // actually has audio so the real story always wins.
-            const existing = m.get(n.attach_id);
-            if (!existing || (!existing.audio_url && n.audio_url)) m.set(n.attach_id, n);
+            const arr = m.get(n.attach_id) ?? [];
+            arr.push(n);
+            m.set(n.attach_id, arr);
+        }
+        // Sort each chain by sequence_order so they play in the correct order.
+        for (const arr of m.values()) {
+            arr.sort((a, b) => (a.sequence_order ?? 0) - (b.sequence_order ?? 0));
         }
         return m;
     }, [experience.narratives]);
@@ -398,8 +400,11 @@ export function ExploreMap({ questId, detail, focusMarkerId }: ExploreMapProps) 
     useEffect(() => {
         if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
         if (!tourPlaying || !activeMarker) return;
-        const narr = narrativeByMarker.get(activeMarker.marker_id);
-        const delay = narr?.audio_url ? 45000 : 6000;
+        const narrs = narrativeByMarker.get(activeMarker.marker_id);
+        const hasAudio = narrs?.some((n) => n.audio_url);
+        // Chains with audio get a long safety net (ExperiencePanel drives the
+        // real advance); silent stops use a short readable dwell.
+        const delay = hasAudio ? 45000 * (narrs?.length ?? 1) : 6000;
         advanceTimerRef.current = setTimeout(() => tourNext(), delay);
     }, [activeMarker, tourPlaying, tourNext, narrativeByMarker]);
 
@@ -411,8 +416,9 @@ export function ExploreMap({ questId, detail, focusMarkerId }: ExploreMapProps) 
             completedRef.current = true;
             tourStop();
             awaitingFinaleRef.current = true;
-            const narr = activeMarker ? narrativeByMarker.get(activeMarker.marker_id) : null;
-            const fallback = narr?.audio_url ? 30000 : 3500;
+            const narrs = activeMarker ? narrativeByMarker.get(activeMarker.marker_id) : null;
+            const hasAudio = narrs?.some((n) => n.audio_url);
+            const fallback = hasAudio ? 30000 * (narrs?.length ?? 1) : 3500;
             if (finaleTimerRef.current) clearTimeout(finaleTimerRef.current);
             finaleTimerRef.current = setTimeout(showCelebration, fallback);
         }
@@ -538,11 +544,11 @@ export function ExploreMap({ questId, detail, focusMarkerId }: ExploreMapProps) 
             {activeMarker && (
                 <ExperiencePanel
                     marker={activeMarker}
-                    narrative={narrativeByMarker.get(activeMarker.marker_id) ?? null}
+                    narratives={narrativeByMarker.get(activeMarker.marker_id) ?? []}
                     onClose={() => { tour.stop(); setActiveMarker(null); }}
                     onTaskComplete={onTaskComplete}
                     onHintUsed={onHintUsed}
-                    onAudioEnded={handleNarrationEnded}
+                    onChainComplete={handleNarrationEnded}
                 />
             )}
 

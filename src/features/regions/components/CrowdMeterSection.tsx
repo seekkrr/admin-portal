@@ -85,11 +85,10 @@ export function CrowdMeterSection({ regionId, canApprove }: CrowdMeterSectionPro
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-neutral-500 mb-1">Value (0–100)</label>
+                                <label className="block text-xs font-medium text-neutral-500 mb-1">Visitors</label>
                                 <input
                                     type="number"
                                     min={0}
-                                    max={100}
                                     value={crowdValue}
                                     onChange={(e) => setCrowdValue(e.target.value)}
                                     className="w-32 rounded-xl py-2.5 px-4 border border-neutral-200 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all"
@@ -98,8 +97,8 @@ export function CrowdMeterSection({ regionId, canApprove }: CrowdMeterSectionPro
                             <button
                                 onClick={() => {
                                     const v = Number(crowdValue);
-                                    if (!Number.isFinite(v) || v < 0 || v > 100) {
-                                        toast.error("Value must be between 0 and 100");
+                                    if (!Number.isFinite(v) || v < 0) {
+                                        toast.error("Value must be 0 or greater");
                                         return;
                                     }
                                     crowdMutation.mutate({ month: crowdMonth, value: Math.round(v) });
