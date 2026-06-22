@@ -12,7 +12,7 @@ interface ExperiencePanelProps {
 }
 
 export function ExperiencePanel({ marker, narrative, onClose, onTaskComplete, onHintUsed, onAudioEnded }: ExperiencePanelProps) {
-    const heroImg = narrative?.media?.[0] ?? marker.images[0] ?? null;
+    const heroImg = narrative?.media?.[0] ?? marker.images?.[0] ?? null;
     return (
         <div className="absolute top-3 bottom-[84px] left-3 z-30 w-[372px] max-w-[88%] flex flex-col
                         bg-[rgba(13,13,18,0.96)] backdrop-blur-md border border-violet-800/40 rounded-2xl shadow-2xl overflow-hidden">
