@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { markersService } from "../services/markers.service";
@@ -17,6 +17,10 @@ import {
     Navigation,
     Footprints,
     Car,
+    ListChecks,
+    Upload,
+    Loader2,
+    X,
 } from "lucide-react";
 import { useAuthStore } from "@store/auth.store";
 import { GeoMap } from "@/components/maps/GeoMap";
@@ -24,6 +28,7 @@ import { toast } from "sonner";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Card } from "@/components/ui/Card";
+import { config } from "@/config/env";
 import type { UpdateMarkerPayload, MarkerStatus } from "@/types";
 
 const STATUS_VALUES: MarkerStatus[] = ["approved", "pending", "hidden", "rejected"];
@@ -37,10 +42,12 @@ interface EditForm {
     status: MarkerStatus;
     websiteUrl: string;
     contact: string;
+    thingsToDoText: string;
+    thingsToDoImageUrl: string;
     minExpense: string;
     maxExpense: string;
     regionId: string;
-    media: string;
+    media: string[];
 }
 
 export function MarkerDetailPage() {
@@ -57,6 +64,10 @@ export function MarkerDetailPage() {
     const [isEditing, setIsEditing] = useState(false);
     const [showDelete, setShowDelete] = useState(false);
     const [hardDelete, setHardDelete] = useState(false);
+    const [uploadingTtd, setUploadingTtd] = useState(false);
+    const ttdFileInputRef = useRef<HTMLInputElement>(null);
+    const [uploadingMedia, setUploadingMedia] = useState(false);
+    const mediaFileInputRef = useRef<HTMLInputElement>(null);
 
     const { data: marker, isLoading, error } = useQuery({
         queryKey: ["marker-detail", markerId],
@@ -76,10 +87,12 @@ export function MarkerDetailPage() {
                 status: marker.status,
                 websiteUrl: marker.website_url ?? "",
                 contact: marker.contact ?? "",
+                thingsToDoText: marker.things_to_do_text ?? "",
+                thingsToDoImageUrl: marker.things_to_do_image_url ?? "",
                 minExpense: marker.min_expense !== null ? String(marker.min_expense) : "",
                 maxExpense: marker.max_expense !== null ? String(marker.max_expense) : "",
                 regionId: marker.region_id ?? "",
-                media: (marker.media ?? []).join(", "),
+                media: marker.media ?? [],
             });
         }
     }, [marker]);
@@ -108,6 +121,58 @@ export function MarkerDetailPage() {
             setShowDelete(false);
         },
     });
+
+    // ── Things-to-do image upload (unsigned Cloudinary, mirrors CreateNarrativeModal) ──
+    const handleTtdImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploadingTtd(true);
+        try {
+            const fd = new FormData();
+            fd.append("file", file);
+            fd.append("upload_preset", config.cloudinary.uploadPreset);
+            const res = await fetch(config.cloudinary.uploadUrl, { method: "POST", body: fd });
+            if (!res.ok) throw new Error("Upload failed");
+            const json = (await res.json()) as { secure_url: string };
+            setForm((f) => (f ? { ...f, thingsToDoImageUrl: json.secure_url } : f));
+            toast.success("Image uploaded");
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Upload failed");
+        } finally {
+            setUploadingTtd(false);
+            if (ttdFileInputRef.current) ttdFileInputRef.current.value = "";
+        }
+    };
+
+    // ── Media upload (unsigned Cloudinary, mirrors CreateNarrativeModal) ──
+    const handleMediaUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        setUploadingMedia(true);
+        try {
+            const urls = await Promise.all(
+                Array.from(files).map(async (file) => {
+                    const fd = new FormData();
+                    fd.append("file", file);
+                    fd.append("upload_preset", config.cloudinary.uploadPreset);
+                    const res = await fetch(config.cloudinary.uploadUrl, { method: "POST", body: fd });
+                    if (!res.ok) throw new Error(`Upload failed: ${file.name}`);
+                    const json = (await res.json()) as { secure_url: string };
+                    return json.secure_url;
+                }),
+            );
+            setForm((f) => (f ? { ...f, media: [...f.media, ...urls] } : f));
+            toast.success(`${files.length} file(s) uploaded`);
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Upload failed");
+        } finally {
+            setUploadingMedia(false);
+            if (mediaFileInputRef.current) mediaFileInputRef.current.value = "";
+        }
+    };
+
+    const removeMedia = (url: string) =>
+        setForm((f) => (f ? { ...f, media: f.media.filter((m) => m !== url) } : f));
 
     if (isLoading) return <LoadingFallback message="Loading marker..." />;
 
@@ -141,10 +206,29 @@ export function MarkerDetailPage() {
             payload.website_url = form.websiteUrl.trim();
         if (form.contact.trim() !== (marker.contact ?? ""))
             payload.contact = form.contact.trim();
+        if (form.thingsToDoText.trim() !== (marker.things_to_do_text ?? ""))
+            payload.things_to_do_text = form.thingsToDoText.trim();
+        if (form.thingsToDoImageUrl.trim() !== (marker.things_to_do_image_url ?? ""))
+            payload.things_to_do_image_url = form.thingsToDoImageUrl.trim();
         if (form.regionId.trim() !== (marker.region_id ?? ""))
             payload.region_id = form.regionId.trim();
 
-        const nextMedia = form.media.split(",").map((m) => m.trim()).filter(Boolean);
+        const parsedMin = form.minExpense.trim() ? Number(form.minExpense.trim()) : null;
+        const parsedMax = form.maxExpense.trim() ? Number(form.maxExpense.trim()) : null;
+        if (parsedMin !== null && (Number.isNaN(parsedMin) || parsedMin < 0)) {
+            toast.error("Min expense must be a non-negative number");
+            return;
+        }
+        if (parsedMax !== null && (Number.isNaN(parsedMax) || parsedMax < 0)) {
+            toast.error("Max expense must be a non-negative number");
+            return;
+        }
+        if (parsedMin !== null && parsedMax !== null && parsedMin > parsedMax) {
+            toast.error("Min expense cannot exceed max expense");
+            return;
+        }
+
+        const nextMedia = form.media.map((m) => m.trim()).filter(Boolean);
         if (nextMedia.join(",") !== (marker.media ?? []).join(","))
             payload.media = nextMedia;
 
@@ -266,7 +350,7 @@ export function MarkerDetailPage() {
                 </Card>
             )}
 
-            {mediaItems.length > 0 && (
+            {!isEditing && mediaItems.length > 0 && (
                 <Card padding="none" className="overflow-hidden">
                     <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
                         <h3 className="text-base font-semibold flex items-center gap-2">
@@ -367,6 +451,41 @@ export function MarkerDetailPage() {
                 </Card>
             )}
 
+            {!isEditing && (marker.things_to_do_text || marker.things_to_do_image_url) && (
+                <Card padding="none" className="overflow-hidden">
+                    <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
+                        <h3 className="text-base font-semibold flex items-center gap-2">
+                            <ListChecks className="w-4 h-4 text-orange-600" />
+                            Things to Do
+                        </h3>
+                    </div>
+                    <div className="p-6 space-y-4">
+                        {marker.things_to_do_image_url && (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                                <a
+                                    href={marker.things_to_do_image_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="block aspect-square overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50 hover:ring-2 hover:ring-orange-500 transition"
+                                >
+                                    <img
+                                        src={marker.things_to_do_image_url}
+                                        alt="Things to do"
+                                        loading="lazy"
+                                        className="w-full h-full object-cover"
+                                    />
+                                </a>
+                            </div>
+                        )}
+                        {marker.things_to_do_text && (
+                            <p className="text-sm text-neutral-700 whitespace-pre-wrap leading-relaxed">
+                                {marker.things_to_do_text}
+                            </p>
+                        )}
+                    </div>
+                </Card>
+            )}
+
             {!isEditing && marker.center_distance && (
                 <Card padding="none" className="overflow-hidden">
                     <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
@@ -446,6 +565,74 @@ export function MarkerDetailPage() {
                                 </div>
                             </div>
                         )}
+                    </div>
+                </Card>
+            )}
+
+            {CAN_MANAGE && isEditing && form && (
+                <Card padding="none" className="overflow-hidden">
+                    <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
+                        <h3 className="text-base font-semibold flex items-center gap-2">
+                            <ListChecks className="w-4 h-4 text-orange-600" />
+                            Things to Do
+                        </h3>
+                    </div>
+                    <div className="p-6 space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-neutral-700 mb-1.5">Things to do (text)</label>
+                            <textarea
+                                rows={3}
+                                placeholder="Suggested activities at this place..."
+                                className={`${inputClass} resize-none`}
+                                value={form.thingsToDoText}
+                                onChange={(e) => setForm({ ...form, thingsToDoText: e.target.value })}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-neutral-700 mb-1.5">Things to do image</label>
+                            <div className="flex flex-wrap gap-3">
+                                {form.thingsToDoImageUrl ? (
+                                    <div className="group relative h-24 w-24 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50">
+                                        <img
+                                            src={form.thingsToDoImageUrl}
+                                            alt="Things to do"
+                                            className="h-full w-full object-cover"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setForm({ ...form, thingsToDoImageUrl: "" })}
+                                            className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition-opacity hover:bg-black/80 group-hover:opacity-100"
+                                            title="Remove"
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <label
+                                        className={`flex h-24 w-24 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-neutral-300 text-neutral-400 transition-colors hover:border-orange-400 hover:bg-orange-50 hover:text-orange-600 ${
+                                            uploadingTtd ? "pointer-events-none opacity-60" : ""
+                                        }`}
+                                    >
+                                        {uploadingTtd ? (
+                                            <Loader2 className="h-5 w-5 animate-spin" />
+                                        ) : (
+                                            <>
+                                                <Upload className="h-5 w-5" />
+                                                <span className="text-[10px] font-medium">Upload</span>
+                                            </>
+                                        )}
+                                        <input
+                                            ref={ttdFileInputRef}
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={handleTtdImageUpload}
+                                            disabled={uploadingTtd}
+                                        />
+                                    </label>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </Card>
             )}
@@ -562,14 +749,48 @@ export function MarkerDetailPage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-neutral-700 mb-1.5">Media image URLs (comma-separated)</label>
-                            <input
-                                type="text"
-                                placeholder="https://img1.jpg, https://img2.jpg"
-                                className={inputClass}
-                                value={form.media}
-                                onChange={(e) => setForm({ ...form, media: e.target.value })}
-                            />
+                            <label className="block text-sm font-medium text-neutral-700 mb-1.5">Media images</label>
+                            <div className="flex flex-wrap gap-3">
+                                {form.media.map((url) => (
+                                    <div
+                                        key={url}
+                                        className="group relative h-20 w-20 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50"
+                                    >
+                                        <img src={url} alt="Marker media" className="h-full w-full object-cover" />
+                                        <button
+                                            type="button"
+                                            onClick={() => removeMedia(url)}
+                                            className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition-opacity hover:bg-black/80 group-hover:opacity-100"
+                                            title="Remove"
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                        </button>
+                                    </div>
+                                ))}
+                                <label
+                                    className={`flex h-20 w-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-neutral-300 text-neutral-400 transition-colors hover:border-orange-400 hover:bg-orange-50 hover:text-orange-600 ${
+                                        uploadingMedia ? "pointer-events-none opacity-60" : ""
+                                    }`}
+                                >
+                                    {uploadingMedia ? (
+                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                    ) : (
+                                        <>
+                                            <Upload className="h-5 w-5" />
+                                            <span className="text-[10px] font-medium">Upload</span>
+                                        </>
+                                    )}
+                                    <input
+                                        ref={mediaFileInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        multiple
+                                        className="hidden"
+                                        onChange={handleMediaUpload}
+                                        disabled={uploadingMedia}
+                                    />
+                                </label>
+                            </div>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-neutral-700 mb-1.5">Description</label>

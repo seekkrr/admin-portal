@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState, type ChangeEvent } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -21,6 +21,8 @@ import {
     Pin,
     ListOrdered,
     Image as ImageIcon,
+    Upload,
+    X,
 } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Badge } from "@/components/ui/Badge";
@@ -28,6 +30,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { GeoMap } from "@/components/maps/GeoMap";
 import { useAuthStore } from "@store/auth.store";
+import { config } from "@/config/env";
 import { narrativesService } from "../services/narratives.service";
 import { AudioPlayer } from "../components/AudioPlayer";
 import { VoicePersonaSamples } from "../components/VoicePersonaSamples";
@@ -59,7 +62,7 @@ interface EditForm {
     is_mandatory: boolean;
     is_unlocked: boolean;
     sequence_order: string;
-    media: string;
+    media: string[];
 }
 
 export function NarrativeDetailPage() {
@@ -76,6 +79,8 @@ export function NarrativeDetailPage() {
     const [editForm, setEditForm] = useState<EditForm | null>(null);
     const [showDelete, setShowDelete] = useState(false);
     const [hardDelete, setHardDelete] = useState(false);
+    const [uploadingMedia, setUploadingMedia] = useState(false);
+    const mediaFileInputRef = useRef<HTMLInputElement>(null);
 
     const {
         data: narrative,
@@ -189,9 +194,39 @@ export function NarrativeDetailPage() {
             is_mandatory: n.is_mandatory,
             is_unlocked: n.is_unlocked,
             sequence_order: n.sequence_order !== null ? String(n.sequence_order) : "",
-            media: (n.media ?? []).join(", "),
+            media: n.media ?? [],
         });
     };
+
+    // ── Media upload (unsigned Cloudinary, mirrors CreateNarrativeModal) ──
+    const handleMediaUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        setUploadingMedia(true);
+        try {
+            const urls = await Promise.all(
+                Array.from(files).map(async (file) => {
+                    const fd = new FormData();
+                    fd.append("file", file);
+                    fd.append("upload_preset", config.cloudinary.uploadPreset);
+                    const res = await fetch(config.cloudinary.uploadUrl, { method: "POST", body: fd });
+                    if (!res.ok) throw new Error(`Upload failed: ${file.name}`);
+                    const json = (await res.json()) as { secure_url: string };
+                    return json.secure_url;
+                }),
+            );
+            setEditForm((f) => (f ? { ...f, media: [...f.media, ...urls] } : f));
+            toast.success(`${files.length} file(s) uploaded`);
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Upload failed");
+        } finally {
+            setUploadingMedia(false);
+            if (mediaFileInputRef.current) mediaFileInputRef.current.value = "";
+        }
+    };
+
+    const removeMedia = (url: string) =>
+        setEditForm((f) => (f ? { ...f, media: f.media.filter((m) => m !== url) } : f));
 
     const saveEdit = (n: AdminNarrative) => {
         if (!editForm) return;
@@ -213,7 +248,7 @@ export function NarrativeDetailPage() {
         const nextSeq = editForm.sequence_order.trim() === "" ? null : Number(editForm.sequence_order);
         if (nextSeq !== null && Number.isFinite(nextSeq) && nextSeq !== n.sequence_order)
             payload.sequence_order = nextSeq;
-        const nextMedia = editForm.media.split(",").map((s) => s.trim()).filter(Boolean);
+        const nextMedia = editForm.media.map((s) => s.trim()).filter(Boolean);
         if (nextMedia.join(",") !== (n.media ?? []).join(",")) payload.media = nextMedia;
 
         if (Object.keys(payload).length === 0) {
@@ -448,15 +483,48 @@ export function NarrativeDetailPage() {
                                 />
                             </div>
                             <div className="md:col-span-2">
-                                <label className="mb-1 block text-sm font-medium text-neutral-700">
-                                    Media URLs (comma-separated)
-                                </label>
-                                <input
-                                    type="text"
-                                    value={editForm.media}
-                                    onChange={(e) => setEditForm({ ...editForm, media: e.target.value })}
-                                    className="w-full rounded-xl border border-neutral-200 px-4 py-2.5 text-sm transition-all focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
-                                />
+                                <label className="mb-1 block text-sm font-medium text-neutral-700">Media</label>
+                                <div className="flex flex-wrap gap-3">
+                                    {editForm.media.map((url) => (
+                                        <div
+                                            key={url}
+                                            className="group relative h-20 w-20 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50"
+                                        >
+                                            <img src={url} alt="Narrative media" className="h-full w-full object-cover" />
+                                            <button
+                                                type="button"
+                                                onClick={() => removeMedia(url)}
+                                                className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition-opacity hover:bg-black/80 group-hover:opacity-100"
+                                                title="Remove"
+                                            >
+                                                <X className="h-3.5 w-3.5" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    <label
+                                        className={`flex h-20 w-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-neutral-300 text-neutral-400 transition-colors hover:border-orange-400 hover:bg-orange-50 hover:text-orange-600 ${
+                                            uploadingMedia ? "pointer-events-none opacity-60" : ""
+                                        }`}
+                                    >
+                                        {uploadingMedia ? (
+                                            <Loader2 className="h-5 w-5 animate-spin" />
+                                        ) : (
+                                            <>
+                                                <Upload className="h-5 w-5" />
+                                                <span className="text-[10px] font-medium">Upload</span>
+                                            </>
+                                        )}
+                                        <input
+                                            ref={mediaFileInputRef}
+                                            type="file"
+                                            accept="image/*"
+                                            multiple
+                                            className="hidden"
+                                            onChange={handleMediaUpload}
+                                            disabled={uploadingMedia}
+                                        />
+                                    </label>
+                                </div>
                             </div>
                         </div>
                         <div className="flex flex-wrap gap-6">
@@ -526,7 +594,7 @@ export function NarrativeDetailPage() {
             </Card>
 
             {/* Media gallery */}
-            {n.media && n.media.length > 0 && (
+            {!editForm && n.media && n.media.length > 0 && (
                 <Card padding="none">
                     <CardHeader className="border-b border-neutral-100 bg-neutral-50/50 px-5 sm:px-6 pt-5 sm:pt-6 pb-4 mb-0 rounded-t-xl">
                         <CardTitle className="text-base flex items-center gap-2">
