@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useRef, useState, type ChangeEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { markersService } from "../services/markers.service";
 import { GeoMap } from "@/components/maps/GeoMap";
-import { MapPin, X } from "lucide-react";
+import { MapPin, X, Upload, Loader2, ListChecks } from "lucide-react";
 import { toast } from "sonner";
+import { config } from "@/config/env";
 import type { CreateMarkerPayload } from "@/types";
 
 interface CreateForm {
@@ -19,7 +20,9 @@ interface CreateForm {
     minExpense: string;
     maxExpense: string;
     regionId: string;
-    media: string;
+    media: string[];
+    thingsToDoText: string;
+    thingsToDoImageUrl: string;
 }
 
 const EMPTY_FORM: CreateForm = {
@@ -35,7 +38,9 @@ const EMPTY_FORM: CreateForm = {
     minExpense: "",
     maxExpense: "",
     regionId: "",
-    media: "",
+    media: [],
+    thingsToDoText: "",
+    thingsToDoImageUrl: "",
 };
 
 interface MarkerCreateModalProps {
@@ -46,6 +51,61 @@ interface MarkerCreateModalProps {
 export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
     const queryClient = useQueryClient();
     const [form, setForm] = useState<CreateForm>(EMPTY_FORM);
+    const [uploadingMedia, setUploadingMedia] = useState(false);
+    const mediaFileInputRef = useRef<HTMLInputElement>(null);
+    const [uploadingTtd, setUploadingTtd] = useState(false);
+    const ttdFileInputRef = useRef<HTMLInputElement>(null);
+
+    // ── Media upload (unsigned Cloudinary, mirrors CreateNarrativeModal) ──
+    const handleMediaUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        setUploadingMedia(true);
+        try {
+            const urls = await Promise.all(
+                Array.from(files).map(async (file) => {
+                    const fd = new FormData();
+                    fd.append("file", file);
+                    fd.append("upload_preset", config.cloudinary.uploadPreset);
+                    const res = await fetch(config.cloudinary.uploadUrl, { method: "POST", body: fd });
+                    if (!res.ok) throw new Error(`Upload failed: ${file.name}`);
+                    const json = (await res.json()) as { secure_url: string };
+                    return json.secure_url;
+                }),
+            );
+            setForm((f) => ({ ...f, media: [...f.media, ...urls] }));
+            toast.success(`${files.length} file(s) uploaded`);
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Upload failed");
+        } finally {
+            setUploadingMedia(false);
+            if (mediaFileInputRef.current) mediaFileInputRef.current.value = "";
+        }
+    };
+
+    const removeMedia = (url: string) =>
+        setForm((f) => ({ ...f, media: f.media.filter((m) => m !== url) }));
+
+    const handleTtdImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploadingTtd(true);
+        try {
+            const fd = new FormData();
+            fd.append("file", file);
+            fd.append("upload_preset", config.cloudinary.uploadPreset);
+            const res = await fetch(config.cloudinary.uploadUrl, { method: "POST", body: fd });
+            if (!res.ok) throw new Error("Upload failed");
+            const json = (await res.json()) as { secure_url: string };
+            setForm((f) => ({ ...f, thingsToDoImageUrl: json.secure_url }));
+            toast.success("Image uploaded");
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Upload failed");
+        } finally {
+            setUploadingTtd(false);
+            if (ttdFileInputRef.current) ttdFileInputRef.current.value = "";
+        }
+    };
 
     const createMutation = useMutation({
         mutationFn: (payload: CreateMarkerPayload) => markersService.create(payload),
@@ -73,10 +133,7 @@ export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
             .split(",")
             .map((t) => t.trim())
             .filter(Boolean);
-        const mediaList = form.media
-            .split(",")
-            .map((m) => m.trim())
-            .filter(Boolean);
+        const mediaList = form.media.map((m) => m.trim()).filter(Boolean);
 
         let minExpense: number | undefined;
         if (form.minExpense.trim()) {
@@ -115,6 +172,8 @@ export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
             map_url: form.mapUrl.trim() || undefined,
             region_id: form.regionId.trim() || undefined,
             media: mediaList.length ? mediaList : undefined,
+            things_to_do_text: form.thingsToDoText.trim() || undefined,
+            things_to_do_image_url: form.thingsToDoImageUrl.trim() || undefined,
             min_expense: minExpense,
             max_expense: maxExpense,
         };
@@ -241,14 +300,109 @@ export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-neutral-700 mb-1">Media image URLs (comma-separated)</label>
-                        <input
-                            type="text"
-                            placeholder="https://img1.jpg, https://img2.jpg"
-                            className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                            value={form.media}
-                            onChange={(e) => setForm({ ...form, media: e.target.value })}
-                        />
+                        <label className="block text-sm font-medium text-neutral-700 mb-1">Media images</label>
+                        <div className="flex flex-wrap gap-3">
+                            {form.media.map((url) => (
+                                <div
+                                    key={url}
+                                    className="group relative h-20 w-20 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50"
+                                >
+                                    <img src={url} alt="Marker media" className="h-full w-full object-cover" />
+                                    <button
+                                        type="button"
+                                        onClick={() => removeMedia(url)}
+                                        className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition-opacity hover:bg-black/80 group-hover:opacity-100"
+                                        title="Remove"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                            ))}
+                            <label
+                                className={`flex h-20 w-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-neutral-300 text-neutral-400 transition-colors hover:border-orange-400 hover:bg-orange-50 hover:text-orange-600 ${
+                                    uploadingMedia ? "pointer-events-none opacity-60" : ""
+                                }`}
+                            >
+                                {uploadingMedia ? (
+                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                ) : (
+                                    <>
+                                        <Upload className="h-5 w-5" />
+                                        <span className="text-[10px] font-medium">Upload</span>
+                                    </>
+                                )}
+                                <input
+                                    ref={mediaFileInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    className="hidden"
+                                    onChange={handleMediaUpload}
+                                    disabled={uploadingMedia}
+                                />
+                            </label>
+                        </div>
+                    </div>
+                    <div className="rounded-xl border border-neutral-200 p-4 space-y-4">
+                        <h4 className="text-sm font-semibold text-neutral-800 flex items-center gap-2">
+                            <ListChecks className="w-4 h-4 text-orange-600" />
+                            Things to Do
+                        </h4>
+                        <div>
+                            <label className="block text-sm font-medium text-neutral-700 mb-1">Things to do (text)</label>
+                            <textarea
+                                rows={3}
+                                placeholder="Suggested activities at this place..."
+                                className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
+                                value={form.thingsToDoText}
+                                onChange={(e) => setForm({ ...form, thingsToDoText: e.target.value })}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-neutral-700 mb-1">Things to do image</label>
+                            <div className="flex flex-wrap gap-3">
+                                {form.thingsToDoImageUrl ? (
+                                    <div className="group relative h-24 w-24 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50">
+                                        <img
+                                            src={form.thingsToDoImageUrl}
+                                            alt="Things to do"
+                                            className="h-full w-full object-cover"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setForm({ ...form, thingsToDoImageUrl: "" })}
+                                            className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition-opacity hover:bg-black/80 group-hover:opacity-100"
+                                            title="Remove"
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <label
+                                        className={`flex h-24 w-24 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-neutral-300 text-neutral-400 transition-colors hover:border-orange-400 hover:bg-orange-50 hover:text-orange-600 ${
+                                            uploadingTtd ? "pointer-events-none opacity-60" : ""
+                                        }`}
+                                    >
+                                        {uploadingTtd ? (
+                                            <Loader2 className="h-5 w-5 animate-spin" />
+                                        ) : (
+                                            <>
+                                                <Upload className="h-5 w-5" />
+                                                <span className="text-[10px] font-medium">Upload</span>
+                                            </>
+                                        )}
+                                        <input
+                                            ref={ttdFileInputRef}
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={handleTtdImageUpload}
+                                            disabled={uploadingTtd}
+                                        />
+                                    </label>
+                                )}
+                            </div>
+                        </div>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-neutral-700 mb-1">Description</label>

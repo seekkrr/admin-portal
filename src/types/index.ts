@@ -568,6 +568,8 @@ export interface Marker {
     max_expense: number | null;
     website_url: string | null;
     contact: string | null;
+    things_to_do_text: string | null;
+    things_to_do_image_url: string | null;
     region_id: string | null;
     status: MarkerStatus;
     source: string | null;
@@ -649,6 +651,8 @@ export interface CreateMarkerPayload {
     map_url?: string;
     website_url?: string;
     contact?: string;
+    things_to_do_text?: string;
+    things_to_do_image_url?: string;
     tags?: string[];
     media?: string[];
     min_expense?: number;
