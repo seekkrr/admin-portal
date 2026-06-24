@@ -213,6 +213,21 @@ export function MarkerDetailPage() {
         if (form.regionId.trim() !== (marker.region_id ?? ""))
             payload.region_id = form.regionId.trim();
 
+        const parsedMin = form.minExpense.trim() ? Number(form.minExpense.trim()) : null;
+        const parsedMax = form.maxExpense.trim() ? Number(form.maxExpense.trim()) : null;
+        if (parsedMin !== null && (Number.isNaN(parsedMin) || parsedMin < 0)) {
+            toast.error("Min expense must be a non-negative number");
+            return;
+        }
+        if (parsedMax !== null && (Number.isNaN(parsedMax) || parsedMax < 0)) {
+            toast.error("Max expense must be a non-negative number");
+            return;
+        }
+        if (parsedMin !== null && parsedMax !== null && parsedMin > parsedMax) {
+            toast.error("Min expense cannot exceed max expense");
+            return;
+        }
+
         const nextMedia = form.media.map((m) => m.trim()).filter(Boolean);
         if (nextMedia.join(",") !== (marker.media ?? []).join(","))
             payload.media = nextMedia;
