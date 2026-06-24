@@ -62,7 +62,7 @@ export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
         if (!files || files.length === 0) return;
         setUploadingMedia(true);
         try {
-            const urls = await Promise.all(
+            const results = await Promise.allSettled(
                 Array.from(files).map(async (file) => {
                     const fd = new FormData();
                     fd.append("file", file);
@@ -73,8 +73,18 @@ export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
                     return json.secure_url;
                 }),
             );
-            setForm((f) => ({ ...f, media: [...f.media, ...urls] }));
-            toast.success(`${files.length} file(s) uploaded`);
+            const urls = results
+                .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
+                .map((r) => r.value);
+            const failures = results.filter((r) => r.status === "rejected");
+
+            if (urls.length > 0) {
+                setForm((f) => ({ ...f, media: [...f.media, ...urls] }));
+                toast.success(`${urls.length} file(s) uploaded successfully`);
+            }
+            if (failures.length > 0) {
+                toast.error(`${failures.length} file(s) failed to upload`);
+            }
         } catch (err) {
             toast.error(err instanceof Error ? err.message : "Upload failed");
         } finally {
