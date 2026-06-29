@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -13,6 +13,8 @@ import { toast } from "sonner";
 import { regionsService } from "../services/regions.service";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { GeoMap, type GeoMapPoint } from "@components/maps/GeoMap";
+import { BboxDrawMap } from "@components/maps/BboxDrawMap";
+import { nearbyReferenceBoxes } from "../utils/nearbyBoxes";
 import { useAuthStore } from "@store/auth.store";
 import type { Region, UpdateRegionPayload, GeoPolygon } from "@/types";
 import { shortId } from "@/utils/format";
@@ -92,7 +94,26 @@ export function RegionDetailPage() {
         onError: (e: Error) => toast.error(e.message || "Failed to update region"),
     });
 
+    // Neighbouring regions for the bbox editor's overlap-guard layer. Only fetched while editing.
+    const allRegionsQuery = useQuery<Region[]>({
+        queryKey: ["admin-regions-all-ref"],
+        queryFn: () => regionsService.listAll(),
+        enabled: isEditing,
+        staleTime: 5 * 60 * 1000,
+    });
 
+    // Anchor on the region's stored bbox (not the live-edited box) so the neighbour set stays
+    // stable while the admin drags the handles.
+    const referenceBoxes = useMemo(
+        () =>
+            nearbyReferenceBoxes({
+                regions: allRegionsQuery.data ?? [],
+                anchor: region ? regionPolygon(region) : null,
+                type: region?.type,
+                excludeId: region?.id,
+            }),
+        [allRegionsQuery.data, region],
+    );
 
     if (isLoading) return <LoadingFallback message="Loading region..." />;
 
@@ -167,8 +188,9 @@ export function RegionDetailPage() {
                 </div>
             </Card>
 
-            {/* Map */}
-            {(points.length > 0 || polygon) && (
+            {/* Read-only map — hidden while editing, since the Edit Region card below renders its
+                own interactive bbox map (showing both would be redundant). */}
+            {!isEditing && (points.length > 0 || polygon) && (
                 <Card padding="none" className="overflow-hidden">
                     <GeoMap
                         points={points}
@@ -259,6 +281,22 @@ export function RegionDetailPage() {
                                 value={editValues.description ?? ""}
                                 onChange={(e) => setForm({ ...editValues, description: e.target.value })}
                                 className="w-full rounded-xl py-2.5 px-4 border border-neutral-200 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-neutral-700 mb-1">Bounding box</label>
+                            <p className="text-xs text-neutral-500 mb-2">
+                                Drag the corner handles to adjust the region boundary, or redraw it. Saving updates the
+                                bbox and its center point.
+                            </p>
+                            <BboxDrawMap
+                                value={(editValues.bbox as GeoPolygon | undefined) ?? polygon}
+                                center={center}
+                                referenceBoxes={referenceBoxes}
+                                onChange={(poly, c) =>
+                                    setForm({ ...editValues, bbox: poly, center_point: c })
+                                }
+                                height="320px"
                             />
                         </div>
                         <div>

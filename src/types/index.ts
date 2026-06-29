@@ -552,6 +552,20 @@ export type MarkerStatus = "approved" | "pending" | "hidden" | "rejected";
 export type MarkerApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
 export type MarkerCategory = string;
 
+// Canonical marker categories — mirrors VALID_MARKER_CATEGORIES in
+// backend/v2/models/marker.py. The V2 marker service rejects any other value,
+// so these must stay byte-for-byte in sync (PascalCase, no normalization).
+export const MARKER_CATEGORIES = [
+    "Restaurants",
+    "Cafes",
+    "Activities",
+    "Shops",
+    "Stays",
+    "Touristy",
+    "Quest",
+    "Others",
+] as const;
+
 export interface Marker {
     id: string;
     title: string;

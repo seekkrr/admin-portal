@@ -1,9 +1,10 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Globe, X, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
 import { regionsService } from "../services/regions.service";
-import { GeoMap } from "@components/maps/GeoMap";
+import { nearbyReferenceBoxes } from "../utils/nearbyBoxes";
+import { BboxDrawMap } from "@components/maps/BboxDrawMap";
 import { PlaceSearchInput } from "@components/maps/PlaceSearchInput";
 import {
     REGION_SEARCH_TYPES,
@@ -11,7 +12,7 @@ import {
     isAdminFeatureType,
     type ResolvedPlace,
 } from "@/services/geocoding.service";
-import type { RegionType, Region, CreateRegionPayload, GeoPolygon } from "@/types";
+import type { RegionType, Region, CreateRegionPayload, GeoPolygon, GeoPoint } from "@/types";
 
 interface RegionCreateModalProps {
     open: boolean;
@@ -35,8 +36,11 @@ export function RegionCreateModal({ open, onClose, onSuccess }: RegionCreateModa
     const [cWeight, setCWeight] = useState("1.0");
     const [cParentId, setCParentId] = useState("");
 
-    // Selected place (provides bbox + center) — search UI lives in <PlaceSearchInput>.
+    // Selected place (provides the initial bbox + center) — search UI lives in <PlaceSearchInput>.
     const [selectedPlace, setSelectedPlace] = useState<ResolvedPlace | null>(null);
+    // bbox + center are seeded from the picked place, then editable via <BboxDrawMap>.
+    const [bbox, setBbox] = useState<GeoPolygon | null>(null);
+    const [centerPoint, setCenterPoint] = useState<GeoPoint | null>(null);
 
     const citiesQuery = useQuery<Region[]>({
         queryKey: ["admin-regions-cities"],
@@ -45,6 +49,25 @@ export function RegionCreateModal({ open, onClose, onSuccess }: RegionCreateModa
         staleTime: 5 * 60 * 1000,
     });
 
+    // All regions for the bbox editor's overlap-guard layer (fetched once a place is picked).
+    const allRegionsQuery = useQuery<Region[]>({
+        queryKey: ["admin-regions-all-ref"],
+        queryFn: () => regionsService.listAll(),
+        enabled: open && !!selectedPlace,
+        staleTime: 5 * 60 * 1000,
+    });
+
+    // Anchor on the picked place's boundary (stable) and show same-type neighbours nearby.
+    const referenceBoxes = useMemo(
+        () =>
+            nearbyReferenceBoxes({
+                regions: allRegionsQuery.data ?? [],
+                anchor: selectedPlace ? placeToPolygon(selectedPlace) : null,
+                type: cType,
+            }),
+        [allRegionsQuery.data, selectedPlace, cType],
+    );
+
     const resetCreate = () => {
         setCName("");
         setCType("city");
@@ -52,6 +75,8 @@ export function RegionCreateModal({ open, onClose, onSuccess }: RegionCreateModa
         setCWeight("1.0");
         setCParentId("");
         setSelectedPlace(null);
+        setBbox(null);
+        setCenterPoint(null);
         onClose();
     };
 
@@ -68,6 +93,8 @@ export function RegionCreateModal({ open, onClose, onSuccess }: RegionCreateModa
 
     const pickPlace = (place: ResolvedPlace) => {
         setSelectedPlace(place);
+        setBbox(placeToPolygon(place));
+        setCenterPoint({ type: "Point", coordinates: place.center });
         if (!cName.trim()) setCName(place.name);
         const detected: RegionType = isAdminFeatureType(place.featureType) ? "city" : "hotspot";
         setCType(detected);
@@ -76,6 +103,8 @@ export function RegionCreateModal({ open, onClose, onSuccess }: RegionCreateModa
 
     const clearPlace = () => {
         setSelectedPlace(null);
+        setBbox(null);
+        setCenterPoint(null);
     };
 
     const handleCreate = (e: FormEvent) => {
@@ -87,6 +116,10 @@ export function RegionCreateModal({ open, onClose, onSuccess }: RegionCreateModa
         }
         if (!selectedPlace) {
             toast.error("Search and select a place to anchor the region");
+            return;
+        }
+        if (!bbox || !centerPoint) {
+            toast.error("Draw a bounding box for the region");
             return;
         }
         if (cType === "hotspot" && !cParentId) {
@@ -102,8 +135,8 @@ export function RegionCreateModal({ open, onClose, onSuccess }: RegionCreateModa
             name,
             type: cType,
             admin_weight: weight,
-            bbox: placeToPolygon(selectedPlace),
-            center_point: { type: "Point", coordinates: selectedPlace.center },
+            bbox,
+            center_point: centerPoint,
         };
         if (selectedPlace.mapboxId) payload.mapbox_place_id = selectedPlace.mapboxId;
         const description = cDescription.trim();
@@ -174,13 +207,19 @@ export function RegionCreateModal({ open, onClose, onSuccess }: RegionCreateModa
                                     Change
                                 </button>
                             </div>
-                            <div className="mt-3 rounded-lg overflow-hidden border border-neutral-200">
-                                <GeoMap
-                                    points={[{ coordinates: selectedPlace.center, color: "#0891b2", label: selectedPlace.name }]}
-                                    polygon={placeToPolygon(selectedPlace)}
+                            <p className="text-[11px] text-neutral-500 mt-2 mb-2">
+                                The boundary is seeded from the place. Drag the corner handles or redraw to adjust it.
+                            </p>
+                            <div className="mt-1 rounded-lg overflow-hidden border border-neutral-200">
+                                <BboxDrawMap
+                                    value={bbox}
                                     center={selectedPlace.center}
-                                    height="200px"
-                                    hideCoordsReadout
+                                    referenceBoxes={referenceBoxes}
+                                    onChange={(poly, c) => {
+                                        setBbox(poly);
+                                        setCenterPoint(c);
+                                    }}
+                                    height="220px"
                                 />
                             </div>
                         </div>
