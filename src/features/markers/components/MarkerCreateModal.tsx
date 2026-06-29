@@ -7,7 +7,8 @@ import { MARKER_SEARCH_TYPES, INDIA_PROXIMITY, type ResolvedPlace } from "@/serv
 import { MapPin, X, Upload, Loader2, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 import { config } from "@/config/env";
-import type { CreateMarkerPayload } from "@/types";
+import { RegionPicker } from "@/features/regions/components/RegionPicker";
+import { MARKER_CATEGORIES, type CreateMarkerPayload } from "@/types";
 
 interface CreateForm {
     title: string;
@@ -246,12 +247,18 @@ export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-neutral-700 mb-1">Category</label>
-                            <input
-                                type="text"
-                                className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                            <select
+                                className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                                 value={form.category}
                                 onChange={(e) => setForm({ ...form, category: e.target.value })}
-                            />
+                            >
+                                <option value="">— Select a category —</option>
+                                {MARKER_CATEGORIES.map((c) => (
+                                    <option key={c} value={c}>
+                                        {c}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-neutral-700 mb-1">Tags (comma-separated)</label>
@@ -347,12 +354,10 @@ export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-neutral-700 mb-1">Region <span className="text-neutral-400 font-normal">(ID)</span></label>
-                        <input
-                            type="text"
-                            className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        <label className="block text-sm font-medium text-neutral-700 mb-1">Region</label>
+                        <RegionPicker
                             value={form.regionId}
-                            onChange={(e) => setForm({ ...form, regionId: e.target.value })}
+                            onChange={(id) => setForm({ ...form, regionId: id })}
                         />
                     </div>
                     <div>

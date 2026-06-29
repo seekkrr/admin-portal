@@ -29,7 +29,8 @@ import { LoadingFallback } from "@components/LoadingFallback";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Card } from "@/components/ui/Card";
 import { config } from "@/config/env";
-import type { UpdateMarkerPayload, MarkerStatus } from "@/types";
+import { RegionPicker } from "@/features/regions/components/RegionPicker";
+import { MARKER_CATEGORIES, type UpdateMarkerPayload, type MarkerStatus } from "@/types";
 
 const STATUS_VALUES: MarkerStatus[] = ["approved", "pending", "hidden", "rejected"];
 
@@ -655,12 +656,18 @@ export function MarkerDetailPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-neutral-700 mb-1.5">Category</label>
-                                <input
-                                    type="text"
-                                    className={inputClass}
+                                <select
+                                    className={`${inputClass} bg-white`}
                                     value={form.category}
                                     onChange={(e) => setForm({ ...form, category: e.target.value })}
-                                />
+                                >
+                                    <option value="">— Select a category —</option>
+                                    {MARKER_CATEGORIES.map((c) => (
+                                        <option key={c} value={c}>
+                                            {c}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-neutral-700 mb-1.5">Status</label>
@@ -740,12 +747,10 @@ export function MarkerDetailPage() {
                             </div>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-neutral-700 mb-1.5">Region ID</label>
-                            <input
-                                type="text"
-                                className={inputClass}
+                            <label className="block text-sm font-medium text-neutral-700 mb-1.5">Region</label>
+                            <RegionPicker
                                 value={form.regionId}
-                                onChange={(e) => setForm({ ...form, regionId: e.target.value })}
+                                onChange={(id) => setForm({ ...form, regionId: id })}
                             />
                         </div>
                         <div>
