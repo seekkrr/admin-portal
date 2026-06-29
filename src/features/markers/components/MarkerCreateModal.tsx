@@ -2,6 +2,8 @@ import { useRef, useState, type ChangeEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { markersService } from "../services/markers.service";
 import { GeoMap } from "@/components/maps/GeoMap";
+import { PlaceSearchInput } from "@/components/maps/PlaceSearchInput";
+import { MARKER_SEARCH_TYPES, INDIA_PROXIMITY, type ResolvedPlace } from "@/services/geocoding.service";
 import { MapPin, X, Upload, Loader2, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 import { config } from "@/config/env";
@@ -130,6 +132,23 @@ export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
         },
     });
 
+    // A picked search result drops the pin (via form.coordinates), recenters the map, and prefills
+    // Title/Address if blank.
+    const handlePlaceSelect = (place: ResolvedPlace) => {
+        setForm((f) => ({
+            ...f,
+            coordinates: place.center,
+            title: f.title.trim() ? f.title : place.name,
+            address: f.address.trim() ? f.address : place.fullAddress,
+        }));
+    };
+
+    // Reset transient form state when the modal is dismissed, so reopening starts clean.
+    const handleClose = () => {
+        setForm(EMPTY_FORM);
+        onClose();
+    };
+
     const handleCreate = () => {
         if (!form.title.trim()) {
             toast.error("Title is required");
@@ -201,7 +220,7 @@ export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
                         New Marker
                     </h3>
                     <button
-                        onClick={onClose}
+                        onClick={handleClose}
                         className="text-neutral-400 hover:text-neutral-700 p-1 rounded-md"
                     >
                         <X className="w-5 h-5" />
@@ -425,26 +444,36 @@ export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-neutral-700 mb-1">Location *</label>
+                        <p className="text-xs text-neutral-500 mb-2">
+                            Search a place, then drag the pin or click the map to fine-tune.
+                        </p>
+                        <div className="mb-3">
+                            <PlaceSearchInput
+                                searchTypes={MARKER_SEARCH_TYPES}
+                                proximity={INDIA_PROXIMITY}
+                                placeholder="Search a place… e.g. Bir Billing, Gateway of India"
+                                onSelect={handlePlaceSelect}
+                                onError={(msg) => toast.error(msg)}
+                            />
+                        </div>
                         <GeoMap
                             height="280px"
+                            draggable
+                            pinColor="#ea580c"
+                            markerPosition={form.coordinates}
                             onPick={(coords) => setForm((f) => ({ ...f, coordinates: coords }))}
-                            points={
-                                form.coordinates
-                                    ? [{ coordinates: form.coordinates, color: "#ea580c" }]
-                                    : []
-                            }
-                            center={form.coordinates}
+                            onMarkerDragEnd={(coords) => setForm((f) => ({ ...f, coordinates: coords }))}
                         />
                         <p className="mt-2 text-xs text-neutral-500">
                             {form.coordinates
                                 ? `Selected: ${form.coordinates[0]}, ${form.coordinates[1]} (lon, lat)`
-                                : "Click the map to choose coordinates."}
+                                : "Search, click the map, or drag the pin to choose coordinates."}
                         </p>
                     </div>
                 </div>
                 <div className="p-6 border-t border-neutral-200 flex justify-end gap-3 sticky bottom-0 bg-white z-10">
                     <button
-                        onClick={onClose}
+                        onClick={handleClose}
                         disabled={createMutation.isPending}
                         className="px-4 py-2.5 text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-xl transition-colors disabled:opacity-50"
                     >
