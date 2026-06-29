@@ -104,7 +104,7 @@ export const GeoMap = memo(function GeoMap({
     const containerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<mapboxgl.Map | null>(null);
     const markersRef = useRef<mapboxgl.Marker[]>([]);
-    const [dragMarker, setDragMarker] = useState<mapboxgl.Marker | null>(null);
+    const dragMarkerRef = useRef<mapboxgl.Marker | null>(null);
     const onPickRef = useRef(onPick);
     const onMarkerDragEndRef = useRef(onMarkerDragEnd);
     const [cursor, setCursor] = useState<{ lng: number; lat: number } | null>(null);
@@ -217,11 +217,11 @@ export const GeoMap = memo(function GeoMap({
             const { lng, lat } = marker.getLngLat();
             onMarkerDragEndRef.current?.([Number(lng.toFixed(6)), Number(lat.toFixed(6))]);
         });
-        setDragMarker(marker);
+        dragMarkerRef.current = marker;
 
         return () => {
             marker.remove();
-            setDragMarker(null);
+            if (dragMarkerRef.current === marker) dragMarkerRef.current = null;
         };
     }, [draggable, pinColor]);
 
