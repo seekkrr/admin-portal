@@ -21,6 +21,8 @@ interface CreateForm {
     mapUrl: string;
     minExpense: string;
     maxExpense: string;
+    opensAt: string;
+    closesAt: string;
     regionId: string;
     media: string[];
     thingsToDoText: string;
@@ -39,6 +41,8 @@ const EMPTY_FORM: CreateForm = {
     mapUrl: "",
     minExpense: "",
     maxExpense: "",
+    opensAt: "",
+    closesAt: "",
     regionId: "",
     media: [],
     thingsToDoText: "",
@@ -127,8 +131,9 @@ export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
             onClose();
             setForm(EMPTY_FORM);
         },
-        onError: () => {
-            toast.error("Failed to create marker");
+        onError: (e: Error) => {
+            // Surface the backend message (e.g. "A marker already exists within 20m of this location").
+            toast.error(e.message || "Failed to create marker");
         },
     });
 
@@ -205,6 +210,8 @@ export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
             things_to_do_image_url: form.thingsToDoImageUrl.trim() || undefined,
             min_expense: minExpense,
             max_expense: maxExpense,
+            opens_at: form.opensAt || undefined,
+            closes_at: form.closesAt || undefined,
         };
         createMutation.mutate(payload);
     };
@@ -316,6 +323,26 @@ export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
                                 className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                                 value={form.maxExpense}
                                 onChange={(e) => setForm({ ...form, maxExpense: e.target.value })}
+                            />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-neutral-700 mb-1">Opens at</label>
+                            <input
+                                type="time"
+                                className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                value={form.opensAt}
+                                onChange={(e) => setForm({ ...form, opensAt: e.target.value })}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-neutral-700 mb-1">Closes at</label>
+                            <input
+                                type="time"
+                                className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                value={form.closesAt}
+                                onChange={(e) => setForm({ ...form, closesAt: e.target.value })}
                             />
                         </div>
                     </div>
@@ -449,6 +476,7 @@ export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
                         </p>
                         <div className="mb-3">
                             <PlaceSearchInput
+                                mode="forward"
                                 searchTypes={MARKER_SEARCH_TYPES}
                                 proximity={INDIA_PROXIMITY}
                                 placeholder="Search a place… e.g. Bir Billing, Gateway of India"

@@ -657,6 +657,10 @@ export interface CreateMarkerPayload {
     media?: string[];
     min_expense?: number;
     max_expense?: number;
+    /** Opening time of day, "HH:MM" (24h). */
+    opens_at?: string;
+    /** Closing time of day, "HH:MM" (24h). */
+    closes_at?: string;
     region_id?: string;
     properties?: Record<string, unknown>;
 }
