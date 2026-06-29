@@ -40,6 +40,18 @@ export interface GeoMapProps {
     onPick?: (coords: [number, number]) => void;
     /** Hide the floating coordinate readout. */
     hideCoordsReadout?: boolean;
+    /** Make the picker pin draggable; fires `onMarkerDragEnd` when released. */
+    draggable?: boolean;
+    /** Fired with [lon, lat] after the draggable pin is dragged. */
+    onMarkerDragEnd?: (coords: [number, number]) => void;
+    /**
+     * Committed [lon, lat] of the draggable pin (source of truth). The pin moves here whenever
+     * this changes; the map only recenters when the point would fall outside the current view.
+     * Pass `null` to hide the pin.
+     */
+    markerPosition?: [number, number] | null;
+    /** Color for the managed draggable pin (defaults to indigo). */
+    pinColor?: string;
 }
 
 function circlePolygon(center: [number, number], radiusM: number, steps = 64): PolygonFeature {
@@ -84,11 +96,24 @@ export const GeoMap = memo(function GeoMap({
     zoom = 13,
     onPick,
     hideCoordsReadout = false,
+    draggable = false,
+    onMarkerDragEnd,
+    markerPosition = null,
+    pinColor,
 }: GeoMapProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<mapboxgl.Map | null>(null);
     const markersRef = useRef<mapboxgl.Marker[]>([]);
+    const dragMarkerRef = useRef<mapboxgl.Marker | null>(null);
+    const onPickRef = useRef(onPick);
+    const onMarkerDragEndRef = useRef(onMarkerDragEnd);
     const [cursor, setCursor] = useState<{ lng: number; lat: number } | null>(null);
+
+    // Keep latest callbacks in refs so the build-once map effect never holds stale ones.
+    useEffect(() => {
+        onPickRef.current = onPick;
+        onMarkerDragEndRef.current = onMarkerDragEnd;
+    });
 
     useEffect(() => {
         if (!containerRef.current) return;
@@ -157,7 +182,11 @@ export const GeoMap = memo(function GeoMap({
 
         if (onPick) {
             map.getCanvas().style.cursor = "crosshair";
-            map.on("click", (e) => onPick([Number(e.lngLat.lng.toFixed(6)), Number(e.lngLat.lat.toFixed(6))]));
+            // The managed pin (if any) follows the committed coordinate via the position effect,
+            // so the click handler only needs to report the picked point.
+            map.on("click", (e) =>
+                onPickRef.current?.([Number(e.lngLat.lng.toFixed(6)), Number(e.lngLat.lat.toFixed(6))]),
+            );
         }
 
         if (!hideCoordsReadout) {
@@ -173,6 +202,46 @@ export const GeoMap = memo(function GeoMap({
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [JSON.stringify(points), JSON.stringify(polygon), JSON.stringify(center), radiusMeters, zoom]);
+
+    // Draggable picker pin — created ONCE (so its DOM node and drag handler are stable) and moved
+    // imperatively, so adjusting the location never tears down and rebuilds the map. Assumes
+    // structural props (points/polygon/center/zoom) stay stable in draggable mode; the marker
+    // create modal honours this by not feeding the live coordinate back into those props.
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map || !draggable) return;
+
+        const el = pinElement(pinColor ?? "#6366f1");
+        const marker = new mapboxgl.Marker({ element: el, anchor: "bottom", draggable: true });
+        marker.on("dragend", () => {
+            const { lng, lat } = marker.getLngLat();
+            onMarkerDragEndRef.current?.([Number(lng.toFixed(6)), Number(lat.toFixed(6))]);
+        });
+        dragMarkerRef.current = marker;
+
+        return () => {
+            marker.remove();
+            if (dragMarkerRef.current === marker) dragMarkerRef.current = null;
+        };
+    }, [draggable, pinColor]);
+
+    // Move the managed pin to the committed coordinate (source of truth). Recenter the map only
+    // when the point would fall outside the current view, so search-picks fly there but a small
+    // drag/click never yanks the camera.
+    useEffect(() => {
+        const map = mapRef.current;
+        const marker = dragMarkerRef.current;
+        if (!map || !draggable || !marker) return;
+        if (!markerPosition) {
+            marker.remove();
+            return;
+        }
+        marker.setLngLat(markerPosition).addTo(map);
+        if (!map.getBounds()?.contains(markerPosition)) {
+            map.flyTo({ center: markerPosition, zoom: Math.max(map.getZoom(), 13), duration: 800 });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [draggable, markerPosition?.[0], markerPosition?.[1]]);
 
     return (
         <div className="relative">

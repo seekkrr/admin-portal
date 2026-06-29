@@ -1,10 +1,16 @@
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Globe, X, Loader2, Search, MapPin, Check, Building2 } from "lucide-react";
+import { Globe, X, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
 import { regionsService } from "../services/regions.service";
 import { GeoMap } from "@components/maps/GeoMap";
-import { config } from "@/config/env";
+import { PlaceSearchInput } from "@components/maps/PlaceSearchInput";
+import {
+    REGION_SEARCH_TYPES,
+    INDIA_PROXIMITY,
+    isAdminFeatureType,
+    type ResolvedPlace,
+} from "@/services/geocoding.service";
 import type { RegionType, Region, CreateRegionPayload, GeoPolygon } from "@/types";
 
 interface RegionCreateModalProps {
@@ -13,59 +19,8 @@ interface RegionCreateModalProps {
     onSuccess?: (id: string) => void;
 }
 
-/** A geocoded place from Mapbox forward geocoding (v6). */
-interface GeoPlace {
-    mapboxId: string;
-    name: string;
-    fullAddress: string;
-    featureType: string;
-    /** [lon, lat] */
-    center: [number, number];
-    /** [west, south, east, north] or null */
-    bbox: [number, number, number, number] | null;
-}
-
-/** Mapbox feature types that map to a SeekKrr "city" region; everything else → hotspot. */
-const CITY_FEATURE_TYPES = new Set(["country", "region", "postcode", "district", "place", "locality"]);
-
-async function geocodePlaces(query: string): Promise<GeoPlace[]> {
-    const token = config.mapbox.accessToken;
-    const url =
-        `https://api.mapbox.com/search/geocode/v6/forward?q=${encodeURIComponent(query)}` +
-        `&limit=6&types=country,region,district,place,locality,neighborhood,address&access_token=${token}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("Mapbox geocoding failed");
-    const data = await res.json();
-    const features: unknown[] = Array.isArray(data?.features) ? data.features : [];
-    return features.map((raw): GeoPlace => {
-        const f = raw as {
-            properties?: {
-                mapbox_id?: string;
-                name?: string;
-                full_address?: string;
-                feature_type?: string;
-                bbox?: number[];
-            };
-            geometry?: { coordinates?: number[] };
-        };
-        const props = f.properties ?? {};
-        const coords = f.geometry?.coordinates ?? [0, 0];
-        const bbox = Array.isArray(props.bbox) && props.bbox.length === 4
-            ? ([props.bbox[0], props.bbox[1], props.bbox[2], props.bbox[3]] as [number, number, number, number])
-            : null;
-        return {
-            mapboxId: props.mapbox_id ?? "",
-            name: props.name ?? "",
-            fullAddress: props.full_address ?? props.name ?? "",
-            featureType: props.feature_type ?? "",
-            center: [coords[0] ?? 0, coords[1] ?? 0],
-            bbox,
-        };
-    });
-}
-
 /** Build a GeoJSON Polygon from a place's bbox, or a small box around its center. */
-function placeToPolygon(place: GeoPlace): GeoPolygon {
+function placeToPolygon(place: ResolvedPlace): GeoPolygon {
     const [lon, lat] = place.center;
     const [w, s, e, n] = place.bbox ?? [lon - 0.02, lat - 0.02, lon + 0.02, lat + 0.02];
     return { type: "Polygon", coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]] };
@@ -80,23 +35,8 @@ export function RegionCreateModal({ open, onClose, onSuccess }: RegionCreateModa
     const [cWeight, setCWeight] = useState("1.0");
     const [cParentId, setCParentId] = useState("");
 
-    // Geocoding state
-    const [geoInput, setGeoInput] = useState("");
-    const [geoQ, setGeoQ] = useState("");
-    const [selectedPlace, setSelectedPlace] = useState<GeoPlace | null>(null);
-
-    // Debounce the geocoding query
-    useEffect(() => {
-        const t = window.setTimeout(() => setGeoQ(geoInput.trim()), 350);
-        return () => window.clearTimeout(t);
-    }, [geoInput]);
-
-    const geoSearch = useQuery<GeoPlace[]>({
-        queryKey: ["region-geocode", geoQ],
-        queryFn: () => geocodePlaces(geoQ),
-        enabled: open && !selectedPlace && geoQ.length >= 3,
-        staleTime: 5 * 60 * 1000,
-    });
+    // Selected place (provides bbox + center) — search UI lives in <PlaceSearchInput>.
+    const [selectedPlace, setSelectedPlace] = useState<ResolvedPlace | null>(null);
 
     const citiesQuery = useQuery<Region[]>({
         queryKey: ["admin-regions-cities"],
@@ -111,8 +51,6 @@ export function RegionCreateModal({ open, onClose, onSuccess }: RegionCreateModa
         setCDescription("");
         setCWeight("1.0");
         setCParentId("");
-        setGeoInput("");
-        setGeoQ("");
         setSelectedPlace(null);
         onClose();
     };
@@ -128,18 +66,16 @@ export function RegionCreateModal({ open, onClose, onSuccess }: RegionCreateModa
         onError: (e: Error) => toast.error(e.message || "Failed to create region"),
     });
 
-    const pickPlace = (place: GeoPlace) => {
+    const pickPlace = (place: ResolvedPlace) => {
         setSelectedPlace(place);
         if (!cName.trim()) setCName(place.name);
-        const detected: RegionType = CITY_FEATURE_TYPES.has(place.featureType) ? "city" : "hotspot";
+        const detected: RegionType = isAdminFeatureType(place.featureType) ? "city" : "hotspot";
         setCType(detected);
         if (detected === "city") setCParentId("");
     };
 
     const clearPlace = () => {
         setSelectedPlace(null);
-        setGeoInput("");
-        setGeoQ("");
     };
 
     const handleCreate = (e: FormEvent) => {
@@ -178,8 +114,6 @@ export function RegionCreateModal({ open, onClose, onSuccess }: RegionCreateModa
 
     if (!open) return null;
 
-    const results = geoSearch.data ?? [];
-
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto animate-slide-up">
@@ -203,60 +137,20 @@ export function RegionCreateModal({ open, onClose, onSuccess }: RegionCreateModa
                     {/* ── Place search (provides bbox + center) ───────────────────── */}
                     {!selectedPlace ? (
                         <div>
-                            <label htmlFor="region-geo" className="block text-sm font-medium text-neutral-700 mb-1">
+                            <label className="block text-sm font-medium text-neutral-700 mb-1">
                                 Find a place <span className="text-red-500">*</span>
                             </label>
                             <p className="text-xs text-neutral-500 mb-2">
                                 Search a city or hotspot. We use its real geographic boundary (bbox) and center.
                             </p>
-                            <div className="relative">
-                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                                <input
-                                    id="region-geo"
-                                    type="text"
-                                    autoFocus
-                                    value={geoInput}
-                                    onChange={(e) => setGeoInput(e.target.value)}
-                                    className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                                    placeholder="e.g. Paris, Gateway of India, Indiranagar…"
-                                />
-                                {geoSearch.isFetching && (
-                                    <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-cyan-500 animate-spin" />
-                                )}
-                            </div>
-                            {geoSearch.isError && (
-                                <p className="mt-2 text-xs text-red-500">Geocoding failed. Try again.</p>
-                            )}
-                            {geoQ.length >= 3 && !geoSearch.isFetching && results.length === 0 && (
-                                <p className="mt-2 text-xs text-neutral-500">No places found for “{geoQ}”.</p>
-                            )}
-                            {results.length > 0 && (
-                                <ul className="mt-2 border border-neutral-200 rounded-xl divide-y divide-neutral-100 overflow-hidden">
-                                    {results.map((place) => {
-                                        const isCity = CITY_FEATURE_TYPES.has(place.featureType);
-                                        return (
-                                            <li key={place.mapboxId || place.fullAddress}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => pickPlace(place)}
-                                                    className="w-full flex items-start gap-3 px-4 py-2.5 text-left hover:bg-cyan-50/60 transition-colors"
-                                                >
-                                                    <span className={`mt-0.5 flex items-center justify-center w-7 h-7 rounded-lg shrink-0 ${isCity ? "bg-cyan-100 text-cyan-600" : "bg-amber-100 text-amber-600"}`}>
-                                                        {isCity ? <Building2 className="w-3.5 h-3.5" /> : <MapPin className="w-3.5 h-3.5" />}
-                                                    </span>
-                                                    <span className="min-w-0">
-                                                        <span className="block text-sm font-medium text-neutral-800 truncate">{place.name}</span>
-                                                        <span className="block text-xs text-neutral-500 truncate">{place.fullAddress}</span>
-                                                        <span className="text-[10px] uppercase tracking-wide text-neutral-400">
-                                                            {place.featureType}{place.bbox ? "" : " · point only"}
-                                                        </span>
-                                                    </span>
-                                                </button>
-                                            </li>
-                                        );
-                                    })}
-                                </ul>
-                            )}
+                            <PlaceSearchInput
+                                searchTypes={REGION_SEARCH_TYPES}
+                                proximity={INDIA_PROXIMITY}
+                                autoFocus
+                                placeholder="e.g. Bir Billing, Varanasi, Indiranagar…"
+                                onSelect={pickPlace}
+                                onError={(msg) => toast.error(msg)}
+                            />
                         </div>
                     ) : (
                         <div className="rounded-xl border border-cyan-200 bg-cyan-50/40 p-3">
