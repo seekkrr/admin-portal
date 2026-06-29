@@ -217,11 +217,11 @@ export const GeoMap = memo(function GeoMap({
             const { lng, lat } = marker.getLngLat();
             onMarkerDragEndRef.current?.([Number(lng.toFixed(6)), Number(lat.toFixed(6))]);
         });
-        dragMarkerRef.current = marker;
+        setDragMarker(marker);
 
         return () => {
             marker.remove();
-            if (dragMarkerRef.current === marker) dragMarkerRef.current = null;
+            setDragMarker(null);
         };
     }, [draggable, pinColor]);
 
