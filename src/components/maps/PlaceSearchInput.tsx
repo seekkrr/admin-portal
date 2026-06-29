@@ -85,7 +85,7 @@ export function PlaceSearchInput({
         }
     };
 
-    const results = suggestQuery.data ?? [];
+    const results = input.trim().length >= 3 ? (suggestQuery.data ?? []) : [];
     // A single source of truth for the message, shown inline and (for retrieve) via onError.
     const errorText = errorMsg ?? (suggestQuery.isError ? "Place search failed. Try again." : null);
 
