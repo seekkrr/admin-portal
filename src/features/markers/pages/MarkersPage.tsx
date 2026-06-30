@@ -28,14 +28,18 @@ const STATUS_OPTIONS: { value: "" | MarkerStatus; label: string }[] = [
     { value: "", label: "All statuses" },
     { value: "approved", label: "Approved" },
     { value: "pending", label: "Pending" },
-    { value: "hidden", label: "Hidden" },
     { value: "rejected", label: "Rejected" },
+];
+
+const VISIBILITY_OPTIONS: { value: string; label: string }[] = [
+    { value: "", label: "All visibility" },
+    { value: "hidden", label: "Hidden" },
+    { value: "visible", label: "Visible" },
 ];
 
 const STATUS_BADGE: Record<MarkerStatus, string> = {
     approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
     pending: "bg-amber-50 text-amber-700 border-amber-200",
-    hidden: "bg-neutral-100 text-neutral-600 border-neutral-200",
     rejected: "bg-red-50 text-red-700 border-red-200",
 };
 
@@ -49,6 +53,7 @@ export function MarkersPage() {
     const [page, setPage] = useState(1);
     const [perPage] = useState(20);
     const [status, setStatus] = useState<"" | MarkerStatus>("");
+    const [visibility, setVisibility] = useState<"" | "hidden" | "visible">("");
     const [category, setCategory] = useState("");
     const [tags, setTags] = useState("");
     const [search, setSearch] = useState("");
@@ -87,10 +92,11 @@ export function MarkersPage() {
     }, [tags]);
 
     const { data, isLoading, error } = useQuery({
-        queryKey: ["admin-markers", { status, category: debouncedCategory, tags: debouncedTags, q: debouncedSearch, page }],
+        queryKey: ["admin-markers", { status, visibility, category: debouncedCategory, tags: debouncedTags, q: debouncedSearch, page }],
         queryFn: () =>
             markersService.list({
                 status: status || undefined,
+                hidden: visibility === "" ? undefined : visibility === "hidden",
                 category: debouncedCategory || undefined,
                 tags: debouncedTags || undefined,
                 search: debouncedSearch || undefined,
@@ -199,6 +205,13 @@ export function MarkersPage() {
                         theme="orange"
                         placeholder="All Statuses"
                     />
+                    <FilterDropdown
+                        value={visibility}
+                        onChange={(val) => { setVisibility(val as "" | "hidden" | "visible"); setPage(1); }}
+                        options={VISIBILITY_OPTIONS}
+                        theme="orange"
+                        placeholder="All Visibility"
+                    />
                     <div className="relative">
                         <Folder className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
                         <input
@@ -304,7 +317,14 @@ export function MarkersPage() {
                                             )}
                                         </td>
                                         <td className="px-4 py-4">
-                                            <Badge label={m.status} styles={STATUS_BADGE[m.status]} />
+                                            <div className="flex items-center gap-1.5">
+                                                <Badge label={m.status} styles={STATUS_BADGE[m.status]} />
+                                                {m.hidden && (
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-neutral-100 text-neutral-600 border border-neutral-200">
+                                                        Hidden
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-4 py-4">
                                             {m.region_id ? (
