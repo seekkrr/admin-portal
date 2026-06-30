@@ -58,6 +58,7 @@ interface EditForm {
     subtitle: string;
     content: string;
     voice_persona: VoicePersona | "";
+    custom_voice_id: string;
     trigger_radius_m: string;
     is_mandatory: boolean;
     is_unlocked: boolean;
@@ -190,6 +191,7 @@ export function NarrativeDetailPage() {
             subtitle: n.subtitle ?? "",
             content: n.content ?? "",
             voice_persona: n.voice_persona ?? "",
+            custom_voice_id: n.custom_voice_id ?? "",
             trigger_radius_m: n.trigger_radius_m !== null ? String(n.trigger_radius_m) : "",
             is_mandatory: n.is_mandatory,
             is_unlocked: n.is_unlocked,
@@ -234,12 +236,21 @@ export function NarrativeDetailPage() {
             toast.error("Title is required");
             return;
         }
+        if (editForm.voice_persona === "custom" && !/^[A-Za-z0-9]{20}$/.test(editForm.custom_voice_id.trim())) {
+            toast.error("Enter a valid 20-character ElevenLabs voice ID");
+            return;
+        }
         const payload: UpdateNarrativePayload = {};
         if (editForm.title.trim() !== (n.title ?? "")) payload.title = editForm.title.trim();
         if (editForm.subtitle.trim() !== (n.subtitle ?? "")) payload.subtitle = editForm.subtitle.trim();
         if (editForm.content.trim() !== (n.content ?? "")) payload.content = editForm.content.trim();
         if (editForm.voice_persona && editForm.voice_persona !== n.voice_persona)
             payload.voice_persona = editForm.voice_persona;
+        if (
+            editForm.voice_persona === "custom" &&
+            editForm.custom_voice_id.trim() !== (n.custom_voice_id ?? "")
+        )
+            payload.custom_voice_id = editForm.custom_voice_id.trim();
         const nextRadius = editForm.trigger_radius_m.trim() === "" ? null : Number(editForm.trigger_radius_m);
         if (nextRadius !== null && Number.isFinite(nextRadius) && nextRadius !== n.trigger_radius_m)
             payload.trigger_radius_m = nextRadius;
@@ -460,6 +471,8 @@ export function NarrativeDetailPage() {
                                 <VoicePersonaSamples
                                     selected={editForm.voice_persona || undefined}
                                     onSelect={(persona) => setEditForm({ ...editForm, voice_persona: persona })}
+                                    customVoiceId={editForm.custom_voice_id}
+                                    onCustomVoiceIdChange={(value) => setEditForm({ ...editForm, custom_voice_id: value })}
                                 />
                             </div>
                             <div>

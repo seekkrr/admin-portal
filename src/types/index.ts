@@ -693,7 +693,7 @@ export type UpdateMarkerPayload = Partial<Omit<CreateMarkerPayload, "location">>
 export type NarrativeStatus = "draft" | "under_review" | "approved" | "rejected" | "archived";
 export type NarrativeAudioStatus = "pending" | "generating" | "ready" | "failed" | "quota_exceeded";
 export type NarrativeAttachType = "marker" | "quest" | "region";
-export type VoicePersona = "historian_warm" | "mystery_whisper" | "energetic_guide" | "elder_storyteller";
+export type VoicePersona = "historian_warm" | "mystery_whisper" | "energetic_guide" | "elder_storyteller" | "custom";
 
 export interface AdminNarrative {
     _id: string;
@@ -708,6 +708,7 @@ export interface AdminNarrative {
     audio_status: NarrativeAudioStatus;
     audio_duration_s: number | null;
     voice_persona: VoicePersona | null;
+    custom_voice_id: string | null;
     media: string[];
     is_mandatory: boolean;
     is_unlocked: boolean;
@@ -766,6 +767,7 @@ export interface UpdateNarrativePayload {
     content?: string;
     subtitle?: string;
     voice_persona?: VoicePersona;
+    custom_voice_id?: string;
     trigger_radius_m?: number;
     is_mandatory?: boolean;
     is_unlocked?: boolean;
@@ -785,6 +787,7 @@ export interface CreateNarrativePayload {
     trigger_location?: GeoPoint;
     trigger_radius_m?: number;
     voice_persona?: VoicePersona;
+    custom_voice_id?: string;
     media?: string[];
     is_mandatory?: boolean;
     is_unlocked?: boolean;
