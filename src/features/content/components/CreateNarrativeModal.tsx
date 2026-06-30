@@ -41,6 +41,7 @@ interface FormState {
     subtitle: string;
     content: string;
     voicePersona: VoicePersona | "";
+    customVoiceId: string;
     triggerRadius: string;
     isMandatory: boolean;
     isUnlocked: boolean;
@@ -52,6 +53,7 @@ const EMPTY_FORM: FormState = {
     subtitle: "",
     content: "",
     voicePersona: "",
+    customVoiceId: "",
     triggerRadius: "",
     isMandatory: false,
     isUnlocked: true,
@@ -146,6 +148,8 @@ export function CreateNarrativeModal({ open, onClose }: CreateNarrativeModalProp
             content: form.content.trim() || undefined,
             subtitle: form.subtitle.trim() || undefined,
             voice_persona: form.voicePersona || undefined,
+            custom_voice_id:
+                form.voicePersona === "custom" ? form.customVoiceId.trim() : undefined,
             trigger_radius_m:
                 radiusNum !== undefined && Number.isFinite(radiusNum) ? radiusNum : undefined,
             media: form.media.length > 0 ? form.media : undefined,
@@ -224,6 +228,10 @@ export function CreateNarrativeModal({ open, onClose }: CreateNarrativeModalProp
         }
         if (!form.title.trim()) {
             toast.error("Title is required");
+            return;
+        }
+        if (form.voicePersona === "custom" && !/^[A-Za-z0-9]{20}$/.test(form.customVoiceId.trim())) {
+            toast.error("Enter a valid 20-character ElevenLabs voice ID");
             return;
         }
         createMutation.mutate(
@@ -460,6 +468,7 @@ export function CreateNarrativeModal({ open, onClose }: CreateNarrativeModalProp
                                             {p.label}
                                         </option>
                                     ))}
+                                    <option value="custom">Custom (ElevenLabs voice ID)</option>
                                 </select>
                             </div>
 
@@ -480,6 +489,23 @@ export function CreateNarrativeModal({ open, onClose }: CreateNarrativeModalProp
                                 />
                             </div>
                         </div>
+
+                        {/* Custom ElevenLabs voice ID input */}
+                        {form.voicePersona === "custom" && (
+                            <div>
+                                <label className="mb-1.5 block text-sm font-medium text-neutral-700">
+                                    ElevenLabs voice ID
+                                </label>
+                                <input
+                                    type="text"
+                                    value={form.customVoiceId}
+                                    onChange={(e) => setForm({ ...form, customVoiceId: e.target.value })}
+                                    placeholder="e.g. pNInz6obpgDQGcFmaJgB"
+                                    className="w-full rounded-xl border border-neutral-200 px-4 py-2.5 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                />
+                                <p className="mt-1 text-xs text-neutral-500">20-character voice ID from your ElevenLabs voice library.</p>
+                            </div>
+                        )}
 
                         {/* Media upload */}
                         <div>
