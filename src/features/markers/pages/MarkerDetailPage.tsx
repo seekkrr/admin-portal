@@ -32,7 +32,7 @@ import { config } from "@/config/env";
 import { RegionPicker } from "@/features/regions/components/RegionPicker";
 import { MARKER_CATEGORIES, type UpdateMarkerPayload, type MarkerStatus } from "@/types";
 
-const STATUS_VALUES: MarkerStatus[] = ["approved", "pending", "hidden", "rejected"];
+const STATUS_VALUES: MarkerStatus[] = ["approved", "pending", "rejected"];
 
 interface EditForm {
     title: string;
@@ -49,6 +49,7 @@ interface EditForm {
     maxExpense: string;
     regionId: string;
     media: string[];
+    hidden: boolean;
 }
 
 export function MarkerDetailPage() {
@@ -94,6 +95,7 @@ export function MarkerDetailPage() {
                 maxExpense: marker.max_expense !== null ? String(marker.max_expense) : "",
                 regionId: marker.region_id ?? "",
                 media: marker.media ?? [],
+                hidden: marker.hidden ?? false,
             });
         }
     }, [marker]);
@@ -202,6 +204,7 @@ export function MarkerDetailPage() {
         const nextTags = form.tags.split(",").map((t) => t.trim()).filter(Boolean);
         if (nextTags.join(",") !== (marker.tags ?? []).join(",")) payload.tags = nextTags;
         if (form.status !== marker.status) payload.status = form.status;
+        if (form.hidden !== (marker.hidden ?? false)) payload.hidden = form.hidden;
 
         if (form.websiteUrl.trim() !== (marker.website_url ?? ""))
             payload.website_url = form.websiteUrl.trim();
@@ -796,6 +799,17 @@ export function MarkerDetailPage() {
                                     />
                                 </label>
                             </div>
+                        </div>
+                        <div>
+                            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={form.hidden}
+                                    onChange={(e) => setForm({ ...form, hidden: e.target.checked })}
+                                    className="w-4 h-4 rounded border-neutral-300 text-orange-600 focus:ring-orange-500 accent-orange-600"
+                                />
+                                <span className="text-sm font-medium text-neutral-700">Hidden (excluded from public discovery)</span>
+                            </label>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-neutral-700 mb-1.5">Description</label>

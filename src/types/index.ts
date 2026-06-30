@@ -546,9 +546,9 @@ export interface GeoPolygon {
 // ───────────────────────────────────────────────────────────────────────────
 // Section 8 — Markers & Marker Applications
 //   Backend: v2/models/marker.py → to_public_dict() returns `id` (string)
-//   Statuses: approved | pending | hidden | rejected
+//   Statuses: approved | pending | rejected  (hidden is a separate boolean)
 // ───────────────────────────────────────────────────────────────────────────
-export type MarkerStatus = "approved" | "pending" | "hidden" | "rejected";
+export type MarkerStatus = "approved" | "pending" | "rejected";
 export type MarkerApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
 export type MarkerCategory = string;
 
@@ -586,6 +586,7 @@ export interface Marker {
     things_to_do_image_url: string | null;
     region_id: string | null;
     status: MarkerStatus;
+    hidden: boolean;
     source: string | null;
     created_by: string | null;
     usage_count: number;
@@ -645,6 +646,7 @@ export interface MarkerApplicationsListResponse {
 
 export interface ListMarkersParams {
     status?: MarkerStatus;
+    hidden?: boolean;
     category?: string;
     tags?: string;
     search?: string;
@@ -676,6 +678,7 @@ export interface CreateMarkerPayload {
     /** Closing time of day, "HH:MM" (24h). */
     closes_at?: string;
     region_id?: string;
+    hidden?: boolean;
     properties?: Record<string, unknown>;
 }
 
