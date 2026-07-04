@@ -51,6 +51,9 @@ const PayoutAccountsPage = lazy(() => import("@/features/payouts/pages/PayoutAcc
 const PayoutAccountDetailPage = lazy(() => import("@/features/payouts/pages/PayoutAccountDetailPage").then(m => ({ default: m.PayoutAccountDetailPage })));
 const PayoutsPage = lazy(() => import("@/features/payouts/pages/PayoutsPage").then(m => ({ default: m.PayoutsPage })));
 const PayoutDetailPage = lazy(() => import("@/features/payouts/pages/PayoutDetailPage").then(m => ({ default: m.PayoutDetailPage })));
+// Coupons — discount codes
+const CouponsPage = lazy(() => import("@/features/coupons/pages/CouponsPage").then(m => ({ default: m.CouponsPage })));
+const CouponDetailPage = lazy(() => import("@/features/coupons/pages/CouponDetailPage").then(m => ({ default: m.CouponDetailPage })));
 
 export const AppRoutes = () => {
     return (
@@ -262,6 +265,18 @@ export const AppRoutes = () => {
                 <Route path="payouts/:payoutId" element={
                     <Suspense fallback={<LoadingFallback message="Loading payout..." />}>
                         <PayoutDetailPage />
+                    </Suspense>
+                } />
+
+                {/* Coupons — discount codes (static before :couponId) */}
+                <Route path="coupons" element={
+                    <Suspense fallback={<LoadingFallback message="Loading coupons..." />}>
+                        <CouponsPage />
+                    </Suspense>
+                } />
+                <Route path="coupons/:couponId" element={
+                    <Suspense fallback={<LoadingFallback message="Loading coupon..." />}>
+                        <CouponDetailPage />
                     </Suspense>
                 } />
             </Route>

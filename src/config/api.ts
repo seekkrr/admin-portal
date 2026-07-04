@@ -198,4 +198,10 @@ export const API_ENDPOINTS = {
         BY_QUEST_USERS: (questId: string) => `/api/v2/progress/${questId}/users`,
         BY_QUEST: (questId: string) => `/api/v2/progress/${questId}`,
     },
+    // ── Coupons (discount codes) ──
+    COUPONS: {
+        BASE: "/api/v2/coupons",
+        BY_ID: (id: string) => `/api/v2/coupons/${id}`,
+        REDEMPTIONS: (id: string) => `/api/v2/coupons/${id}/redemptions`,
+    },
 } as const;
