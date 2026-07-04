@@ -1722,3 +1722,105 @@ export interface AdminQuestExperience {
     achievement: ExperienceAchievement | null;
     start_point: { marker_id: string; name: string | null; lat: number | null; lng: number | null } | null;
 }
+
+// ============================================================
+// Section — Coupons (discount codes)
+// Backend: /api/v2/coupons. Create/update/delete require admin/super_admin;
+// list/get also allow finance to view (read-only).
+// ============================================================
+
+export type CouponDiscountType = "flat" | "percent" | "percent_range";
+export type CouponLinkItem = "quest" | "all";
+
+export interface Coupon {
+    _id: string;
+    name: string;
+    code: string;
+    discount_type: CouponDiscountType;
+    discount_value: number | null;
+    discount_min: number | null;
+    discount_max: number | null;
+    link_item: CouponLinkItem;
+    link_id: string | null;
+    is_active: boolean;
+    expires_at: string | null;
+    per_user_limit: number;
+    max_redemptions: number | null;
+    redemption_count: number;
+    currency: string;
+    created_at: string;
+}
+
+export interface CouponsListResponse {
+    success?: boolean;
+    coupons: Coupon[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
+export interface ListCouponsParams {
+    is_active?: "true" | "false" | "";
+    link_item?: CouponLinkItem | "";
+    code?: string;
+    page?: number;
+    page_size?: number;
+}
+
+export interface CreateCouponPayload {
+    name: string;
+    code: string;
+    discount_type: CouponDiscountType;
+    discount_value?: number;
+    discount_min?: number;
+    discount_max?: number;
+    link_item: CouponLinkItem;
+    link_id?: string;
+    is_active?: boolean;
+    expires_at?: string;
+    per_user_limit?: number;
+    max_redemptions?: number;
+}
+
+export interface UpdateCouponPayload {
+    name?: string;
+    discount_type?: CouponDiscountType;
+    discount_value?: number;
+    discount_min?: number;
+    discount_max?: number;
+    link_item?: CouponLinkItem;
+    link_id?: string;
+    is_active?: boolean;
+    expires_at?: string;
+    per_user_limit?: number;
+    max_redemptions?: number;
+}
+
+// Coupon redemption record — one row per successful application of a coupon
+// to a transaction. Returned by GET /coupons/{id}/redemptions.
+export interface CouponRedemption {
+    user_id: string;
+    coupon_code: string;
+    amount_before_discount: number;
+    discount_amount: number;
+    final_amount_after_discount: number;
+    effective_percent: number | null;
+    link_item_id: string | null;
+    transaction_id: string | null;
+    created_at: string;
+}
+
+export interface CouponRedemptionsListResponse {
+    success?: boolean;
+    redemptions: CouponRedemption[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
+export interface ListCouponRedemptionsParams {
+    page?: number;
+    page_size?: number;
+}

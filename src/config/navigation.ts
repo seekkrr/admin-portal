@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Video, Map, UserPlus, MessageSquare, BarChart3, MapPin, BookOpen, Star, Globe, Trophy, ListOrdered, Settings2, Activity, ArrowLeftRight, RotateCcw, Wallet, Banknote, ReceiptText, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, Users, Video, Map, UserPlus, MessageSquare, BarChart3, MapPin, BookOpen, Star, Globe, Trophy, ListOrdered, Settings2, Activity, ArrowLeftRight, RotateCcw, Wallet, Banknote, ReceiptText, Tag, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
     icon: LucideIcon;
@@ -67,6 +67,9 @@ export const NAV_GROUPS: NavGroup[] = [
             { icon: Wallet, label: "Payout Accounts", to: "/payout-accounts", roles: [...FINANCE_ROLES] },
             { icon: Banknote, label: "Payouts", to: "/payouts", roles: [...FINANCE_ROLES] },
             { icon: ReceiptText, label: "Payment Events", to: "/payment-events", roles: [...FINANCE_ROLES] },
+            // Coupon create/update/delete require admin/super_admin; the nav entry is
+            // gated to those roles even though finance may view via direct link.
+            { icon: Tag, label: "Coupons", to: "/coupons", roles: ["admin", "super_admin"] },
         ]
     }
 ];
