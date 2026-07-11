@@ -5,7 +5,7 @@ import { PeriodSelector } from "../components/PeriodSelector";
 import { AnalyticsCard } from "../components/AnalyticsCard";
 import { SimpleLineChart, SimpleBarChart, SimpleDoughnutChart } from "../components/SimpleChart";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@components/ui";
-import { Users, DollarSign, Map, Video, Globe, MessageSquare, Activity, Star, Award, MapPin } from "lucide-react";
+import { Users, DollarSign, Map, Video, Globe, MessageSquare, Activity, Star, Award, MapPin, Megaphone, Link2 } from "lucide-react";
 import { useAuthStore } from "@store/auth.store";
 import { Navigate } from "react-router-dom";
 import type { AnalyticsPeriod } from "@/types";
@@ -13,6 +13,7 @@ import { formatCurrency } from "@/utils/format";
 
 const TABS = [
     { id: "users", label: "Users", icon: Users },
+    { id: "acquisition", label: "Acquisition", icon: Megaphone },
     { id: "revenue", label: "Revenue", icon: DollarSign },
     { id: "quests", label: "Quests", icon: Map },
     { id: "creators", label: "Creators", icon: Video },
@@ -44,6 +45,8 @@ export function AnalyticsPage() {
     const { data: activeUsers, isLoading: loadAU } = useQuery({ queryKey: ["admin-analytics-users-active", period], queryFn: () => analyticsService.getActiveUsers(from, to), enabled: activeTab === "users" });
     const { data: usersByRole } = useQuery({ queryKey: ["admin-analytics-users-by-role"], queryFn: analyticsService.getUsersByRole, enabled: activeTab === "users" });
     const { data: retention } = useQuery({ queryKey: ["admin-analytics-users-retention"], queryFn: () => analyticsService.getRetentionCohorts(), enabled: activeTab === "users" });
+
+    const { data: linkClicks, isLoading: loadLC } = useQuery({ queryKey: ["admin-analytics-acquisition-link-clicks", period], queryFn: () => analyticsService.getAcquisitionLinkClicks(from, to, period === "90d" ? "weekly" : "daily"), enabled: activeTab === "acquisition" });
 
     const { data: revTotal, isLoading: loadRT } = useQuery({ queryKey: ["admin-analytics-revenue-total", period], queryFn: () => analyticsService.getRevenueTotal(from, to), enabled: activeTab === "revenue" });
     const { data: revOverTime } = useQuery({ queryKey: ["admin-analytics-revenue-over-time", period], queryFn: () => analyticsService.getRevenueOverTime(from, to), enabled: activeTab === "revenue" });
@@ -171,6 +174,55 @@ export function AnalyticsPage() {
                     !retention?.data || retention.data.length === 0
                 )
             )}
+        </div>
+    );
+
+    // ========== ACQUISITION TAB ==========
+    const renderAcquisitionTab = () => (
+        <div className="space-y-6 animate-fade-in">
+            {renderSectionHeader(
+                "Marketing Acquisition",
+                `Tracked-link clicks by campaign for the last ${period.replace('d', ' days')} (links: /api/v2/r/<campaign>)`,
+                <PeriodSelector value={period} onChange={setPeriod} />
+            )}
+
+            {/* KPI row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                <AnalyticsCard
+                    title={`Link Clicks (${period})`}
+                    value={linkClicks?.data?.total_clicks || 0}
+                    icon={Link2}
+                    colorClass="ring-fuchsia-100 text-fuchsia-600"
+                    isLoading={loadLC}
+                />
+            </div>
+
+            {/* Charts row */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                {renderChartCard("Clicks Over Time", "Tracked marketing link clicks", (
+                    loadLC
+                        ? <div className="h-[240px] bg-neutral-100 animate-pulse rounded-lg" />
+                        : <SimpleLineChart data={(linkClicks?.data?.series || []).map((d: { period: string; clicks: number }) => ({ label: d.period, value: d.clicks }))} color="#c026d3" height={240} />
+                ), "lg:col-span-2")}
+
+                {renderChartCard("Clicks by Campaign", "Which packs/campaigns drive store visits",
+                    renderTable(
+                        ["Campaign (src)", "Clicks"],
+                        (linkClicks?.data?.by_src || []).map((r: { src: string; clicks: number }, index: number) => {
+                            const campaignName = r.src || "Direct / Organic";
+                            return (
+                                <tr key={r.src || "unknown-" + index} className="hover:bg-neutral-50/60 transition-colors">
+                                    <td className="px-5 py-3.5 font-semibold text-neutral-800 font-mono text-xs">{campaignName}</td>
+                                    <td className="px-5 py-3.5 text-fuchsia-600 font-bold text-right">{r.clicks}</td>
+                                </tr>
+                            );
+                        }),
+                        "No clicks yet — share tracked links from post packs",
+                        !linkClicks?.data?.by_src || linkClicks.data.by_src.length === 0,
+                        "280px"
+                    )
+                )}
+            </div>
         </div>
     );
 
@@ -514,6 +566,7 @@ export function AnalyticsPage() {
             {/* Tab content */}
             <div>
                 {activeTab === "users" && renderUsersTab()}
+                {activeTab === "acquisition" && renderAcquisitionTab()}
                 {activeTab === "revenue" && renderRevenueTab()}
                 {activeTab === "quests" && renderQuestsTab()}
                 {activeTab === "creators" && renderCreatorsTab()}

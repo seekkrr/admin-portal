@@ -32,6 +32,14 @@ export const analyticsService = {
         return (await api.get(`${API_ENDPOINTS.ANALYTICS.USERS_RETENTION}?${qs}`)).data;
     },
 
+    // --- Acquisition ---
+    getAcquisitionLinkClicks: async (from?: string, to?: string, interval: string = "daily") => {
+        const qs = new URLSearchParams({ interval });
+        if (from) qs.append("from", from);
+        if (to) qs.append("to", to);
+        return (await api.get(`${API_ENDPOINTS.ANALYTICS.ACQUISITION_LINK_CLICKS}?${qs}`)).data;
+    },
+
     // --- Revenue ---
     getRevenueTotal: async (from?: string, to?: string) => {
         const qs = new URLSearchParams();
