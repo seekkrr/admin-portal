@@ -208,12 +208,15 @@ export function AnalyticsPage() {
                 {renderChartCard("Clicks by Campaign", "Which packs/campaigns drive store visits",
                     renderTable(
                         ["Campaign (src)", "Clicks"],
-                        (linkClicks?.data?.by_src || []).map((r: { src: string; clicks: number }) => (
-                            <tr key={r.src} className="hover:bg-neutral-50/60 transition-colors">
-                                <td className="px-5 py-3.5 font-semibold text-neutral-800 font-mono text-xs">{r.src}</td>
-                                <td className="px-5 py-3.5 text-fuchsia-600 font-bold text-right">{r.clicks}</td>
-                            </tr>
-                        )),
+                        (linkClicks?.data?.by_src || []).map((r: { src: string; clicks: number }, index: number) => {
+                            const campaignName = r.src || "Direct / Organic";
+                            return (
+                                <tr key={r.src || "unknown-" + index} className="hover:bg-neutral-50/60 transition-colors">
+                                    <td className="px-5 py-3.5 font-semibold text-neutral-800 font-mono text-xs">{campaignName}</td>
+                                    <td className="px-5 py-3.5 text-fuchsia-600 font-bold text-right">{r.clicks}</td>
+                                </tr>
+                            );
+                        }),
                         "No clicks yet — share tracked links from post packs",
                         !linkClicks?.data?.by_src || linkClicks.data.by_src.length === 0,
                         "280px"
