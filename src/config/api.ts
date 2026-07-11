@@ -97,6 +97,8 @@ export const API_ENDPOINTS = {
         USERS_ACTIVE: "/api/v2/analytics/users/active",
         USERS_BY_ROLE: "/api/v2/analytics/users/by-role",
         USERS_RETENTION: "/api/v2/analytics/users/retention",
+        // Acquisition
+        ACQUISITION_LINK_CLICKS: "/api/v2/analytics/acquisition/link-clicks",
         // Revenue
         REVENUE_TOTAL: "/api/v2/analytics/revenue/total",
         REVENUE_OVER_TIME: "/api/v2/analytics/revenue/over-time",
