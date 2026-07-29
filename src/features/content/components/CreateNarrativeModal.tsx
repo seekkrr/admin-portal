@@ -17,7 +17,7 @@ import { narrativesService } from "../services/narratives.service";
 import { PERSONAS } from "./voicePersonas";
 import { AttachTargetPicker, type AttachTarget } from "./AttachTargetPicker";
 import { NarrativeConflictDialog } from "./NarrativeConflictDialog";
-import { config } from "@/config/env";
+import { mediaService } from "@/services/media.service";
 import type {
     CreateNarrativePayload,
     NarrativeAttachType,
@@ -247,16 +247,8 @@ export function CreateNarrativeModal({ open, onClose }: CreateNarrativeModalProp
         try {
             const urls = await Promise.all(
                 Array.from(files).map(async (file) => {
-                    const fd = new FormData();
-                    fd.append("file", file);
-                    fd.append("upload_preset", config.cloudinary.uploadPreset);
-                    const res = await fetch(config.cloudinary.uploadUrl, {
-                        method: "POST",
-                        body: fd,
-                    });
-                    if (!res.ok) throw new Error(`Upload failed: ${file.name}`);
-                    const json = (await res.json()) as { secure_url: string };
-                    return json.secure_url;
+                    const result = await mediaService.uploadImage(file, { category: "narrative" });
+                    return result.secure_url;
                 }),
             );
             setForm((f) => ({ ...f, media: [...f.media, ...urls] }));

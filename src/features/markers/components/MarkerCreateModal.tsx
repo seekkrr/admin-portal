@@ -6,7 +6,7 @@ import { PlaceSearchInput } from "@/components/maps/PlaceSearchInput";
 import { MARKER_SEARCH_TYPES, INDIA_PROXIMITY, type ResolvedPlace } from "@/services/geocoding.service";
 import { MapPin, X, Upload, Loader2, ListChecks } from "lucide-react";
 import { toast } from "sonner";
-import { config } from "@/config/env";
+import { mediaService } from "@/services/media.service";
 import { RegionPicker } from "@/features/regions/components/RegionPicker";
 import { MARKER_CATEGORIES, type CreateMarkerPayload } from "@/types";
 
@@ -71,13 +71,8 @@ export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
         try {
             const results = await Promise.allSettled(
                 Array.from(files).map(async (file) => {
-                    const fd = new FormData();
-                    fd.append("file", file);
-                    fd.append("upload_preset", config.cloudinary.uploadPreset);
-                    const res = await fetch(config.cloudinary.uploadUrl, { method: "POST", body: fd });
-                    if (!res.ok) throw new Error(`Upload failed: ${file.name}`);
-                    const json = (await res.json()) as { secure_url: string };
-                    return json.secure_url;
+                    const result = await mediaService.uploadImage(file, { category: "marker" });
+                    return result.secure_url;
                 }),
             );
             const urls = results
@@ -108,13 +103,8 @@ export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
         if (!file) return;
         setUploadingTtd(true);
         try {
-            const fd = new FormData();
-            fd.append("file", file);
-            fd.append("upload_preset", config.cloudinary.uploadPreset);
-            const res = await fetch(config.cloudinary.uploadUrl, { method: "POST", body: fd });
-            if (!res.ok) throw new Error("Upload failed");
-            const json = (await res.json()) as { secure_url: string };
-            setForm((f) => ({ ...f, thingsToDoImageUrl: json.secure_url }));
+            const result = await mediaService.uploadImage(file, { category: "marker" });
+            setForm((f) => ({ ...f, thingsToDoImageUrl: result.secure_url }));
             toast.success("Image uploaded");
         } catch (err) {
             toast.error(err instanceof Error ? err.message : "Upload failed");
