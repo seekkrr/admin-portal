@@ -30,7 +30,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { GeoMap } from "@/components/maps/GeoMap";
 import { useAuthStore } from "@store/auth.store";
-import { config } from "@/config/env";
+import { mediaService } from "@/services/media.service";
 import { narrativesService } from "../services/narratives.service";
 import { AudioPlayer } from "../components/AudioPlayer";
 import { VoicePersonaSamples } from "../components/VoicePersonaSamples";
@@ -208,13 +208,11 @@ export function NarrativeDetailPage() {
         try {
             const urls = await Promise.all(
                 Array.from(files).map(async (file) => {
-                    const fd = new FormData();
-                    fd.append("file", file);
-                    fd.append("upload_preset", config.cloudinary.uploadPreset);
-                    const res = await fetch(config.cloudinary.uploadUrl, { method: "POST", body: fd });
-                    if (!res.ok) throw new Error(`Upload failed: ${file.name}`);
-                    const json = (await res.json()) as { secure_url: string };
-                    return json.secure_url;
+                    const result = await mediaService.uploadImage(file, {
+                        category: "narrative",
+                        entity_id: narrativeId,
+                    });
+                    return result.secure_url;
                 }),
             );
             setEditForm((f) => (f ? { ...f, media: [...f.media, ...urls] } : f));

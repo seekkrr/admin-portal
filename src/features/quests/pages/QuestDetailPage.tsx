@@ -15,7 +15,7 @@ import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { questsService } from "../services/quests.service";
 import { QuestActionModal, type QuestActionType } from "../components/QuestActionModal";
 import { ReviewHistory } from "../components/ReviewHistory";
-import { config } from "@/config/env";
+import { mediaService } from "@/services/media.service";
 
 // Lazy-loaded so the heavy mapbox-gl bundle (~1.7 MB) is only fetched when the
 // Explore tab is actually opened, not on every quest detail view.
@@ -330,14 +330,9 @@ export function QuestDetailPage() {
         setUploadingMedia(true);
         const current = [...(quest.cloudinary_assets ?? [])];
         try {
-            const results = await Promise.all(Array.from(files).map(async (file) => {
-                const fd = new FormData();
-                fd.append("file", file);
-                fd.append("upload_preset", config.cloudinary.uploadPreset);
-                const res = await fetch(config.cloudinary.uploadUrl, { method: "POST", body: fd });
-                if (!res.ok) throw new Error(`Upload failed: ${file.name}`);
-                return res.json() as Promise<{ public_id: string; secure_url: string; resource_type?: string; format?: string }>;
-            }));
+            const results = await Promise.all(Array.from(files).map((file) =>
+                mediaService.uploadImage(file, { category: "quest", entity_id: questId }),
+            ));
             const uploaded: CloudinaryAsset[] = results.map((r) => ({
                 public_id: r.public_id, secure_url: r.secure_url,
                 resource_type: r.resource_type ?? "image", format: r.format ?? "", alt_text: "",

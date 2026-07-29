@@ -28,7 +28,7 @@ import { toast } from "sonner";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Card } from "@/components/ui/Card";
-import { config } from "@/config/env";
+import { mediaService } from "@/services/media.service";
 import { RegionPicker } from "@/features/regions/components/RegionPicker";
 import { MARKER_CATEGORIES, type UpdateMarkerPayload, type MarkerStatus } from "@/types";
 
@@ -131,13 +131,12 @@ export function MarkerDetailPage() {
         if (!file) return;
         setUploadingTtd(true);
         try {
-            const fd = new FormData();
-            fd.append("file", file);
-            fd.append("upload_preset", config.cloudinary.uploadPreset);
-            const res = await fetch(config.cloudinary.uploadUrl, { method: "POST", body: fd });
-            if (!res.ok) throw new Error("Upload failed");
-            const json = (await res.json()) as { secure_url: string };
-            setForm((f) => (f ? { ...f, thingsToDoImageUrl: json.secure_url } : f));
+            const result = await mediaService.uploadImage(file, {
+                category: "marker",
+                entity_id: markerId,
+                slot: "things-to-do",
+            });
+            setForm((f) => (f ? { ...f, thingsToDoImageUrl: result.secure_url } : f));
             toast.success("Image uploaded");
         } catch (err) {
             toast.error(err instanceof Error ? err.message : "Upload failed");
@@ -155,13 +154,11 @@ export function MarkerDetailPage() {
         try {
             const urls = await Promise.all(
                 Array.from(files).map(async (file) => {
-                    const fd = new FormData();
-                    fd.append("file", file);
-                    fd.append("upload_preset", config.cloudinary.uploadPreset);
-                    const res = await fetch(config.cloudinary.uploadUrl, { method: "POST", body: fd });
-                    if (!res.ok) throw new Error(`Upload failed: ${file.name}`);
-                    const json = (await res.json()) as { secure_url: string };
-                    return json.secure_url;
+                    const result = await mediaService.uploadImage(file, {
+                        category: "marker",
+                        entity_id: markerId,
+                    });
+                    return result.secure_url;
                 }),
             );
             setForm((f) => (f ? { ...f, media: [...f.media, ...urls] } : f));
