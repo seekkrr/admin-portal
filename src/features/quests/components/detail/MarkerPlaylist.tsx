@@ -35,7 +35,7 @@ export function MarkerPlaylist({ markers, startMarkerId, onShowOnMap }: MarkerPl
                             {m.marker_id === startMarkerId && <Flag className="w-3 h-3 text-emerald-500 flex-shrink-0" />}
                         </div>
                         <p className="text-xs text-neutral-400 mt-0.5">
-                            {m.category && <span>{m.category} · </span>}
+                            {(m.categories && m.categories.length > 0) && <span>{m.categories.join(", ")} · </span>}
                             {m.is_required ? "Required" : "Optional"}
                             {m.tags.length > 0 && ` · ${m.tags.slice(0, 3).join(", ")}`}
                         </p>

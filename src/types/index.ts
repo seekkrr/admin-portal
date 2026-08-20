@@ -111,6 +111,7 @@ export interface AuthTokens {
 export interface CloudinaryAsset {
     public_id: string;
     secure_url: string;
+    url?: string;
     version?: number;
     format?: string;
     resource_type?: string;
@@ -176,7 +177,8 @@ export interface QuestListEntry {
 export interface MarkerSummary {
     marker_id: string;
     name: string | null;
-    category: string | null;
+    categories?: string[];
+    sub_categories?: string[];
     tags: string[];
     images: CloudinaryAsset[];
     things_to_do_text: string | null;
@@ -570,7 +572,8 @@ export interface Marker {
     id: string;
     title: string;
     location: GeoPoint | null;
-    category: MarkerCategory | null;
+    categories: string[];
+    sub_categories: string[];
     description: string | null;
     media: string[] | null;
     tags: string[] | null;
@@ -611,7 +614,8 @@ export interface MarkerApplication {
     status: MarkerApplicationStatus;
     proposed_location: GeoPoint | null;
     proposed_title: string;
-    proposed_category: string | null;
+    proposed_categories: string[];
+    proposed_sub_categories: string[];
     proposed_description: string | null;
     proposed_address: string | null;
     photos: string[] | null;
@@ -661,7 +665,8 @@ export interface ListMarkersParams {
 export interface CreateMarkerPayload {
     title: string;
     location: GeoPoint;
-    category?: string;
+    categories?: string[];
+    sub_categories?: string[];
     description?: string;
     address?: string;
     map_url?: string;
@@ -1660,7 +1665,8 @@ export interface ExperienceTask {
 export interface ExperienceMarker {
     marker_id: string;
     name: string | null;
-    category: string | null;
+    categories?: string[];
+    sub_categories?: string[];
     description: string | null;
     coordinates: ExperienceCoordinates | null;
     order: number | null;

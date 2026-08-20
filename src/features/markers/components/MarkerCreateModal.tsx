@@ -8,11 +8,13 @@ import { MapPin, X, Upload, Loader2, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 import { mediaService } from "@/services/media.service";
 import { RegionPicker } from "@/features/regions/components/RegionPicker";
-import { MARKER_CATEGORIES, type CreateMarkerPayload } from "@/types";
+import { type CreateMarkerPayload } from "@/types";
+import { categoryService } from "@/services/category.service";
 
 interface CreateForm {
     title: string;
-    category: string;
+    categories: string[];
+    subCategories: string[];
     description: string;
     address: string;
     tags: string;
@@ -32,7 +34,8 @@ interface CreateForm {
 
 const EMPTY_FORM: CreateForm = {
     title: "",
-    category: "",
+    categories: [],
+    subCategories: [],
     description: "",
     address: "",
     tags: "",
@@ -58,12 +61,18 @@ interface MarkerCreateModalProps {
 export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
     const queryClient = useQueryClient();
     const [form, setForm] = useState<CreateForm>(EMPTY_FORM);
+    
+    const { data: dbCategories = [] } = useQuery({
+        queryKey: ["categories"],
+        queryFn: () => categoryService.getCategories(),
+        staleTime: 5 * 60_000,
+    });
     const [uploadingMedia, setUploadingMedia] = useState(false);
     const mediaFileInputRef = useRef<HTMLInputElement>(null);
     const [uploadingTtd, setUploadingTtd] = useState(false);
     const ttdFileInputRef = useRef<HTMLInputElement>(null);
 
-    // ── Media upload (unsigned Cloudinary, mirrors CreateNarrativeModal) ──
+    // ── Media upload (S3 presigned uploads) ──
     const handleMediaUpload = async (e: ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files || files.length === 0) return;
@@ -188,7 +197,8 @@ export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
         const payload: CreateMarkerPayload = {
             title: form.title.trim(),
             location: { type: "Point", coordinates: form.coordinates },
-            category: form.category.trim() || undefined,
+            categories: form.categories.length > 0 ? form.categories : undefined,
+            sub_categories: form.subCategories.length > 0 ? form.subCategories : undefined,
             description: form.description.trim() || undefined,
             address: form.address.trim() || undefined,
             tags: tagList.length ? tagList : undefined,
@@ -236,20 +246,59 @@ export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-neutral-700 mb-1">Category</label>
-                            <select
-                                className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                value={form.category}
-                                onChange={(e) => setForm({ ...form, category: e.target.value })}
-                            >
-                                <option value="">— Select a category —</option>
-                                {MARKER_CATEGORIES.map((c) => (
-                                    <option key={c} value={c}>
-                                        {c}
-                                    </option>
+                            <label className="block text-sm font-medium text-neutral-700 mb-1">Categories</label>
+                            <div className="flex flex-wrap gap-2 p-2 border border-neutral-200 rounded-xl max-h-32 overflow-y-auto">
+                                {dbCategories.map((c) => (
+                                    <label key={c.id} className="flex items-center gap-2 text-sm bg-neutral-50 px-2 py-1 rounded-md cursor-pointer hover:bg-neutral-100">
+                                        <input
+                                            type="checkbox"
+                                            className="rounded border-neutral-300 text-orange-500 focus:ring-orange-500"
+                                            checked={form.categories.includes(c.name)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    if (form.categories.length >= 3) {
+                                                        toast.error("Select up to 3 categories");
+                                                        return;
+                                                    }
+                                                    setForm({ ...form, categories: [...form.categories, c.name] });
+                                                } else {
+                                                    setForm({ ...form, categories: form.categories.filter((cat) => cat !== c.name) });
+                                                }
+                                            }}
+                                        />
+                                        {c.name}
+                                    </label>
                                 ))}
-                            </select>
+                            </div>
                         </div>
+                        {form.categories.length > 0 && (
+                        <div className="col-span-1 md:col-span-2">
+                            <label className="block text-sm font-medium text-neutral-700 mb-1">Subcategories</label>
+                            <div className="flex flex-wrap gap-2 p-2 border border-neutral-200 rounded-xl max-h-32 overflow-y-auto">
+                                {dbCategories
+                                    .filter(c => form.categories.includes(c.name))
+                                    .flatMap(c => c.sub_categories)
+                                    .filter((sub, index, self) => self.indexOf(sub) === index)
+                                    .map((sub) => (
+                                    <label key={sub} className="flex items-center gap-2 text-sm bg-neutral-50 px-2 py-1 rounded-md cursor-pointer hover:bg-neutral-100">
+                                        <input
+                                            type="checkbox"
+                                            className="rounded border-neutral-300 text-orange-500 focus:ring-orange-500"
+                                            checked={form.subCategories.includes(sub)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setForm({ ...form, subCategories: [...form.subCategories, sub] });
+                                                } else {
+                                                    setForm({ ...form, subCategories: form.subCategories.filter((s) => s !== sub) });
+                                                }
+                                            }}
+                                        />
+                                        {sub}
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                        )}
                         <div>
                             <label className="block text-sm font-medium text-neutral-700 mb-1">Tags (comma-separated)</label>
                             <input
