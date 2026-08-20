@@ -23,20 +23,23 @@ import {
     X,
 } from "lucide-react";
 import { useAuthStore } from "@store/auth.store";
+import { mediaService } from "@/services/media.service";
 import { GeoMap } from "@/components/maps/GeoMap";
 import { toast } from "sonner";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Card } from "@/components/ui/Card";
-import { mediaService } from "@/services/media.service";
+
 import { RegionPicker } from "@/features/regions/components/RegionPicker";
-import { MARKER_CATEGORIES, type UpdateMarkerPayload, type MarkerStatus } from "@/types";
+import { type UpdateMarkerPayload, type MarkerStatus } from "@/types";
+import { categoryService } from "@/services/category.service";
 
 const STATUS_VALUES: MarkerStatus[] = ["approved", "pending", "rejected"];
 
 interface EditForm {
     title: string;
-    category: string;
+    categories: string[];
+    subCategories: string[];
     description: string;
     address: string;
     tags: string;
@@ -62,6 +65,12 @@ export function MarkerDetailPage() {
 
     const IS_SUPER = user?.role?.includes("super_admin");
 
+    const { data: dbCategories = [] } = useQuery({
+        queryKey: ["categories"],
+        queryFn: () => categoryService.getCategories(),
+        staleTime: 5 * 60 * 1000,
+    });
+
     const [form, setForm] = useState<EditForm | null>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [showDelete, setShowDelete] = useState(false);
@@ -82,7 +91,8 @@ export function MarkerDetailPage() {
         if (marker) {
             setForm({
                 title: marker.title,
-                category: marker.category ?? "",
+                categories: marker.categories ?? [],
+                subCategories: marker.sub_categories ?? [],
                 description: marker.description ?? "",
                 address: marker.address ?? "",
                 tags: (marker.tags ?? []).join(", "),
@@ -125,7 +135,7 @@ export function MarkerDetailPage() {
         },
     });
 
-    // ── Things-to-do image upload (unsigned Cloudinary, mirrors CreateNarrativeModal) ──
+    // ── Things-to-do image upload (S3 presigned uploads) ──
     const handleTtdImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -146,7 +156,7 @@ export function MarkerDetailPage() {
         }
     };
 
-    // ── Media upload (unsigned Cloudinary, mirrors CreateNarrativeModal) ──
+    // ── Media upload (S3 presigned uploads) ──
     const handleMediaUpload = async (e: ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files || files.length === 0) return;
@@ -195,7 +205,17 @@ export function MarkerDetailPage() {
         }
         const payload: UpdateMarkerPayload = {};
         if (form.title.trim() !== marker.title) payload.title = form.title.trim();
-        if (form.category.trim() !== (marker.category ?? "")) payload.category = form.category.trim();
+        
+        const nextCategories = form.categories;
+        if (nextCategories.join(",") !== (marker.categories ?? []).join(",")) {
+            payload.categories = nextCategories.length > 0 ? nextCategories : undefined;
+        }
+        
+        const nextSubCategories = form.subCategories.filter(Boolean);
+        if (nextSubCategories.join(",") !== (marker.sub_categories ?? []).join(",")) {
+            payload.sub_categories = nextSubCategories;
+        }
+        
         if (form.description.trim() !== (marker.description ?? "")) payload.description = form.description.trim();
         if (form.address.trim() !== (marker.address ?? "")) payload.address = form.address.trim();
         const nextTags = form.tags.split(",").map((t) => t.trim()).filter(Boolean);
@@ -334,7 +354,7 @@ export function MarkerDetailPage() {
                     <div>
                         <h1 className="text-2xl font-bold text-neutral-900">{marker.title}</h1>
                         <p className="text-neutral-500 mt-1 capitalize">
-                            {marker.category || "Uncategorized"} · {marker.status} · {marker.usage_count} uses
+                            {(marker.categories ?? []).join(", ") || "Uncategorized"} · {marker.status} · {marker.usage_count} uses
                         </p>
                     </div>
                 </div>
@@ -655,20 +675,59 @@ export function MarkerDetailPage() {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-neutral-700 mb-1.5">Category</label>
-                                <select
-                                    className={`${inputClass} bg-white`}
-                                    value={form.category}
-                                    onChange={(e) => setForm({ ...form, category: e.target.value })}
-                                >
-                                    <option value="">— Select a category —</option>
-                                    {MARKER_CATEGORIES.map((c) => (
-                                        <option key={c} value={c}>
-                                            {c}
-                                        </option>
+                                <label className="block text-sm font-medium text-neutral-700 mb-1.5">Categories</label>
+                                <div className="flex flex-wrap gap-2 p-2 border border-neutral-200 rounded-xl max-h-32 overflow-y-auto">
+                                    {dbCategories.map((c) => (
+                                        <label key={c.id} className="flex items-center gap-2 text-sm bg-neutral-50 px-2 py-1 rounded-md cursor-pointer hover:bg-neutral-100">
+                                            <input
+                                                type="checkbox"
+                                                className="rounded border-neutral-300 text-orange-500 focus:ring-orange-500"
+                                                checked={form.categories.includes(c.name)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        if (form.categories.length >= 3) {
+                                                            toast.error("Select up to 3 categories");
+                                                            return;
+                                                        }
+                                                        setForm({ ...form, categories: [...form.categories, c.name] });
+                                                    } else {
+                                                        setForm({ ...form, categories: form.categories.filter((cat) => cat !== c.name) });
+                                                    }
+                                                }}
+                                            />
+                                            {c.name}
+                                        </label>
                                     ))}
-                                </select>
+                                </div>
                             </div>
+                            {form.categories.length > 0 && (
+                            <div className="col-span-1 md:col-span-2">
+                                <label className="block text-sm font-medium text-neutral-700 mb-1.5">Subcategories</label>
+                                <div className="flex flex-wrap gap-2 p-2 border border-neutral-200 rounded-xl max-h-32 overflow-y-auto">
+                                    {dbCategories
+                                        .filter(c => form.categories.includes(c.name))
+                                        .flatMap(c => c.sub_categories)
+                                        .filter((sub, index, self) => self.indexOf(sub) === index)
+                                        .map((sub) => (
+                                        <label key={sub} className="flex items-center gap-2 text-sm bg-neutral-50 px-2 py-1 rounded-md cursor-pointer hover:bg-neutral-100">
+                                            <input
+                                                type="checkbox"
+                                                className="rounded border-neutral-300 text-orange-500 focus:ring-orange-500"
+                                                checked={form.subCategories.includes(sub)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setForm({ ...form, subCategories: [...form.subCategories, sub] });
+                                                    } else {
+                                                        setForm({ ...form, subCategories: form.subCategories.filter((s) => s !== sub) });
+                                                    }
+                                                }}
+                                            />
+                                            {sub}
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                            )}
                             <div>
                                 <label className="block text-sm font-medium text-neutral-700 mb-1.5">Status</label>
                                 <select

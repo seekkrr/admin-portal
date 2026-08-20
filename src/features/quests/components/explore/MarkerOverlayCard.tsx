@@ -61,7 +61,7 @@ export function MarkerOverlayCard({ marker, onClose }: MarkerOverlayCardProps) {
                     <div className="absolute inset-0 bg-gradient-to-t from-neutral-900 to-transparent" />
                     <div className="absolute bottom-2 left-3 right-8">
                         <p className="text-white font-bold text-sm truncate">{marker.name}</p>
-                        {marker.category && <p className="text-violet-200/80 text-xs">{marker.category}</p>}
+                        {(marker.categories && marker.categories.length > 0) && <p className="text-violet-200/80 text-xs">{marker.categories.join(", ")}</p>}
                     </div>
                 </div>
             )}
@@ -71,7 +71,7 @@ export function MarkerOverlayCard({ marker, onClose }: MarkerOverlayCardProps) {
                         <MapPin className="w-4 h-4 text-violet-400 flex-shrink-0" />
                         <div>
                             <p className="text-sm font-semibold text-white">{marker.name}</p>
-                            {marker.category && <p className="text-xs text-violet-300/70">{marker.category}</p>}
+                            {(marker.categories && marker.categories.length > 0) && <p className="text-xs text-violet-300/70">{marker.categories.join(", ")}</p>}
                         </div>
                     </div>
                 )}

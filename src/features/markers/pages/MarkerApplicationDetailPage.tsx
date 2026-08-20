@@ -165,7 +165,7 @@ export function MarkerApplicationDetailPage() {
                     <div>
                         <h1 className="text-2xl font-bold text-neutral-900">{application.proposed_title}</h1>
                         <p className="text-neutral-500 mt-1 capitalize">
-                            {application.proposed_category || "Uncategorized"} · {application.status.replace("_", " ")}
+                            {(application.proposed_categories ?? []).join(", ") || "Uncategorized"} · {application.status.replace("_", " ")}
                         </p>
                     </div>
                 </div>

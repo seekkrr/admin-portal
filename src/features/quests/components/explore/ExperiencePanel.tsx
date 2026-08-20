@@ -75,7 +75,7 @@ export function ExperiencePanel({ marker, narratives, onClose, onTaskComplete, o
                 </span>
                 <div className="min-w-0 flex-1">
                     <p className="text-sm font-bold text-white truncate">{marker.name}</p>
-                    {marker.category && <p className="text-[11px] text-violet-300/70">{marker.category}</p>}
+                    {(marker.categories && marker.categories.length > 0) && <p className="text-[11px] text-violet-300/70">{marker.categories.join(", ")}</p>}
                 </div>
                 <button onClick={onClose} className="p-1 rounded-full bg-white/10 text-white hover:bg-white/20 flex-shrink-0">
                     <X className="w-4 h-4" />

@@ -200,7 +200,7 @@ export function NarrativeDetailPage() {
         });
     };
 
-    // ── Media upload (unsigned Cloudinary, mirrors CreateNarrativeModal) ──
+    // ── Media upload (S3 presigned uploads) ──
     const handleMediaUpload = async (e: ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files || files.length === 0) return;

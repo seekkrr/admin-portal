@@ -307,13 +307,15 @@ export function MarkersPage() {
                                                 {m.title}
                                             </Link>
                                         </td>
-                                        <td className="px-4 py-4">
-                                            {m.category ? (
-                                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 text-neutral-700 capitalize border border-neutral-200">
-                                                    {m.category}
-                                                </span>
+                                        <td className="px-4 py-4 max-w-[200px]">
+                                            {(m.categories && m.categories.length > 0) ? (
+                                                <div className="flex flex-wrap gap-1">
+                                                    <span className="inline-block px-2.5 py-1 bg-neutral-100 text-neutral-600 rounded-lg text-xs font-medium capitalize truncate max-w-full" title={m.categories.join(', ')}>
+                                                        {m.categories[0]} {m.categories.length > 1 ? `+${m.categories.length - 1}` : ''}
+                                                    </span>
+                                                </div>
                                             ) : (
-                                                <span className="text-neutral-400">—</span>
+                                                <span className="text-neutral-400 text-sm">—</span>
                                             )}
                                         </td>
                                         <td className="px-4 py-4">

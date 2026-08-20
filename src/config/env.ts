@@ -1,12 +1,13 @@
 import { z } from "zod";
 
 const envSchema = z.object({
-    VITE_API_BASE_URL: z.string().url().default("https://api.seekkrr.com"),
-    VITE_APP_NAME: z.string().default("SeekKrr Admin Portal"),
-    VITE_MAPBOX_ACCESS_TOKEN: z.string().min(1, "Mapbox access token is required"),
-    VITE_CLOUDINARY_CLOUD_NAME: z.string().min(1, "Cloudinary cloud name is required"),
-    VITE_CLOUDINARY_UPLOAD_PRESET: z.string().default("seekkrr_admin"),
-    VITE_GOOGLE_CLIENT_ID: z.string().min(1, "Google client ID is required"),
+    VITE_API_BASE_URL: z.string().optional().default("https://api.seekkrr.com"),
+    VITE_APP_NAME: z.string().optional().default("SeekKrr Admin Portal"),
+    VITE_MAPBOX_ACCESS_TOKEN: z.string().optional().default(""),
+    VITE_MEDIA_DELIVERY_BASE: z.string().optional().default("https://img.seekkrr.com"),
+    VITE_CLOUDINARY_CLOUD_NAME: z.string().optional().default("seekkrr"),
+    VITE_CLOUDINARY_UPLOAD_PRESET: z.string().optional().default("seekkrr_admin"),
+    VITE_GOOGLE_CLIENT_ID: z.string().optional().default(""),
 });
 
 type EnvConfig = z.infer<typeof envSchema>;
@@ -16,6 +17,7 @@ function validateEnv(): EnvConfig {
         VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
         VITE_APP_NAME: import.meta.env.VITE_APP_NAME,
         VITE_MAPBOX_ACCESS_TOKEN: import.meta.env.VITE_MAPBOX_ACCESS_TOKEN,
+        VITE_MEDIA_DELIVERY_BASE: import.meta.env.VITE_MEDIA_DELIVERY_BASE,
         VITE_CLOUDINARY_CLOUD_NAME: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME,
         VITE_CLOUDINARY_UPLOAD_PRESET: import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET,
         VITE_GOOGLE_CLIENT_ID: import.meta.env.VITE_GOOGLE_CLIENT_ID,
@@ -47,6 +49,9 @@ export const config = {
         style: "mapbox://styles/mapbox/standard",
         defaultCenter: { lng: 77.5946, lat: 12.9716 } as const, // Bangalore
         defaultZoom: 12,
+    },
+    media: {
+        deliveryBase: env.VITE_MEDIA_DELIVERY_BASE,
     },
     cloudinary: {
         cloudName: env.VITE_CLOUDINARY_CLOUD_NAME,
