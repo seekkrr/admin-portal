@@ -1,5 +1,5 @@
 import { useRef, useState, type ChangeEvent } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { markersService } from "../services/markers.service";
 import { GeoMap } from "@/components/maps/GeoMap";
 import { PlaceSearchInput } from "@/components/maps/PlaceSearchInput";
