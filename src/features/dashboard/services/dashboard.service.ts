@@ -47,5 +47,9 @@ export const dashboardService = {
         const qs = new URLSearchParams({ from, to });
         const { data } = await api.get(`${API_ENDPOINTS.ANALYTICS.USERS_RETENTION}?${qs}`);
         return data;
+    },
+    getBusinessAnalytics: async (): Promise<{ total_businesses: number, total_active_offers: number, total_platform_checkins: number, platform_redemption_rate: number }> => {
+        const { data } = await api.get(`/offers/admin/business-analytics`);
+        return data;
     }
 };

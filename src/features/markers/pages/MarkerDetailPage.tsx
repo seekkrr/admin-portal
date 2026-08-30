@@ -53,6 +53,8 @@ interface EditForm {
     regionId: string;
     media: string[];
     hidden: boolean;
+    subscriptionFlag: "NA" | "Virtual" | "Physical" | "Both";
+    businessSecretCode: string;
 }
 
 export function MarkerDetailPage() {
@@ -106,6 +108,8 @@ export function MarkerDetailPage() {
                 regionId: marker.region_id ?? "",
                 media: marker.media ?? [],
                 hidden: marker.hidden ?? false,
+                subscriptionFlag: marker.subscription_flag ?? "NA",
+                businessSecretCode: marker.business_secret_code ?? "",
             });
         }
     }, [marker]);
@@ -222,6 +226,8 @@ export function MarkerDetailPage() {
         if (nextTags.join(",") !== (marker.tags ?? []).join(",")) payload.tags = nextTags;
         if (form.status !== marker.status) payload.status = form.status;
         if (form.hidden !== (marker.hidden ?? false)) payload.hidden = form.hidden;
+        if (form.subscriptionFlag !== (marker.subscription_flag ?? "NA")) payload.subscription_flag = form.subscriptionFlag;
+        if (form.businessSecretCode.trim() !== (marker.business_secret_code ?? "")) payload.business_secret_code = form.businessSecretCode.trim();
 
         if (form.websiteUrl.trim() !== (marker.website_url ?? ""))
             payload.website_url = form.websiteUrl.trim();
@@ -546,6 +552,8 @@ export function MarkerDetailPage() {
                         <DetailRow label="Address" value={marker.address} />
                         <DetailRow label="Description" value={marker.description} />
                         <DetailRow label="Tags" value={(marker.tags ?? []).join(", ") || null} />
+                        <DetailRow label="Business Role" value={marker.subscription_flag || "NA"} />
+                        <DetailRow label="Secret Code" value={marker.business_secret_code || "Not Set"} />
                         <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
                             <span className="w-32 shrink-0 font-medium text-neutral-500">Region</span>
                             {marker.region_id ? (
@@ -741,6 +749,31 @@ export function MarkerDetailPage() {
                                         </option>
                                     ))}
                                 </select>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-neutral-700 mb-1.5">Business Subscription</label>
+                                <select
+                                    value={form.subscriptionFlag}
+                                    onChange={(e) => setForm({ ...form, subscriptionFlag: e.target.value as any })}
+                                    className={`${inputClass} bg-white`}
+                                >
+                                    <option value="NA">NA (Not a Business)</option>
+                                    <option value="Virtual">Virtual Redemptions</option>
+                                    <option value="Physical">Physical Redemptions</option>
+                                    <option value="Both">Both</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-neutral-700 mb-1.5">Business Secret Code</label>
+                                <input
+                                    type="text"
+                                    placeholder="4-digit code (e.g. 1234)"
+                                    className={inputClass}
+                                    value={form.businessSecretCode}
+                                    onChange={(e) => setForm({ ...form, businessSecretCode: e.target.value })}
+                                />
                             </div>
                         </div>
                         <div>
