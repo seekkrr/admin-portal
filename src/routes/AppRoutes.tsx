@@ -41,6 +41,10 @@ const TaskConfigDetailPage = lazy(() => import("@/features/task-configs/pages/Ta
 // Section 14 — Progress Tracking
 const ProgressPage = lazy(() => import("@/features/progress/pages/ProgressPage").then(m => ({ default: m.ProgressPage })));
 // Section 6 — Financial: Transactions & Refunds
+// Section 6 — Financial: Transactions & Refunds
+const BusinessOffersPage = lazy(() =>
+    import("@features/business-offers/pages/BusinessOffersPage").then((m) => ({ default: m.BusinessOffersPage }))
+);
 const TransactionsPage = lazy(() => import("@/features/financial/pages/TransactionsPage").then(m => ({ default: m.TransactionsPage })));
 const TransactionDetailPage = lazy(() => import("@/features/financial/pages/TransactionDetailPage").then(m => ({ default: m.TransactionDetailPage })));
 const RefundsPage = lazy(() => import("@/features/financial/pages/RefundsPage").then(m => ({ default: m.RefundsPage })));
@@ -73,6 +77,14 @@ export const AppRoutes = () => {
                     </ProtectedRoute>
                 }
             >
+                <Route
+                    path="business-offers"
+                    element={
+                        <ProtectedRoute>
+                            <BusinessOffersPage />
+                        </ProtectedRoute>
+                    }
+                />
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={
                     <Suspense fallback={<LoadingFallback message="Loading dashboard..." />}>

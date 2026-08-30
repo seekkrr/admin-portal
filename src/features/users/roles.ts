@@ -18,7 +18,7 @@ export const ROLE_TIERS: readonly (readonly string[])[] = [
 ];
 
 // Functional roles OUTSIDE the ladder — additive, preserved across changes.
-export const ADDITIVE_ROLES = ["creator"] as const;
+export const ADDITIVE_ROLES = ["creator", "business"] as const;
 
 const RANK_OF: Record<string, number> = Object.fromEntries(
     ROLE_TIERS.flatMap((tier, rank) => tier.map((r) => [r, rank])),

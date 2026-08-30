@@ -8,7 +8,7 @@ export interface User {
     contact_id: string;
     security_id: string;
     profile_id: string;
-    role: Array<"user" | "admin" | "super_admin" | "creator" | "moderator" | "finance">;
+    role: Array<"user" | "admin" | "super_admin" | "creator" | "moderator" | "finance" | "business">;
     status: "active" | "suspended" | "deleted";
     is_creator: boolean;
     points_earned: number;   // returned by the admin user list (to_admin_dict)
@@ -594,6 +594,8 @@ export interface Marker {
     created_by: string | null;
     usage_count: number;
     center_distance: MarkerCenterDistance | null;
+    subscription_flag?: "NA" | "Virtual" | "Physical" | "Both";
+    business_secret_code?: string;
     created_at: string | null;
     updated_at: string | null;
 }
@@ -684,6 +686,8 @@ export interface CreateMarkerPayload {
     closes_at?: string;
     region_id?: string;
     hidden?: boolean;
+    subscription_flag?: "NA" | "Virtual" | "Physical" | "Both";
+    business_secret_code?: string;
     properties?: Record<string, unknown>;
 }
 

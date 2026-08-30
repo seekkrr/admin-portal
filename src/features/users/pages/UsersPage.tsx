@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-    Search, Users, Trash2, Ban,
+    Search, Users, Trash2, Ban, Store,
     Shield, RefreshCw, AlertTriangle, CheckCircle2, XCircle,
     X, Filter, Coins, Star, TrendingUp
 } from "lucide-react";
@@ -62,7 +62,8 @@ type ConfirmAction =
     | { type: "bulk-delete"; payload: { ids: string[] } }
     | { type: "single-delete"; payload: { userId: string } }
     | { type: "promote"; payload: { userId: string; role: string; current: string[] } }
-    | { type: "promote-creator"; payload: { userId: string; name: string } };
+    | { type: "promote-creator"; payload: { userId: string; name: string } }
+    | { type: "promote-business"; payload: { userId: string; name: string; current: string[] } };
 
 // ---- Filter Dropdown Options ----
 const STATUS_OPTIONS: DropdownOption[] = [
@@ -381,6 +382,13 @@ export function UsersPage() {
             case "promote-creator":
                 promoteCreatorMutation.mutate(confirmAction.payload.userId);
                 break;
+            case "promote-business":
+                roleMutation.mutate({
+                    userId: confirmAction.payload.userId,
+                    role: "business",
+                    current: confirmAction.payload.current
+                });
+                break;
         }
     }, [confirmAction, bulkActionMutation, deleteMutation, roleMutation, promoteCreatorMutation, hardDelete]);
 
@@ -596,8 +604,11 @@ export function UsersPage() {
                                                 </div>
                                                 <div className="text-[11px] text-neutral-400 font-mono mt-0.5">{u._id}</div>
                                             </td>
-                                            <td className="px-4 py-3">
+                                            <td className="px-4 py-3 space-x-1">
                                                 <Badge label={rc.label} styles={rc.bg} />
+                                                {u.role?.includes("business") && (
+                                                    <Badge label="Business" styles="bg-orange-50 text-orange-700 border-orange-200" />
+                                                )}
                                             </td>
                                             <td className="px-4 py-3">
                                                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${sc.bg}`}>
@@ -631,6 +642,15 @@ export function UsersPage() {
                                                             className="p-1.5 rounded-lg text-neutral-400 hover:text-teal-600 hover:bg-teal-50 transition-colors"
                                                         >
                                                             <Star className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    {!u.role?.includes("business") && (
+                                                        <button
+                                                            onClick={() => setConfirmAction({ type: "promote-business", payload: { userId: u._id, name: `${u.first_name} ${u.last_name}`, current: u.role ?? [] } })}
+                                                            title="Promote to business"
+                                                            className="p-1.5 rounded-lg text-neutral-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                                                        >
+                                                            <Store className="w-4 h-4" />
                                                         </button>
                                                     )}
                                                     <button
@@ -784,6 +804,18 @@ export function UsersPage() {
                 onConfirm={executeConfirmedAction}
                 onCancel={() => setConfirmAction(null)}
                 isPending={promoteCreatorMutation.isPending}
+            />
+
+            {/* Promote to Business Confirmation */}
+            <ConfirmModal
+                open={confirmAction?.type === "promote-business"}
+                title="Promote to Business"
+                message={`This will grant the business role to "${confirmAction?.type === "promote-business" ? confirmAction.payload.name : ""}". They will gain access to the Creator Portal's Business Dashboard.`}
+                confirmLabel="Promote to Business"
+                confirmStyle="bg-orange-600 hover:bg-orange-700"
+                onConfirm={executeConfirmedAction}
+                onCancel={() => setConfirmAction(null)}
+                isPending={roleMutation.isPending}
             />
 
             {/* Loading overlay for mutations */}

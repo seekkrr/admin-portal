@@ -42,6 +42,13 @@ export function DashboardPage() {
         staleTime: 5 * 60 * 1000,
     });
 
+    const { data: businessStats } = useQuery({
+        queryKey: ["admin-business-analytics"],
+        queryFn: () => dashboardService.getBusinessAnalytics(),
+        enabled: !!isAdmin,
+        staleTime: 5 * 60 * 1000,
+    });
+
     const { data: roles } = useQuery({
         queryKey: ["admin-dashboard-roles"],
         queryFn: () => dashboardService.getUsersByRole(),
@@ -109,6 +116,8 @@ export function DashboardPage() {
                         {renderKpiCard("Total Reviews", overview?.data?.total_reviews || 0, MessageSquare, "ring-violet-100 text-violet-600")}
                         {renderKpiCard("Quest Completions (Last 30 Days)", overview?.data?.completions_in_period || 0, Map, "ring-rose-100 text-rose-600")}
                         {renderKpiCard("Completion Rate", `${overview?.data?.completion_rate || 0}%`, Activity, "ring-cyan-100 text-cyan-600")}
+                        {renderKpiCard("Active Business Offers", businessStats?.total_active_offers || 0, Activity, "ring-orange-100 text-orange-600")}
+                        {renderKpiCard("Platform Check-ins", businessStats?.total_platform_checkins || 0, Users, "ring-yellow-100 text-yellow-600")}
                     </div>
 
                     {/* Growth Chart */}
