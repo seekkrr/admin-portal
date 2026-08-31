@@ -49,7 +49,7 @@ export const dashboardService = {
         return data;
     },
     getBusinessAnalytics: async (): Promise<{ total_businesses: number, total_active_offers: number, total_platform_checkins: number, platform_redemption_rate: number }> => {
-        const { data } = await api.get(`/offers/admin/business-analytics`);
+        const { data } = await api.get(API_ENDPOINTS.OFFERS.ADMIN_ANALYTICS);
         return data;
     }
 };

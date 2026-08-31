@@ -79,6 +79,7 @@ const ROLE_OPTIONS: DropdownOption[] = [
     { value: "finance", label: "Finance" },
     { value: "admin", label: "Admin" },
     { value: "super_admin", label: "Super Admin" },
+    { value: "business", label: "Business" },
 ];
 
 const CREATOR_OPTIONS: DropdownOption[] = [
