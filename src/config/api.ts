@@ -206,4 +206,8 @@ export const API_ENDPOINTS = {
         BY_ID: (id: string) => `/api/v2/coupons/${id}`,
         REDEMPTIONS: (id: string) => `/api/v2/coupons/${id}/redemptions`,
     },
+    OFFERS: {
+        ADMIN_LIST: "/api/v2/offers/admin/business-offers",
+        ADMIN_ANALYTICS: "/api/v2/offers/admin/business-analytics",
+    },
 } as const;

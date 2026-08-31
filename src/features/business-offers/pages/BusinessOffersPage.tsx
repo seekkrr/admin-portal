@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Store } from "lucide-react";
 import { api } from "@/services/api";
+import { API_ENDPOINTS } from "@/config/api";
 import { Pagination } from "@/components/ui/Pagination";
 import { Badge } from "@/components/ui/Badge";
 import { LoadingFallback } from "@/components/LoadingFallback";
@@ -25,7 +26,7 @@ export function BusinessOffersPage() {
     const { data, isLoading, error } = useQuery({
         queryKey: ["admin-business-offers", page],
         queryFn: async () => {
-            const res = await api.get<{ offers: BusinessOffer[], total: number }>(`/offers/admin/business-offers?skip=${(page - 1) * pageSize}&limit=${pageSize}`);
+            const res = await api.get<{ offers: BusinessOffer[], total: number }>(`${API_ENDPOINTS.OFFERS.ADMIN_LIST}?skip=${(page - 1) * pageSize}&limit=${pageSize}`);
             return res.data;
         }
     });
