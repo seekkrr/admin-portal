@@ -149,6 +149,78 @@ export type QuestTheme =
     | "nature" | "spiritual" | "photography" | "archaeological"
     | "offbeat" | "finding_yourself" | "other";
 
+// ── Events / Festivals ──────────────────────────────────────────────────────
+// Backed by /api/v2/events. Backend serializes `_id`; the events service maps
+// it to `id` so the admin UI matches the rest of the portal's `id` convention.
+export type EventStatus = "draft" | "published" | "live" | "ended" | "cancelled";
+
+export interface EventListEntry {
+    id: string;
+    title: string;
+    subtitle?: string | null;
+    image?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
+    region_id?: string | null;
+    region_name?: string | null;
+    categories: string[];
+    average_rating?: number | null;
+    is_featured: boolean;
+    status: EventStatus;
+}
+
+export interface EventVenueRef {
+    marker_id: string;
+    name?: string | null;
+    category?: string | null;
+    thumbnail_url?: string | null;
+    coordinates?: number[] | null;
+}
+
+export interface V2EventDetail {
+    id: string;
+    title: string;
+    subtitle?: string | null;
+    description: string;
+    categories: string[];
+    media: { image_urls: string[]; video_urls: string[]; cover_image_url: string };
+    start_date?: string | null;
+    end_date?: string | null;
+    timezone?: string | null;
+    region_id?: string | null;
+    region_name?: string | null;
+    venues: EventVenueRef[];
+    quest_ids: string[];
+    status: EventStatus;
+    average_rating?: number | null;
+    review_count: number;
+    capacity?: number | null;
+    is_featured: boolean;
+    created_at?: string | null;
+    updated_at?: string | null;
+    rsvp?: { going_count: number; interested_count: number; my_status?: string | null };
+}
+
+export interface EventAttendee {
+    user_id: string;
+    name: string;
+    avatar_url?: string | null;
+    status: string;
+    rsvp_at?: string | null;
+}
+
+export interface UpdateEventPayload {
+    title?: string;
+    subtitle?: string;
+    description?: string;
+    categories?: string[];
+    start_date?: string;
+    end_date?: string;
+    region_id?: string;
+    capacity?: number;
+    is_featured?: boolean;
+}
+
 // Shape returned by GET /api/v2/quests (list endpoint) — to_list_dict()
 export interface QuestListEntry {
     id: string;

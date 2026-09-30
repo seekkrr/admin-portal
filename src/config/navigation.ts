@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Video, Map, UserPlus, MessageSquare, BarChart3, MapPin, BookOpen, Star, Globe, Trophy, ListOrdered, Settings2, Activity, ArrowLeftRight, RotateCcw, Wallet, Banknote, ReceiptText, Tag, Store, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, Users, Video, Map, UserPlus, MessageSquare, BarChart3, MapPin, BookOpen, Star, Globe, Trophy, ListOrdered, Settings2, Activity, ArrowLeftRight, RotateCcw, Wallet, Banknote, ReceiptText, Tag, Store, CalendarDays, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
     icon: LucideIcon;
@@ -40,6 +40,7 @@ export const NAV_GROUPS: NavGroup[] = [
             { icon: MapPin, label: "Markers", to: "/markers" },
             { icon: Globe, label: "Regions", to: "/regions" },
             { icon: Map, label: "Quests", to: "/quests" },
+            { icon: CalendarDays, label: "Events", to: "/events" },
             { icon: BookOpen, label: "Narratives", to: "/narratives" },
             { icon: Settings2, label: "Task Configs", to: "/task-configs" },
         ]
