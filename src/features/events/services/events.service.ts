@@ -100,6 +100,14 @@ export const eventsService = {
         await api.delete(API_ENDPOINTS.EVENTS.BY_ID(eventId));
     },
 
+    announce: async (eventId: string, title: string, body: string): Promise<{ recipients: number; sent: number }> => {
+        const { data } = await api.post<{ recipients?: number; sent?: number }>(
+            API_ENDPOINTS.EVENTS.ANNOUNCE(eventId),
+            { title, body }
+        );
+        return { recipients: data.recipients ?? 0, sent: data.sent ?? 0 };
+    },
+
     listAttendees: async (
         eventId: string,
         params: { status?: string; page?: number; page_size?: number } = {}

@@ -23,6 +23,7 @@ export const API_ENDPOINTS = {
         BY_ID: (id: string) => `/api/v2/events/${id}`,
         STATUS: (id: string) => `/api/v2/events/${id}/status`,
         ATTENDEES: (id: string) => `/api/v2/events/${id}/attendees`,
+        ANNOUNCE: (id: string) => `/api/v2/events/${id}/announce`,
     },
     CREATORS: {
         LIST: "/api/v2/creators",

@@ -9,6 +9,7 @@ import { AccessDenied } from "@/components/AccessDenied";
 import { useAuthStore } from "@/store/auth.store";
 import { eventsService } from "../services/events.service";
 import { EventAttendeesModal } from "../components/EventAttendeesModal";
+import { EventAnnounceModal } from "../components/EventAnnounceModal";
 import type { EventListEntry, EventStatus } from "@/types";
 
 const ALLOWED_ROLES = ["admin", "super_admin", "moderator"];
@@ -60,6 +61,7 @@ export function EventsPage() {
     const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<EventListEntry | null>(null);
     const [attendeesFor, setAttendeesFor] = useState<EventListEntry | null>(null);
+    const [announceFor, setAnnounceFor] = useState<EventListEntry | null>(null);
 
     useEffect(() => { setPage(1); }, [statusFilter]);
 
@@ -182,6 +184,7 @@ export function EventsPage() {
                                                     {openDropdownId === ev.id && (
                                                         <div className="absolute right-0 top-full mt-1.5 w-48 bg-white border border-neutral-200 rounded-xl shadow-xl z-30 py-1.5" onClick={(e) => e.stopPropagation()}>
                                                             <button onClick={() => { setAttendeesFor(ev); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-medium">View Attendees</button>
+                                                            <button onClick={() => { setAnnounceFor(ev); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-medium">Announce</button>
                                                             {transitionsFor(ev.status).map((t) => (
                                                                 <button key={t.to} onClick={() => { void changeStatus(ev.id, t.to); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-medium">{t.label}</button>
                                                             ))}
@@ -217,6 +220,10 @@ export function EventsPage() {
 
             {attendeesFor && (
                 <EventAttendeesModal eventId={attendeesFor.id} eventTitle={attendeesFor.title} onClose={() => setAttendeesFor(null)} />
+            )}
+
+            {announceFor && (
+                <EventAnnounceModal eventId={announceFor.id} eventTitle={announceFor.title} onClose={() => setAnnounceFor(null)} />
             )}
         </div>
     );
