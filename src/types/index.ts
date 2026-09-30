@@ -209,6 +209,17 @@ export interface EventAttendee {
     rsvp_at?: string | null;
 }
 
+// ── Global Timeline filter chips (admin-managed) ──
+export interface TimelineFilterItem {
+    id: string;
+    key: string;
+    label: string;
+    icon?: string | null;
+    color?: string | null;
+    order: number;
+    is_active: boolean;
+}
+
 export interface UpdateEventPayload {
     title?: string;
     subtitle?: string;
