@@ -16,6 +16,7 @@ const CreatorApplicationsPage = lazy(() => import("@/features/creator-applicatio
 const QuestsPage = lazy(() => import("@/features/quests/pages/QuestsPage").then(m => ({ default: m.QuestsPage })));
 const QuestDetailPage = lazy(() => import("@/features/quests/pages/QuestDetailPage").then(m => ({ default: m.QuestDetailPage })));
 const EventsPage = lazy(() => import("@/features/events/pages/EventsPage").then(m => ({ default: m.EventsPage })));
+const TimelineFiltersPage = lazy(() => import("@/features/timeline-filters/pages/TimelineFiltersPage").then(m => ({ default: m.TimelineFiltersPage })));
 const SupportQueriesPage = lazy(() => import("@/features/support-queries/pages/SupportQueriesPage").then(m => ({ default: m.SupportQueriesPage })));
 const SupportQueryDetailPage = lazy(() => import("@/features/support-queries/pages/SupportQueryDetailPage").then(m => ({ default: m.SupportQueryDetailPage })));
 const AnalyticsPage = lazy(() => import("@/features/analytics/pages/AnalyticsPage").then(m => ({ default: m.AnalyticsPage })));
@@ -127,6 +128,11 @@ export const AppRoutes = () => {
                 <Route path="events" element={
                     <Suspense fallback={<LoadingFallback message="Loading events..." />}>
                         <EventsPage />
+                    </Suspense>
+                } />
+                <Route path="timeline-filters" element={
+                    <Suspense fallback={<LoadingFallback message="Loading timeline filters..." />}>
+                        <TimelineFiltersPage />
                     </Suspense>
                 } />
                 <Route path="support-queries" element={

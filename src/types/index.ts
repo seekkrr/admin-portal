@@ -152,7 +152,7 @@ export type QuestTheme =
 // ── Events / Festivals ──────────────────────────────────────────────────────
 // Backed by /api/v2/events. Backend serializes `_id`; the events service maps
 // it to `id` so the admin UI matches the rest of the portal's `id` convention.
-export type EventStatus = "draft" | "published" | "live" | "ended" | "cancelled";
+export type EventStatus = "draft" | "pending" | "published" | "live" | "ended" | "cancelled";
 
 export interface EventListEntry {
     id: string;
@@ -207,6 +207,17 @@ export interface EventAttendee {
     avatar_url?: string | null;
     status: string;
     rsvp_at?: string | null;
+}
+
+// ── Global Timeline filter chips (admin-managed) ──
+export interface TimelineFilterItem {
+    id: string;
+    key: string;
+    label: string;
+    icon?: string | null;
+    color?: string | null;
+    order: number;
+    is_active: boolean;
 }
 
 export interface UpdateEventPayload {

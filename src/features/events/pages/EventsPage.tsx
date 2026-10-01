@@ -19,6 +19,7 @@ const PER_PAGE = 10;
 const STATUS_OPTIONS = [
     { value: "", label: "All Statuses" },
     { value: "draft", label: "Draft", dot: "bg-neutral-400" },
+    { value: "pending", label: "In Review", dot: "bg-blue-500" },
     { value: "published", label: "Published", dot: "bg-green-500" },
     { value: "live", label: "Live", dot: "bg-red-500" },
     { value: "ended", label: "Ended", dot: "bg-neutral-400" },
@@ -27,15 +28,26 @@ const STATUS_OPTIONS = [
 
 const STATUS_STYLES: Record<EventStatus, string> = {
     draft: "bg-neutral-100 text-neutral-600 border-neutral-200",
+    pending: "bg-blue-50 text-blue-700 border-blue-200",
     published: "bg-green-50 text-green-700 border-green-200",
     live: "bg-red-50 text-red-700 border-red-200",
     ended: "bg-neutral-100 text-neutral-500 border-neutral-200",
     cancelled: "bg-amber-50 text-amber-700 border-amber-200",
 };
 
+const STATUS_LABELS: Record<EventStatus, string> = {
+    draft: "draft",
+    pending: "in review",
+    published: "published",
+    live: "live",
+    ended: "ended",
+    cancelled: "cancelled",
+};
+
 function transitionsFor(status: EventStatus): { label: string; to: EventStatus }[] {
     switch (status) {
         case "draft": return [{ label: "Publish", to: "published" }];
+        case "pending": return [{ label: "Approve & Publish", to: "published" }, { label: "Send back to Draft", to: "draft" }, { label: "Reject (Cancel)", to: "cancelled" }];
         case "published": return [{ label: "Mark Live", to: "live" }, { label: "Move to Draft", to: "draft" }, { label: "Cancel", to: "cancelled" }];
         case "live": return [{ label: "Mark Ended", to: "ended" }, { label: "Cancel", to: "cancelled" }];
         case "cancelled": return [{ label: "Move to Draft", to: "draft" }];
@@ -100,6 +112,16 @@ export function EventsPage() {
         }
     };
 
+    const toggleFeatured = async (ev: EventListEntry) => {
+        try {
+            await eventsService.updateEvent(ev.id, { is_featured: !ev.is_featured });
+            toast.success(ev.is_featured ? "Removed from featured" : "Marked as featured");
+            queryClient.invalidateQueries({ queryKey: ["admin-events"] });
+        } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Failed to update event");
+        }
+    };
+
     const confirmDelete = async () => {
         if (!deleteTarget) return;
         try {
@@ -161,14 +183,35 @@ export function EventsPage() {
                             ) : (
                                 events.map((ev) => (
                                     <tr key={ev.id} className="hover:bg-neutral-50/60 transition-colors">
-                                        <td className="py-3.5 px-4 font-medium text-neutral-900">
-                                            {ev.title}
-                                            {ev.is_featured && <span className="ml-2 text-[11px] font-semibold text-amber-600">★</span>}
+                                        <td className="py-3.5 px-4">
+                                            <div className="flex items-center gap-3">
+                                                {ev.image ? (
+                                                    <img src={ev.image} alt="" className="w-10 h-10 rounded-lg object-cover border border-neutral-200 shrink-0" />
+                                                ) : (
+                                                    <div className="w-10 h-10 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0">
+                                                        <CalendarDays className="w-4 h-4 text-neutral-400" />
+                                                    </div>
+                                                )}
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-1.5 font-medium text-neutral-900">
+                                                        <span className="truncate">{ev.title}</span>
+                                                        {ev.is_featured && <span title="Featured" className="text-amber-500 text-[13px]">★</span>}
+                                                    </div>
+                                                    {ev.subtitle && <div className="text-xs text-neutral-400 truncate max-w-[240px]">{ev.subtitle}</div>}
+                                                    {ev.categories && ev.categories.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1 mt-1">
+                                                            {ev.categories.slice(0, 3).map((c) => (
+                                                                <span key={c} className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-500 text-[10px] font-medium">{c}</span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </td>
                                         <td className="py-3.5 px-4 text-sm text-neutral-500 whitespace-nowrap">{fmtDate(ev.start_date)} – {fmtDate(ev.end_date)}</td>
                                         <td className="py-3.5 px-4 text-sm text-neutral-500">{ev.region_name ?? "—"}</td>
                                         <td className="py-3.5 px-4 text-center">
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${STATUS_STYLES[ev.status]}`}>{ev.status}</span>
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${STATUS_STYLES[ev.status]}`}>{STATUS_LABELS[ev.status]}</span>
                                         </td>
                                         <td className="py-3.5 px-4 text-right relative">
                                             <div className="flex items-center justify-end gap-1">
@@ -185,6 +228,7 @@ export function EventsPage() {
                                                         <div className="absolute right-0 top-full mt-1.5 w-48 bg-white border border-neutral-200 rounded-xl shadow-xl z-30 py-1.5" onClick={(e) => e.stopPropagation()}>
                                                             <button onClick={() => { setAttendeesFor(ev); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-medium">View Attendees</button>
                                                             <button onClick={() => { setAnnounceFor(ev); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-medium">Announce</button>
+                                                            <button onClick={() => { void toggleFeatured(ev); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-medium">{ev.is_featured ? "Unfeature" : "Feature"}</button>
                                                             {transitionsFor(ev.status).map((t) => (
                                                                 <button key={t.to} onClick={() => { void changeStatus(ev.id, t.to); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-medium">{t.label}</button>
                                                             ))}

@@ -25,6 +25,10 @@ export const API_ENDPOINTS = {
         ATTENDEES: (id: string) => `/api/v2/events/${id}/attendees`,
         ANNOUNCE: (id: string) => `/api/v2/events/${id}/announce`,
     },
+    TIMELINE_FILTERS: {
+        BASE: "/api/v2/timeline-filters",
+        BY_ID: (id: string) => `/api/v2/timeline-filters/${id}`,
+    },
     CREATORS: {
         LIST: "/api/v2/creators",
         PLATFORM_STATS: "/api/v2/creators/platform-stats",
