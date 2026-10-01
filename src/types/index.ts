@@ -152,7 +152,7 @@ export type QuestTheme =
 // ── Events / Festivals ──────────────────────────────────────────────────────
 // Backed by /api/v2/events. Backend serializes `_id`; the events service maps
 // it to `id` so the admin UI matches the rest of the portal's `id` convention.
-export type EventStatus = "draft" | "published" | "live" | "ended" | "cancelled";
+export type EventStatus = "draft" | "pending" | "published" | "live" | "ended" | "cancelled";
 
 export interface EventListEntry {
     id: string;

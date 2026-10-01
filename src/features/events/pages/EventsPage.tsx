@@ -19,6 +19,7 @@ const PER_PAGE = 10;
 const STATUS_OPTIONS = [
     { value: "", label: "All Statuses" },
     { value: "draft", label: "Draft", dot: "bg-neutral-400" },
+    { value: "pending", label: "In Review", dot: "bg-blue-500" },
     { value: "published", label: "Published", dot: "bg-green-500" },
     { value: "live", label: "Live", dot: "bg-red-500" },
     { value: "ended", label: "Ended", dot: "bg-neutral-400" },
@@ -27,15 +28,26 @@ const STATUS_OPTIONS = [
 
 const STATUS_STYLES: Record<EventStatus, string> = {
     draft: "bg-neutral-100 text-neutral-600 border-neutral-200",
+    pending: "bg-blue-50 text-blue-700 border-blue-200",
     published: "bg-green-50 text-green-700 border-green-200",
     live: "bg-red-50 text-red-700 border-red-200",
     ended: "bg-neutral-100 text-neutral-500 border-neutral-200",
     cancelled: "bg-amber-50 text-amber-700 border-amber-200",
 };
 
+const STATUS_LABELS: Record<EventStatus, string> = {
+    draft: "draft",
+    pending: "in review",
+    published: "published",
+    live: "live",
+    ended: "ended",
+    cancelled: "cancelled",
+};
+
 function transitionsFor(status: EventStatus): { label: string; to: EventStatus }[] {
     switch (status) {
         case "draft": return [{ label: "Publish", to: "published" }];
+        case "pending": return [{ label: "Approve & Publish", to: "published" }, { label: "Send back to Draft", to: "draft" }, { label: "Reject (Cancel)", to: "cancelled" }];
         case "published": return [{ label: "Mark Live", to: "live" }, { label: "Move to Draft", to: "draft" }, { label: "Cancel", to: "cancelled" }];
         case "live": return [{ label: "Mark Ended", to: "ended" }, { label: "Cancel", to: "cancelled" }];
         case "cancelled": return [{ label: "Move to Draft", to: "draft" }];
@@ -199,7 +211,7 @@ export function EventsPage() {
                                         <td className="py-3.5 px-4 text-sm text-neutral-500 whitespace-nowrap">{fmtDate(ev.start_date)} – {fmtDate(ev.end_date)}</td>
                                         <td className="py-3.5 px-4 text-sm text-neutral-500">{ev.region_name ?? "—"}</td>
                                         <td className="py-3.5 px-4 text-center">
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${STATUS_STYLES[ev.status]}`}>{ev.status}</span>
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${STATUS_STYLES[ev.status]}`}>{STATUS_LABELS[ev.status]}</span>
                                         </td>
                                         <td className="py-3.5 px-4 text-right relative">
                                             <div className="flex items-center justify-end gap-1">
