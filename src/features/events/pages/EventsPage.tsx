@@ -227,7 +227,7 @@ export function EventsPage() {
                                                     {openDropdownId === ev.id && (
                                                         <div className="absolute right-0 top-full mt-1.5 w-48 bg-white border border-neutral-200 rounded-xl shadow-xl z-30 py-1.5" onClick={(e) => e.stopPropagation()}>
                                                             <button onClick={() => { setAttendeesFor(ev); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-medium">View Attendees</button>
-                                                            <button onClick={() => { setAnnounceFor(ev); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-medium">Announce</button>
+                                                            <button onClick={() => { setAnnounceFor(ev); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-medium">Send Notification</button>
                                                             <button onClick={() => { void toggleFeatured(ev); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-medium">{ev.is_featured ? "Unfeature" : "Feature"}</button>
                                                             {transitionsFor(ev.status).map((t) => (
                                                                 <button key={t.to} onClick={() => { void changeStatus(ev.id, t.to); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-medium">{t.label}</button>

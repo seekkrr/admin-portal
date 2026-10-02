@@ -35,6 +35,8 @@ export const API_ENDPOINTS = {
         BY_ID: (creatorId: string) => `/api/v2/creators/${creatorId}`,
         UPDATE: (creatorId: string) => `/api/v2/creators/${creatorId}`,
         STATS_UPDATE: (creatorId: string) => `/api/v2/creators/${creatorId}/stats`,
+        NOTIFICATION_ACCESS_REQUESTS: "/api/v2/creators/notification-access/requests",
+        NOTIFICATION_ACCESS: (creatorId: string) => `/api/v2/creators/${creatorId}/notification-access`,
         PROVISION: (userId: string) => `/api/v2/creators/provision/${userId}`,
     },
     CORE: {
