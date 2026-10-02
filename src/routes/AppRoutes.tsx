@@ -17,6 +17,7 @@ const QuestsPage = lazy(() => import("@/features/quests/pages/QuestsPage").then(
 const QuestDetailPage = lazy(() => import("@/features/quests/pages/QuestDetailPage").then(m => ({ default: m.QuestDetailPage })));
 const EventsPage = lazy(() => import("@/features/events/pages/EventsPage").then(m => ({ default: m.EventsPage })));
 const TimelineFiltersPage = lazy(() => import("@/features/timeline-filters/pages/TimelineFiltersPage").then(m => ({ default: m.TimelineFiltersPage })));
+const NotificationAccessPage = lazy(() => import("@/features/notification-access/pages/NotificationAccessPage").then(m => ({ default: m.NotificationAccessPage })));
 const SupportQueriesPage = lazy(() => import("@/features/support-queries/pages/SupportQueriesPage").then(m => ({ default: m.SupportQueriesPage })));
 const SupportQueryDetailPage = lazy(() => import("@/features/support-queries/pages/SupportQueryDetailPage").then(m => ({ default: m.SupportQueryDetailPage })));
 const AnalyticsPage = lazy(() => import("@/features/analytics/pages/AnalyticsPage").then(m => ({ default: m.AnalyticsPage })));
@@ -128,6 +129,11 @@ export const AppRoutes = () => {
                 <Route path="events" element={
                     <Suspense fallback={<LoadingFallback message="Loading events..." />}>
                         <EventsPage />
+                    </Suspense>
+                } />
+                <Route path="notification-access" element={
+                    <Suspense fallback={<LoadingFallback message="Loading notification access..." />}>
+                        <NotificationAccessPage />
                     </Suspense>
                 } />
                 <Route path="timeline-filters" element={
