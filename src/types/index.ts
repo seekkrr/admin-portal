@@ -167,6 +167,15 @@ export interface EventListEntry {
     average_rating?: number | null;
     is_featured: boolean;
     status: EventStatus;
+    created_by?: string | null;
+    created_by_name?: string | null;
+    collaborator_ids?: string[];
+    collaborators?: EventCollaborator[];
+}
+
+export interface EventCollaborator {
+    id: string;
+    name?: string | null;
 }
 
 export interface EventVenueRef {
@@ -199,6 +208,10 @@ export interface V2EventDetail {
     created_at?: string | null;
     updated_at?: string | null;
     rsvp?: { going_count: number; interested_count: number; my_status?: string | null };
+    created_by?: string | null;
+    created_by_name?: string | null;
+    collaborator_ids?: string[];
+    collaborators?: EventCollaborator[];
 }
 
 export interface EventAttendee {

@@ -24,6 +24,7 @@ export const API_ENDPOINTS = {
         STATUS: (id: string) => `/api/v2/events/${id}/status`,
         ATTENDEES: (id: string) => `/api/v2/events/${id}/attendees`,
         ANNOUNCE: (id: string) => `/api/v2/events/${id}/announce`,
+        COLLABORATORS: (id: string) => `/api/v2/events/${id}/collaborators`,
     },
     TIMELINE_FILTERS: {
         BASE: "/api/v2/timeline-filters",
