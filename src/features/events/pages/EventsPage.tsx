@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CalendarDays, MoreVertical, Users, Filter } from "lucide-react";
+import { CalendarDays, MoreVertical, Users, Filter, UserCog } from "lucide-react";
 import { Pagination } from "@/components/ui/Pagination";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { FilterDropdown } from "@/components/FilterDropdown";
@@ -10,6 +10,7 @@ import { useAuthStore } from "@/store/auth.store";
 import { eventsService } from "../services/events.service";
 import { EventAttendeesModal } from "../components/EventAttendeesModal";
 import { EventAnnounceModal } from "../components/EventAnnounceModal";
+import { EventCollaboratorsModal } from "../components/EventCollaboratorsModal";
 import type { EventListEntry, EventStatus } from "@/types";
 
 const ALLOWED_ROLES = ["admin", "super_admin", "moderator"];
@@ -74,6 +75,7 @@ export function EventsPage() {
     const [deleteTarget, setDeleteTarget] = useState<EventListEntry | null>(null);
     const [attendeesFor, setAttendeesFor] = useState<EventListEntry | null>(null);
     const [announceFor, setAnnounceFor] = useState<EventListEntry | null>(null);
+    const [collaboratorsFor, setCollaboratorsFor] = useState<EventListEntry | null>(null);
 
     useEffect(() => { setPage(1); }, [statusFilter]);
 
@@ -228,6 +230,7 @@ export function EventsPage() {
                                                         <div className="absolute right-0 top-full mt-1.5 w-48 bg-white border border-neutral-200 rounded-xl shadow-xl z-30 py-1.5" onClick={(e) => e.stopPropagation()}>
                                                             <button onClick={() => { setAttendeesFor(ev); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-medium">View Attendees</button>
                                                             <button onClick={() => { setAnnounceFor(ev); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-medium">Send Notification</button>
+                                                            <button onClick={() => { setCollaboratorsFor(ev); setOpenDropdownId(null); }} className="w-full flex items-center gap-2 text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-medium"><UserCog className="w-3.5 h-3.5" /> Manage Collaborators</button>
                                                             <button onClick={() => { void toggleFeatured(ev); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-medium">{ev.is_featured ? "Unfeature" : "Feature"}</button>
                                                             {transitionsFor(ev.status).map((t) => (
                                                                 <button key={t.to} onClick={() => { void changeStatus(ev.id, t.to); setOpenDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-medium">{t.label}</button>
@@ -268,6 +271,15 @@ export function EventsPage() {
 
             {announceFor && (
                 <EventAnnounceModal eventId={announceFor.id} eventTitle={announceFor.title} onClose={() => setAnnounceFor(null)} />
+            )}
+
+            {collaboratorsFor && (
+                <EventCollaboratorsModal
+                    eventId={collaboratorsFor.id}
+                    eventTitle={collaboratorsFor.title}
+                    onClose={() => setCollaboratorsFor(null)}
+                    onSaved={() => queryClient.invalidateQueries({ queryKey: ["admin-events"] })}
+                />
             )}
         </div>
     );

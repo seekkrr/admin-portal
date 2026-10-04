@@ -108,6 +108,15 @@ export const eventsService = {
         return { recipients: data.recipients ?? 0, sent: data.sent ?? 0 };
     },
 
+    /** Replace an event's collaborator team. `creatorUserIds` are USER ids. */
+    setCollaborators: async (eventId: string, creatorUserIds: string[]): Promise<V2EventDetail> => {
+        const { data } = await api.put<{ success: boolean; event: Record<string, unknown> }>(
+            API_ENDPOINTS.EVENTS.COLLABORATORS(eventId),
+            { creator_ids: creatorUserIds }
+        );
+        return withId<V2EventDetail>(data.event);
+    },
+
     listAttendees: async (
         eventId: string,
         params: { status?: string; page?: number; page_size?: number } = {}
