@@ -17,12 +17,27 @@ export const API_ENDPOINTS = {
         UNPAUSE: (id: string) => `/api/v2/quests/${id}/unpause`,
         EXPERIENCE: (id: string) => `/api/v2/quests/${id}/experience`,
     },
+    EVENTS: {
+        BASE: "/api/v2/events",
+        ADMIN: "/api/v2/events/admin",
+        BY_ID: (id: string) => `/api/v2/events/${id}`,
+        STATUS: (id: string) => `/api/v2/events/${id}/status`,
+        ATTENDEES: (id: string) => `/api/v2/events/${id}/attendees`,
+        ANNOUNCE: (id: string) => `/api/v2/events/${id}/announce`,
+        COLLABORATORS: (id: string) => `/api/v2/events/${id}/collaborators`,
+    },
+    TIMELINE_FILTERS: {
+        BASE: "/api/v2/timeline-filters",
+        BY_ID: (id: string) => `/api/v2/timeline-filters/${id}`,
+    },
     CREATORS: {
         LIST: "/api/v2/creators",
         PLATFORM_STATS: "/api/v2/creators/platform-stats",
         BY_ID: (creatorId: string) => `/api/v2/creators/${creatorId}`,
         UPDATE: (creatorId: string) => `/api/v2/creators/${creatorId}`,
         STATS_UPDATE: (creatorId: string) => `/api/v2/creators/${creatorId}/stats`,
+        NOTIFICATION_ACCESS_REQUESTS: "/api/v2/creators/notification-access/requests",
+        NOTIFICATION_ACCESS: (creatorId: string) => `/api/v2/creators/${creatorId}/notification-access`,
         PROVISION: (userId: string) => `/api/v2/creators/provision/${userId}`,
     },
     CORE: {

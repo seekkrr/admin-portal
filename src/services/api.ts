@@ -4,6 +4,7 @@ import axios, {
     type InternalAxiosRequestConfig,
 } from "axios";
 import { config } from "@config/env";
+import { API_ENDPOINTS } from "@config/api";
 import type { ApiError } from "@/types";
 
 const AUTH_TOKEN_KEY = "seekkrr_admin_access_token"; // Distinct key for admin
@@ -21,6 +22,50 @@ function setStoredTokens(accessToken: string, refreshToken: string): void {
 function clearStoredTokens(): void {
     localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
+// Bare client (no interceptors) used only to mint a new access token, so a 401
+// on the refresh call itself can't recurse back into the refresh flow.
+const refreshClient = axios.create({
+    baseURL: config.api.baseUrl,
+    timeout: config.api.timeout,
+    headers: { "Content-Type": "application/json" },
+});
+
+// Single-flight: many requests can 401 at once; they must share ONE refresh.
+let refreshPromise: Promise<string> | null = null;
+
+function refreshAccessToken(): Promise<string> {
+    if (!refreshPromise) {
+        const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+        refreshPromise = (async () => {
+            if (!refreshToken) throw new Error("No refresh token");
+            const { data } = await refreshClient.post<{ access_token: string; refresh_token: string }>(
+                API_ENDPOINTS.AUTH.REFRESH,
+                { refresh_token: refreshToken }
+            );
+            setStoredTokens(data.access_token, data.refresh_token);
+            return data.access_token;
+        })().finally(() => { refreshPromise = null; });
+    }
+    return refreshPromise;
+}
+
+function redirectToLogin(): void {
+    const p = window.location.pathname;
+    if (!p.includes("/login") && !p.includes("/auth/callback")) {
+        window.location.href = "/login";
+    }
+}
+
+/** Auth endpoints where a 401 means "bad credentials", not "token expired". */
+function isAuthEndpoint(url?: string): boolean {
+    if (!url) return false;
+    return (
+        url.includes(API_ENDPOINTS.AUTH.REFRESH) ||
+        url.includes(API_ENDPOINTS.AUTH.OAUTH_LOGIN) ||
+        url.includes(API_ENDPOINTS.AUTH.LOGOUT)
+    );
 }
 
 function createApiClient(): AxiosInstance {
@@ -51,19 +96,34 @@ function createApiClient(): AxiosInstance {
         (response) => response,
         async (error: AxiosError<ApiError>) => {
             const status = error.response?.status;
+            const originalRequest = error.config as
+                | (InternalAxiosRequestConfig & { _retry?: boolean })
+                | undefined;
             console.error("[API] Response error:", status, error.response?.data);
 
-            // Handle 401 - Unauthorized
-            if (status === 401) {
+            // Handle 401 - try a silent refresh once, then retry the request.
+            // Logout is the fallback only when there's no refresh token or the
+            // refresh fails, so an expired access token no longer ends the session.
+            if (
+                status === 401 &&
+                originalRequest &&
+                !originalRequest._retry &&
+                !isAuthEndpoint(originalRequest.url) &&
+                localStorage.getItem(REFRESH_TOKEN_KEY)
+            ) {
+                originalRequest._retry = true;
+                try {
+                    await refreshAccessToken();
+                    return client(originalRequest);
+                } catch {
+                    console.warn("[API] Token refresh failed - clearing session");
+                    clearStoredTokens();
+                    redirectToLogin();
+                }
+            } else if (status === 401) {
                 console.warn("[API] 401 Unauthorized - Clearing tokens");
                 clearStoredTokens();
-                // Redirect to login if not already there
-                const isLoginPage = window.location.pathname.includes("/login");
-                const isCallbackPage = window.location.pathname.includes("/auth/callback");
-
-                if (!isLoginPage && !isCallbackPage) {
-                    window.location.href = "/login";
-                }
+                redirectToLogin();
             }
 
             // Extract error message — check all known backend shapes:
