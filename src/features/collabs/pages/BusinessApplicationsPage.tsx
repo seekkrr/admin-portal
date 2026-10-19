@@ -126,7 +126,7 @@ export function BusinessApplicationsPage() {
                                         <td className="px-4 py-3">
                                             <div className="font-medium text-neutral-900">{a.business_name}</div>
                                             <div className="text-[11px] text-neutral-400 mt-0.5">
-                                                {a.categories.length ? a.categories.join(", ") : "No categories"} · via {a.source}
+                                                {a.categories.length ? [...a.categories, ...(a.sub_categories ?? [])].join(", ") : "No categories"} · via {a.source}
                                             </div>
                                         </td>
                                         <td className="px-4 py-3">
@@ -226,6 +226,7 @@ export function BusinessApplicationsPage() {
                             </h4>
                             <DetailRow label="Status" value={<StatusPill status={selected.status} />} />
                             <DetailRow label="Categories" value={selected.categories.length ? selected.categories.join(", ") : "—"} />
+                            <DetailRow label="Type" value={selected.sub_categories?.length ? selected.sub_categories.join(", ") : "—"} />
                             <DetailRow label="Region" value={<RegionName id={selected.region_id} />} />
                             <DetailRow label="Requested plan" value={selected.requested_plan ? humanize(selected.requested_plan) : "—"} />
                             <DetailRow label="GSTIN" value={selected.gstin ? <span className="font-mono">{selected.gstin}</span> : "—"} />

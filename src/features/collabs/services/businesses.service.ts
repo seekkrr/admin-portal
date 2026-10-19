@@ -5,6 +5,7 @@ import type {
     AdminBusiness,
     AdminBusinessApplication,
     ApproveBusinessApplicationResult,
+    BusinessCategory,
     BusinessApplicationsListResponse,
     BusinessesListResponse,
     ClaimInvite,
@@ -21,6 +22,11 @@ import type {
  */
 export const businessesService = {
     // ── Businesses ──
+    categories: async (): Promise<BusinessCategory[]> => {
+        const { data } = await api.get<{ categories: BusinessCategory[] }>(API_ENDPOINTS.BUSINESSES_ADMIN.CATEGORIES);
+        return data.categories ?? [];
+    },
+
     list: async (params: ListBusinessesParams): Promise<BusinessesListResponse> => {
         const { data } = await api.get<BusinessesListResponse>(`${API_ENDPOINTS.BUSINESSES_ADMIN.BASE}${toQuery(params)}`);
         return { ...data, businesses: data.businesses ?? [] };

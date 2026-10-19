@@ -234,6 +234,7 @@ export const API_ENDPOINTS = {
     },
     BUSINESSES_ADMIN: {
         BASE: "/api/v2/businesses/admin",
+        CATEGORIES: "/api/v2/businesses/categories",
         BY_ID: (id: string) => `/api/v2/businesses/admin/${id}`,
         CLAIM_INVITES: (id: string) => `/api/v2/businesses/admin/${id}/claim-invites`,
     },
