@@ -61,6 +61,22 @@ const PayoutDetailPage = lazy(() => import("@/features/payouts/pages/PayoutDetai
 // Coupons — discount codes
 const CouponsPage = lazy(() => import("@/features/coupons/pages/CouponsPage").then(m => ({ default: m.CouponsPage })));
 const CouponDetailPage = lazy(() => import("@/features/coupons/pages/CouponDetailPage").then(m => ({ default: m.CouponDetailPage })));
+// Collabs — creator × business
+const CollabsOverviewPage = lazy(() => import("@/features/collabs/pages/CollabsOverviewPage").then(m => ({ default: m.CollabsOverviewPage })));
+const BusinessApplicationsPage = lazy(() => import("@/features/collabs/pages/BusinessApplicationsPage").then(m => ({ default: m.BusinessApplicationsPage })));
+const BusinessesPage = lazy(() => import("@/features/collabs/pages/BusinessesPage").then(m => ({ default: m.BusinessesPage })));
+const BusinessDetailPage = lazy(() => import("@/features/collabs/pages/BusinessDetailPage").then(m => ({ default: m.BusinessDetailPage })));
+const CollabModerationPage = lazy(() => import("@/features/collabs/pages/ModerationPage").then(m => ({ default: m.ModerationPage })));
+const CollabReportsPage = lazy(() => import("@/features/collabs/pages/ReportsPage").then(m => ({ default: m.ReportsPage })));
+const FraudFlagsPage = lazy(() => import("@/features/collabs/pages/FraudFlagsPage").then(m => ({ default: m.FraudFlagsPage })));
+const CollabApplicationsPage = lazy(() => import("@/features/collabs/pages/CollabApplicationsPage").then(m => ({ default: m.CollabApplicationsPage })));
+const CollabCreatorsPage = lazy(() => import("@/features/collabs/pages/CollabCreatorsPage").then(m => ({ default: m.CollabCreatorsPage })));
+const PlansBillingPage = lazy(() => import("@/features/collabs/pages/PlansBillingPage").then(m => ({ default: m.PlansBillingPage })));
+const MatchTuningPage = lazy(() => import("@/features/collabs/pages/MatchTuningPage").then(m => ({ default: m.MatchTuningPage })));
+const RolloutPage = lazy(() => import("@/features/collabs/pages/RolloutPage").then(m => ({ default: m.RolloutPage })));
+// Platform — email templates
+const EmailTemplatesPage = lazy(() => import("@/features/email-templates/pages/EmailTemplatesPage").then(m => ({ default: m.EmailTemplatesPage })));
+const EmailTemplateEditorPage = lazy(() => import("@/features/email-templates/pages/EmailTemplateEditorPage").then(m => ({ default: m.EmailTemplateEditorPage })));
 
 export const AppRoutes = () => {
     return (
@@ -307,6 +323,81 @@ export const AppRoutes = () => {
                 <Route path="coupons/:couponId" element={
                     <Suspense fallback={<LoadingFallback message="Loading coupon..." />}>
                         <CouponDetailPage />
+                    </Suspense>
+                } />
+
+                {/* Collabs — creator × business (static paths before :businessId) */}
+                <Route path="collabs" element={<Navigate to="/collabs/overview" replace />} />
+                <Route path="collabs/overview" element={
+                    <Suspense fallback={<LoadingFallback message="Loading collabs overview..." />}>
+                        <CollabsOverviewPage />
+                    </Suspense>
+                } />
+                <Route path="collabs/business-applications" element={
+                    <Suspense fallback={<LoadingFallback message="Loading business applications..." />}>
+                        <BusinessApplicationsPage />
+                    </Suspense>
+                } />
+                <Route path="collabs/businesses" element={
+                    <Suspense fallback={<LoadingFallback message="Loading businesses..." />}>
+                        <BusinessesPage />
+                    </Suspense>
+                } />
+                <Route path="collabs/businesses/:businessId" element={
+                    <Suspense fallback={<LoadingFallback message="Loading business..." />}>
+                        <BusinessDetailPage />
+                    </Suspense>
+                } />
+                <Route path="collabs/moderation" element={
+                    <Suspense fallback={<LoadingFallback message="Loading moderation queue..." />}>
+                        <CollabModerationPage />
+                    </Suspense>
+                } />
+                <Route path="collabs/reports" element={
+                    <Suspense fallback={<LoadingFallback message="Loading reports..." />}>
+                        <CollabReportsPage />
+                    </Suspense>
+                } />
+                <Route path="collabs/fraud-flags" element={
+                    <Suspense fallback={<LoadingFallback message="Loading fraud flags..." />}>
+                        <FraudFlagsPage />
+                    </Suspense>
+                } />
+                <Route path="collabs/applications" element={
+                    <Suspense fallback={<LoadingFallback message="Loading collab requests..." />}>
+                        <CollabApplicationsPage />
+                    </Suspense>
+                } />
+                <Route path="collabs/creators" element={
+                    <Suspense fallback={<LoadingFallback message="Loading collab creators..." />}>
+                        <CollabCreatorsPage />
+                    </Suspense>
+                } />
+                <Route path="collabs/billing" element={
+                    <Suspense fallback={<LoadingFallback message="Loading plans & billing..." />}>
+                        <PlansBillingPage />
+                    </Suspense>
+                } />
+                <Route path="collabs/match" element={
+                    <Suspense fallback={<LoadingFallback message="Loading match tuning..." />}>
+                        <MatchTuningPage />
+                    </Suspense>
+                } />
+                <Route path="collabs/rollout" element={
+                    <Suspense fallback={<LoadingFallback message="Loading rollout..." />}>
+                        <RolloutPage />
+                    </Suspense>
+                } />
+
+                {/* Platform — email templates (keys contain dots; links encode them) */}
+                <Route path="email-templates" element={
+                    <Suspense fallback={<LoadingFallback message="Loading email templates..." />}>
+                        <EmailTemplatesPage />
+                    </Suspense>
+                } />
+                <Route path="email-templates/:key" element={
+                    <Suspense fallback={<LoadingFallback message="Loading template..." />}>
+                        <EmailTemplateEditorPage />
                     </Suspense>
                 } />
             </Route>
