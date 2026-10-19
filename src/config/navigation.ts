@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Video, Map, UserPlus, MessageSquare, BarChart3, MapPin, BookOpen, Star, Globe, Trophy, ListOrdered, Settings2, Activity, ArrowLeftRight, RotateCcw, Wallet, Banknote, ReceiptText, Tag, Store, CalendarDays, ListFilter, BellRing, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, Users, Video, Map, UserPlus, MessageSquare, BarChart3, MapPin, BookOpen, Star, Globe, Trophy, ListOrdered, Settings2, Activity, ArrowLeftRight, RotateCcw, Wallet, Banknote, ReceiptText, Tag, Store, CalendarDays, ListFilter, BellRing, Handshake, Inbox, Building2, ShieldCheck, Flag, Siren, GitPullRequestArrow, UserCheck, CreditCard, SlidersHorizontal, Rocket, Mail, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
     icon: LucideIcon;
@@ -12,6 +12,12 @@ export interface NavItem {
 // payout accounts, payment events). Moderators are intentionally excluded —
 // they hold no financial permissions in the backend RBAC matrix.
 export const FINANCE_ROLES = ["admin", "super_admin", "finance"] as const;
+
+// Collabs: queues/read views are open to moderators; money (plans, billing),
+// algorithm (match tuning) and rollout/business-offers are admin-only —
+// mirrors the backend guards in admin_collabs.py / platform_config.py.
+export const COLLAB_STAFF_NAV_ROLES = ["admin", "super_admin", "moderator"] as const;
+export const ADMIN_NAV_ROLES = ["admin", "super_admin"] as const;
 
 export interface NavGroup {
     group: string;
@@ -73,7 +79,29 @@ export const NAV_GROUPS: NavGroup[] = [
             // Coupon create/update/delete require admin/super_admin; the nav entry is
             // gated to those roles even though finance may view via direct link.
             { icon: Tag, label: "Coupons", to: "/coupons", roles: ["admin", "super_admin"] },
-            { icon: Store, label: "Business Offers", to: "/business-offers", roles: ["admin", "super_admin"] },
+        ]
+    },
+    {
+        group: "Collabs",
+        items: [
+            { icon: Handshake, label: "Overview", to: "/collabs/overview", roles: [...COLLAB_STAFF_NAV_ROLES] },
+            { icon: Inbox, label: "Business Applications", to: "/collabs/business-applications", roles: [...COLLAB_STAFF_NAV_ROLES] },
+            { icon: Building2, label: "Businesses", to: "/collabs/businesses", roles: [...COLLAB_STAFF_NAV_ROLES] },
+            { icon: ShieldCheck, label: "Moderation", to: "/collabs/moderation", roles: [...COLLAB_STAFF_NAV_ROLES] },
+            { icon: Flag, label: "Reports", to: "/collabs/reports", roles: [...COLLAB_STAFF_NAV_ROLES] },
+            { icon: Siren, label: "Fraud Flags", to: "/collabs/fraud-flags", roles: [...COLLAB_STAFF_NAV_ROLES] },
+            { icon: GitPullRequestArrow, label: "Collab Requests", to: "/collabs/applications", roles: [...COLLAB_STAFF_NAV_ROLES] },
+            { icon: UserCheck, label: "Collab Creators", to: "/collabs/creators", roles: [...COLLAB_STAFF_NAV_ROLES] },
+            { icon: Store, label: "Business Offers", to: "/business-offers", roles: [...ADMIN_NAV_ROLES] },
+            { icon: CreditCard, label: "Plans & Billing", to: "/collabs/billing", roles: [...ADMIN_NAV_ROLES] },
+            { icon: SlidersHorizontal, label: "Match Tuning", to: "/collabs/match", roles: [...ADMIN_NAV_ROLES] },
+            { icon: Rocket, label: "Rollout", to: "/collabs/rollout", roles: [...ADMIN_NAV_ROLES] },
+        ]
+    },
+    {
+        group: "Platform",
+        items: [
+            { icon: Mail, label: "Email Templates", to: "/email-templates", roles: [...ADMIN_NAV_ROLES] },
         ]
     }
 ];
