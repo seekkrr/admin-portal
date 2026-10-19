@@ -6,7 +6,6 @@ const envSchema = z.object({
     VITE_MAPBOX_ACCESS_TOKEN: z.string().optional().default(""),
     VITE_MEDIA_DELIVERY_BASE: z.string().optional().default("https://img.seekkrr.com"),
     VITE_CLOUDINARY_CLOUD_NAME: z.string().optional().default("seekkrr"),
-    VITE_CLOUDINARY_UPLOAD_PRESET: z.string().optional().default("seekkrr_admin"),
     VITE_GOOGLE_CLIENT_ID: z.string().optional().default(""),
 });
 
@@ -19,7 +18,6 @@ function validateEnv(): EnvConfig {
         VITE_MAPBOX_ACCESS_TOKEN: import.meta.env.VITE_MAPBOX_ACCESS_TOKEN,
         VITE_MEDIA_DELIVERY_BASE: import.meta.env.VITE_MEDIA_DELIVERY_BASE,
         VITE_CLOUDINARY_CLOUD_NAME: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME,
-        VITE_CLOUDINARY_UPLOAD_PRESET: import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET,
         VITE_GOOGLE_CLIENT_ID: import.meta.env.VITE_GOOGLE_CLIENT_ID,
     });
 
@@ -55,8 +53,6 @@ export const config = {
     },
     cloudinary: {
         cloudName: env.VITE_CLOUDINARY_CLOUD_NAME,
-        uploadPreset: env.VITE_CLOUDINARY_UPLOAD_PRESET,
-        uploadUrl: `https://api.cloudinary.com/v1_1/${env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`,
     },
     googleClientId: env.VITE_GOOGLE_CLIENT_ID,
 } as const;
