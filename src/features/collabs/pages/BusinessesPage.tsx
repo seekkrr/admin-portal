@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Store, Plus, Filter, BadgeCheck, Globe, Star } from "lucide-react";
+import { Store, Plus, Filter, BadgeCheck, Globe, Star, Tag } from "lucide-react";
 import { AccessDenied } from "@components/AccessDenied";
 import { FilterDropdown, type DropdownOption } from "@/components/FilterDropdown";
 import { Pagination } from "@/components/ui/Pagination";
 import { businessesService } from "../services/businesses.service";
 import { useCollabAccess } from "../roles";
-import { useDebouncedValue } from "../hooks";
+import { useBusinessCategories, useDebouncedValue } from "../hooks";
 import {
     Chip, LoadingButtonIcon, Modal, PageHeader, PanelState, SearchBox, StatusPill, Toolbar, btnPrimary, btnSecondary, thClass,
 } from "../components/CollabsUi";
@@ -41,18 +41,29 @@ export function BusinessesPage() {
     const initialStatus = searchParams.get("status") ?? "";
     const [status, setStatus] = useState(STATUS_OPTIONS.some((o) => o.value === initialStatus) ? initialStatus : "");
     const [verified, setVerified] = useState("");
+    const [category, setCategory] = useState(searchParams.get("category") ?? "");
     const [searchInput, setSearchInput] = useState("");
     const search = useDebouncedValue(searchInput);
     const [page, setPage] = useState(1);
     const [createOpen, setCreateOpen] = useState(false);
     const [draft, setDraft] = useState<BusinessDraft>(emptyBusinessDraft);
 
-    useEffect(() => setPage(1), [search, status, verified]);
+    useEffect(() => setPage(1), [search, status, verified, category]);
+
+    const { data: categories = [] } = useBusinessCategories();
+    const categoryOptions: DropdownOption[] = [
+        { value: "", label: "All categories" },
+        ...categories.flatMap((c) => [
+            { value: c.name, label: c.name },
+            ...c.sub_categories.map((s) => ({ value: s, label: `${c.name} › ${s}` })),
+        ]),
+    ];
 
     const params: ListBusinessesParams = {
         status: (status || undefined) as BusinessStatus | undefined,
         verified: verified === "" ? undefined : verified === "true",
         search: search || undefined,
+        category: category || undefined,
         page,
         page_size: PAGE_SIZE,
     };
@@ -100,12 +111,14 @@ export function BusinessesPage() {
                 <SearchBox value={searchInput} onChange={setSearchInput} placeholder="Search name, contact email or phone..." />
                 <FilterDropdown options={STATUS_OPTIONS} value={status} onChange={setStatus} icon={<Filter className="w-3.5 h-3.5" />} placeholder="Status" theme="teal" />
                 <FilterDropdown options={VERIFIED_OPTIONS} value={verified} onChange={setVerified} icon={<BadgeCheck className="w-3.5 h-3.5" />} placeholder="Verified" theme="teal" />
-                {(status || verified || searchInput) && (
+                <FilterDropdown options={categoryOptions} value={category} onChange={setCategory} icon={<Tag className="w-3.5 h-3.5" />} placeholder="Category" theme="teal" />
+                {(status || verified || category || searchInput) && (
                     <button
                         type="button"
                         onClick={() => {
                             setStatus("");
                             setVerified("");
+                            setCategory("");
                             setSearchInput("");
                         }}
                         className="px-3 py-2.5 rounded-xl text-sm text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"

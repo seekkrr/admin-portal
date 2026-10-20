@@ -1,4 +1,3 @@
-import { splitList } from "./utils";
 import type { AdminBusiness, BusinessStatus, CreateBusinessPayload, UpdateBusinessPayload } from "./types";
 
 /** Editable form state for a business profile (create + admin edit). */
@@ -6,7 +5,8 @@ export interface BusinessDraft {
     name: string;
     tagline: string;
     description: string;
-    categories: string; // comma separated
+    categories: string[];
+    sub_categories: string[];
     region_id: string;
     marker_ids: string[];
     contact_phone: string;
@@ -23,7 +23,8 @@ export function emptyBusinessDraft(): BusinessDraft {
         name: "",
         tagline: "",
         description: "",
-        categories: "",
+        categories: [],
+        sub_categories: [],
         region_id: "",
         marker_ids: [],
         contact_phone: "",
@@ -41,7 +42,8 @@ export function draftFromBusiness(b: AdminBusiness): BusinessDraft {
         name: b.name ?? "",
         tagline: b.tagline ?? "",
         description: b.description ?? "",
-        categories: (b.categories ?? []).join(", "),
+        categories: b.categories ?? [],
+        sub_categories: b.sub_categories ?? [],
         region_id: b.region_id ?? "",
         marker_ids: b.marker_ids ?? [],
         contact_phone: b.contact_phone ?? "",
@@ -66,8 +68,8 @@ export function diffBusinessDraft(draft: BusinessDraft, b: AdminBusiness): Updat
     if (draft.name.trim() !== base.name) out.name = draft.name.trim();
     if (draft.tagline.trim() !== base.tagline) out.tagline = draft.tagline.trim();
     if (draft.description.trim() !== base.description) out.description = draft.description.trim();
-    const cats = splitList(draft.categories);
-    if (!sameList(cats, b.categories ?? [])) out.categories = cats;
+    if (!sameList(draft.categories, base.categories)) out.categories = draft.categories;
+    if (!sameList(draft.sub_categories, base.sub_categories)) out.sub_categories = draft.sub_categories;
     if (draft.region_id && draft.region_id !== base.region_id) out.region_id = draft.region_id;
     if (!sameList(draft.marker_ids, base.marker_ids)) out.marker_ids = draft.marker_ids;
     if (draft.contact_phone.trim() !== base.contact_phone) out.contact_phone = draft.contact_phone.trim();
@@ -85,8 +87,8 @@ export function createPayloadFromDraft(draft: BusinessDraft): CreateBusinessPayl
     const out: CreateBusinessPayload = { name: draft.name.trim() };
     if (draft.tagline.trim()) out.tagline = draft.tagline.trim();
     if (draft.description.trim()) out.description = draft.description.trim();
-    const cats = splitList(draft.categories);
-    if (cats.length) out.categories = cats;
+    if (draft.categories.length) out.categories = draft.categories;
+    if (draft.sub_categories.length) out.sub_categories = draft.sub_categories;
     if (draft.region_id) out.region_id = draft.region_id;
     if (draft.marker_ids.length) out.marker_ids = draft.marker_ids;
     if (draft.contact_phone.trim()) out.contact_phone = draft.contact_phone.trim();

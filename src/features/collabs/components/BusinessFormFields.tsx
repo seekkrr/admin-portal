@@ -1,6 +1,7 @@
 import { RegionPicker } from "@/features/regions/components/RegionPicker";
 import { Checkbox, Field, inputClass } from "./CollabsUi";
 import { MarkerIdsInput, RegionName } from "./CollabPickers";
+import { BusinessCategoryPicker } from "./BusinessCategoryPicker";
 import { slugError, type BusinessDraft } from "../businessDraft";
 import type { BusinessStatus } from "../types";
 
@@ -66,14 +67,12 @@ export function BusinessFormFields({
                     className={`${inputClass} min-h-[96px] resize-y`}
                 />
             </Field>
-            <Field label="Categories" htmlFor={`${idPrefix}-categories`} hint="Comma separated, up to 10 (e.g. Cafe, Stays).">
-                <input
-                    id={`${idPrefix}-categories`}
-                    type="text"
-                    value={draft.categories}
+            <Field label="Categories" hint="Up to 3, from the predefined place categories, then pick the type.">
+                <BusinessCategoryPicker
+                    categories={draft.categories}
+                    subCategories={draft.sub_categories}
                     disabled={disabled}
-                    onChange={(e) => set("categories", e.target.value)}
-                    className={inputClass}
+                    onChange={(categories, sub_categories) => onChange({ ...draft, categories, sub_categories })}
                 />
             </Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

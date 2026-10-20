@@ -448,6 +448,7 @@ export interface AdminBusiness {
     tagline: string | null;
     description: string | null;
     categories: string[];
+    sub_categories: string[];
     region_id: string | null;
     socials: BusinessSocial[];
     photos: string[];
@@ -479,6 +480,8 @@ export interface ListBusinessesParams {
     status?: BusinessStatus;
     verified?: boolean;
     search?: string;
+    /** Category or sub-category name. */
+    category?: string;
     page?: number;
     page_size?: number;
 }
@@ -489,6 +492,7 @@ export interface UpdateBusinessPayload {
     tagline?: string;
     description?: string;
     categories?: string[];
+    sub_categories?: string[];
     socials?: BusinessSocial[];
     contact_phone?: string;
     contact_email?: string;
@@ -507,6 +511,7 @@ export interface CreateBusinessPayload {
     tagline?: string;
     description?: string;
     categories?: string[];
+    sub_categories?: string[];
     socials?: BusinessSocial[];
     contact_phone?: string;
     contact_email?: string;
@@ -515,6 +520,12 @@ export interface CreateBusinessPayload {
     public_slug?: string;
     region_id?: string;
     marker_ids?: string[];
+}
+
+/** A predefined place category a business can be listed under. */
+export interface BusinessCategory {
+    name: string;
+    sub_categories: string[];
 }
 
 export interface ClaimInvite {
@@ -538,6 +549,7 @@ export interface AdminBusinessApplication {
     maps_url: string | null;
     region_id: string | null;
     categories: string[];
+    sub_categories?: string[];
     social_links: string[];
     requested_plan: "free" | "growth" | "pro" | "multi_location" | null;
     gstin: string | null;
