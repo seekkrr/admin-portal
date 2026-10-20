@@ -107,6 +107,12 @@ export const API_ENDPOINTS = {
         MATRIX_REFRESH: (id: string) => `/api/v2/regions/${id}/matrix/refresh`,
         LINK_QUEST: (regionId: string, questId: string) => `/api/v2/regions/${regionId}/quests/${questId}`,
     },
+    // Region-based explore map: which cities the app shows, in what order (admin only).
+    EXPLORE: {
+        ADMIN_REGIONS: "/api/v2/explore/admin/regions",
+        ADMIN_ORDER: "/api/v2/explore/admin/order",
+        ADMIN_REGION_BY_ID: (id: string) => `/api/v2/explore/admin/regions/${id}`,
+    },
     ANALYTICS: {
         OVERVIEW: "/api/v2/analytics/overview",
         // Users

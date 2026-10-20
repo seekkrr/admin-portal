@@ -289,7 +289,7 @@ export function BusinessApplicationsPage() {
                                 {selected.social_links.map((link) => (
                                     <a
                                         key={link}
-                                        href={link.startsWith("http") ? link : `https://${link}`}
+                                        href={/^[^/\s]+@[^/\s]+\.[^/\s]+$/.test(link.replace(/^https?:\/\//, "")) ? `mailto:${link.replace(/^https?:\/\//, "")}` : link.startsWith("http") ? link : `https://${link}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="flex items-center gap-2 p-2.5 bg-neutral-50 border border-neutral-200 rounded-xl hover:bg-neutral-100 transition-colors text-sm text-neutral-700"

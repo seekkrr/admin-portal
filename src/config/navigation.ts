@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Video, Map, UserPlus, MessageSquare, BarChart3, MapPin, BookOpen, Star, Globe, Trophy, ListOrdered, Settings2, Activity, ArrowLeftRight, RotateCcw, Wallet, Banknote, ReceiptText, Tag, Store, CalendarDays, ListFilter, BellRing, Handshake, Inbox, Building2, ShieldCheck, Flag, Siren, GitPullRequestArrow, UserCheck, CreditCard, SlidersHorizontal, Rocket, Mail, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, Users, Video, Map, UserPlus, MessageSquare, BarChart3, MapPin, BookOpen, Star, Globe, Trophy, ListOrdered, Settings2, Activity, ArrowLeftRight, RotateCcw, Wallet, Banknote, ReceiptText, Tag, Store, CalendarDays, ListFilter, BellRing, Handshake, Inbox, Building2, ShieldCheck, Flag, Siren, GitPullRequestArrow, UserCheck, CreditCard, SlidersHorizontal, Rocket, Mail, Compass, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
     icon: LucideIcon;
@@ -45,6 +45,8 @@ export const NAV_GROUPS: NavGroup[] = [
         items: [
             { icon: MapPin, label: "Markers", to: "/markers" },
             { icon: Globe, label: "Regions", to: "/regions" },
+            // Explore-map order/settings need the admin-only regions:manage permission.
+            { icon: Compass, label: "Explore map", to: "/explore-map", roles: [...ADMIN_NAV_ROLES] },
             { icon: Map, label: "Quests", to: "/quests" },
             { icon: CalendarDays, label: "Events", to: "/events" },
             { icon: BellRing, label: "Notification Access", to: "/notification-access" },

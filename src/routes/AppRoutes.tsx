@@ -34,6 +34,7 @@ const ReviewDetailPage = lazy(() => import("@/features/content/pages/ReviewDetai
 // Section 11 — Regions
 const RegionsPage = lazy(() => import("@/features/regions/pages/RegionsPage").then(m => ({ default: m.RegionsPage })));
 const RegionDetailPage = lazy(() => import("@/features/regions/pages/RegionDetailPage").then(m => ({ default: m.RegionDetailPage })));
+const ExploreMapPage = lazy(() => import("@/features/explore-map/pages/ExploreMapPage").then(m => ({ default: m.ExploreMapPage })));
 // Section 10 — Achievements & Leaderboards
 const AchievementsPage = lazy(() => import("@/features/achievements/pages/AchievementsPage").then(m => ({ default: m.AchievementsPage })));
 const AchievementDetailPage = lazy(() => import("@/features/achievements/pages/AchievementDetailPage").then(m => ({ default: m.AchievementDetailPage })));
@@ -226,6 +227,12 @@ export const AppRoutes = () => {
                 <Route path="regions/:regionId" element={
                     <Suspense fallback={<LoadingFallback message="Loading region..." />}>
                         <RegionDetailPage />
+                    </Suspense>
+                } />
+                {/* Explore map — admin-only region order & presentation */}
+                <Route path="explore-map" element={
+                    <Suspense fallback={<LoadingFallback message="Loading explore map..." />}>
+                        <ExploreMapPage />
                     </Suspense>
                 } />
 
