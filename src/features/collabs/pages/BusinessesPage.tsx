@@ -22,7 +22,7 @@ const PAGE_SIZE = 20;
 
 const STATUS_OPTIONS: DropdownOption[] = [
     { value: "", label: "All statuses" },
-    { value: "pending_claim", label: "Pending claim", dot: "bg-amber-500" },
+    { value: "pending_claim", label: "No owner yet", dot: "bg-amber-500" },
     { value: "active", label: "Active", dot: "bg-emerald-500" },
     { value: "suspended", label: "Suspended", dot: "bg-red-500" },
 ];
@@ -78,7 +78,7 @@ export function BusinessesPage() {
     const create = useMutation({
         mutationFn: () => businessesService.create(createPayloadFromDraft(draft)),
         onSuccess: (business) => {
-            toast.success(`${business.name} created — send the owner a claim link next`);
+            toast.success(business.owner_user_id ? `${business.name} is live` : `${business.name} created — assign an owner to make it live`);
             queryClient.invalidateQueries({ queryKey: ["collabs-businesses"] });
             setCreateOpen(false);
             setDraft(emptyBusinessDraft());
@@ -101,7 +101,7 @@ export function BusinessesPage() {
                 actions={
                     isAdmin && (
                         <button type="button" onClick={() => setCreateOpen(true)} className={btnPrimary}>
-                            <Plus className="w-4 h-4" /> Create on behalf
+                            <Plus className="w-4 h-4" /> Create business
                         </button>
                     )
                 }
@@ -207,8 +207,7 @@ export function BusinessesPage() {
                 }
             >
                 <p className="text-sm text-neutral-600 bg-teal-50/60 border border-teal-100 rounded-xl p-3">
-                    Sales-assisted onboarding: the profile starts as <strong>pending claim</strong> and verified. After creating it, send the
-                    owner a claim link — they verify by OTP to the listed phone and become the owner.
+                    Add the owner's user ID or email and the business goes live straight away, with Partner Portal access for them. Without an owner it waits as <strong>no owner yet</strong>.
                 </p>
                 <BusinessFormFields draft={draft} onChange={setDraft} mode="create" idPrefix="biz-create" />
             </Modal>

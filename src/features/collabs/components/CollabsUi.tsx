@@ -123,8 +123,11 @@ const STATUS_TONE_OF: Record<string, Tone> = {
     free: "neutral",
 };
 
+const STATUS_LABELS: Record<string, string> = { pending_claim: "No owner yet" };
+
 export function StatusPill({ status, label }: { status: string | null | undefined; label?: string }) {
     if (!status) return <span className="text-neutral-400">—</span>;
+    label = label ?? STATUS_LABELS[status];
     const tone = STATUS_TONES[STATUS_TONE_OF[status] ?? "neutral"];
     return (
         <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border whitespace-nowrap ${tone.bg}`}>

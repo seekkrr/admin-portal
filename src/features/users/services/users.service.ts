@@ -182,6 +182,20 @@ export const usersService = {
         return response.data;
     },
 
+    /** Admin switch: turn creator or business access on/off. Returns the updated user. */
+    setAccess: async (
+        userId: string,
+        kind: "creator" | "business",
+        enabled: boolean,
+        businessName?: string,
+    ): Promise<User> => {
+        const response = await api.put<{ success: boolean; user: User }>(API_ENDPOINTS.CORE.USER_ACCESS(userId, kind), {
+            enabled,
+            ...(businessName ? { business_name: businessName } : {}),
+        });
+        return response.data.user;
+    },
+
     promoteToCreator: async (userId: string): Promise<User> => {
         const response = await api.post<{ success: boolean; user: User }>(
             API_ENDPOINTS.CORE.USER_PROMOTE_CREATOR(userId)

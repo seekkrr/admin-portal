@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-    ArrowLeft, Store, BadgeCheck, Save, Users, Send, MessageCircle, Clock, ShieldCheck, Sparkles, Receipt, Info, ExternalLink, GitPullRequestArrow,
+    ArrowLeft, Store, BadgeCheck, Save, Users, Sparkles, Receipt, Info, ExternalLink, GitPullRequestArrow,
 } from "lucide-react";
 import { AccessDenied } from "@components/AccessDenied";
 import { LoadingFallback } from "@components/LoadingFallback";
@@ -12,13 +12,14 @@ import { businessesService } from "../services/businesses.service";
 import { collabsAdminService } from "../services/collabs-admin.service";
 import { useCollabAccess } from "../roles";
 import {
-    Chip, CopyButton, DetailRow, Field, LoadingButtonIcon, MonoId, SectionCard, StatusPill, btnPrimary, inputClass, thClass,
+    Chip, DetailRow, LoadingButtonIcon, MonoId, SectionCard, StatusPill, btnPrimary, thClass,
 } from "../components/CollabsUi";
 import { BusinessFormFields } from "../components/BusinessFormFields";
 import { OverridePanel } from "../components/OverridePanel";
+import { OwnerPanel } from "../components/OwnerPanel";
 import { diffBusinessDraft, draftFromBusiness, slugError, type BusinessDraft } from "../businessDraft";
-import { fmtDate, fmtDateTime, humanize, whatsappShareUrl } from "../utils";
-import type { AdminBusiness, ClaimInvite } from "../types";
+import { fmtDate, fmtDateTime, humanize } from "../utils";
+import type { AdminBusiness } from "../types";
 
 function EditBusinessForm({ business, canEdit }: { business: AdminBusiness; canEdit: boolean }) {
     const queryClient = useQueryClient();
@@ -65,90 +66,6 @@ function EditBusinessForm({ business, canEdit }: { business: AdminBusiness; canE
             }
         >
             <BusinessFormFields draft={draft} onChange={setDraft} mode="edit" disabled={!canEdit || save.isPending} idPrefix={`biz-${business.id}`} />
-        </SectionCard>
-    );
-}
-
-function ClaimLinkPanel({ business }: { business: AdminBusiness }) {
-    const [phone, setPhone] = useState(business.contact_phone ?? "");
-    const [invite, setInvite] = useState<ClaimInvite | null>(null);
-
-    const create = useMutation({
-        mutationFn: () => businessesService.createClaimInvite(business.id, phone.trim() || undefined),
-        onSuccess: (inv) => {
-            setInvite(inv);
-            toast.success("Claim link created");
-        },
-        onError: (e: Error) => toast.error(e.message || "Failed to create claim link"),
-    });
-
-    if (business.owner_user_id) {
-        return (
-            <SectionCard title="Claim status" icon={ShieldCheck}>
-                <div className="space-y-2 text-sm">
-                    <p className="flex items-center gap-2 text-emerald-700 font-medium">
-                        <BadgeCheck className="w-4 h-4" /> Claimed
-                    </p>
-                    <DetailRow label="Owner" value={<MonoId id={business.owner_user_id} short={false} />} />
-                    <DetailRow label="Claimed" value={fmtDateTime(business.claimed_at)} />
-                </div>
-            </SectionCard>
-        );
-    }
-
-    const message = invite
-        ? `Hi! ${business.name} is listed on SeekKrr. Claim your business profile here to start running creator collabs: ${invite.claim_url}`
-        : "";
-
-    return (
-        <SectionCard title="Send claim link" icon={Send}>
-            <div className="space-y-4">
-                <p className="text-xs text-neutral-500">
-                    Not yet claimed. Generate a single-use link for the owner; claiming verifies by OTP to the phone below.
-                </p>
-                <Field label="Owner phone" htmlFor={`claim-phone-${business.id}`} hint="Optional — defaults to the business contact phone.">
-                    <input
-                        id={`claim-phone-${business.id}`}
-                        type="tel"
-                        maxLength={20}
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        className={inputClass}
-                        placeholder="+91…"
-                    />
-                </Field>
-                <button type="button" onClick={() => create.mutate()} disabled={create.isPending} className={`${btnPrimary} w-full`}>
-                    <LoadingButtonIcon loading={create.isPending} icon={Send} />
-                    {invite ? "Generate a new link" : "Generate claim link"}
-                </button>
-
-                {invite && (
-                    <div className="p-3 rounded-xl border border-teal-200 bg-teal-50/40 space-y-3">
-                        <div className="flex items-center gap-2">
-                            <input readOnly value={invite.claim_url} className={`${inputClass} font-mono text-xs`} onFocus={(e) => e.currentTarget.select()} />
-                            <CopyButton value={invite.claim_url} />
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <a
-                                href={whatsappShareUrl(message)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700"
-                            >
-                                <MessageCircle className="w-3.5 h-3.5" /> Share on WhatsApp
-                            </a>
-                            <CopyButton value={message} label="Copy message" />
-                        </div>
-                        <div className="text-xs text-neutral-600 space-y-1">
-                            <p className="flex items-center gap-1.5">
-                                <Clock className="w-3.5 h-3.5" /> Expires {fmtDateTime(invite.expires_at)}
-                            </p>
-                            {invite.phone && <p>Bound to {invite.phone}</p>}
-                            {invite.requires_phone_verification && <p>The owner will verify by OTP before claiming.</p>}
-                        </div>
-                    </div>
-                )}
-            </div>
         </SectionCard>
     );
 }
@@ -295,7 +212,7 @@ export function BusinessDetailPage() {
                     <SectionCard title={`Team members (${business.members.length})`} icon={Users} bodyClassName="p-0">
                         <p className="px-6 pt-4 text-xs text-neutral-500">Read-only. Owners manage their team (invite, roles, removal) from the app or Partner Portal.</p>
                         {business.members.length === 0 ? (
-                            <p className="p-6 text-center text-sm text-neutral-400">No members yet — the profile hasn't been claimed.</p>
+                            <p className="p-6 text-center text-sm text-neutral-400">No members yet — assign an owner.</p>
                         ) : (
                             <table className="w-full text-sm mt-2">
                                 <thead>
@@ -326,15 +243,7 @@ export function BusinessDetailPage() {
                 </div>
 
                 <div className="space-y-4">
-                    {isAdmin ? (
-                        <ClaimLinkPanel key={business.id} business={business} />
-                    ) : (
-                        !business.owner_user_id && (
-                            <SectionCard title="Claim status" icon={ShieldCheck}>
-                                <p className="text-sm text-neutral-500">Not yet claimed. An admin can send the owner a claim link.</p>
-                            </SectionCard>
-                        )
-                    )}
+                    <OwnerPanel key={business.id} business={business} canEdit={isAdmin} />
 
                     {isAdmin && (
                         <SectionCard title="Plan override" icon={Receipt}>

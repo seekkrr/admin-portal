@@ -6,7 +6,7 @@ import { slugError, type BusinessDraft } from "../businessDraft";
 import type { BusinessStatus } from "../types";
 
 const STATUSES: { value: BusinessStatus; label: string }[] = [
-    { value: "pending_claim", label: "Pending claim" },
+    { value: "pending_claim", label: "No owner yet" },
     { value: "active", label: "Active" },
     { value: "suspended", label: "Suspended" },
 ];
@@ -14,7 +14,7 @@ const STATUSES: { value: BusinessStatus; label: string }[] = [
 /**
  * Business profile fields shared by "Create on behalf" and the admin edit
  * form. Status/verified only exist in edit mode (create always starts as
- * pending_claim + verified).
+ * verified; it is live once it has an owner).
  */
 export function BusinessFormFields({
     draft,
@@ -46,6 +46,24 @@ export function BusinessFormFields({
                     placeholder="e.g. Garden Café Bir"
                 />
             </Field>
+            {mode === "create" && (
+                <Field
+                    label="Owner"
+                    htmlFor={`${idPrefix}-owner`}
+                    hint="User ID or the email they sign in with. The business goes live and they get the Partner Portal straight away. Leave empty to assign later."
+                >
+                    <input
+                        id={`${idPrefix}-owner`}
+                        type="text"
+                        maxLength={255}
+                        value={draft.owner}
+                        disabled={disabled}
+                        onChange={(e) => set("owner", e.target.value)}
+                        className={inputClass}
+                        placeholder="User ID or email"
+                    />
+                </Field>
+            )}
             <Field label="Tagline" htmlFor={`${idPrefix}-tagline`}>
                 <input
                     id={`${idPrefix}-tagline`}
@@ -76,7 +94,7 @@ export function BusinessFormFields({
                 />
             </Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Contact phone" htmlFor={`${idPrefix}-phone`} hint="Used for claim-link OTP verification.">
+                <Field label="Contact phone" htmlFor={`${idPrefix}-phone`} hint="For SeekKrr to reach the business. Not shown publicly.">
                     <input
                         id={`${idPrefix}-phone`}
                         type="tel"
@@ -153,7 +171,7 @@ export function BusinessFormFields({
                 <div className="pt-2 border-t border-neutral-100 space-y-4">
                     <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Status</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-                        <Field label="Status" htmlFor={`${idPrefix}-status`} hint="Active requires a claimed owner.">
+                        <Field label="Status" htmlFor={`${idPrefix}-status`} hint="Active requires an owner.">
                             <select
                                 id={`${idPrefix}-status`}
                                 value={draft.status}

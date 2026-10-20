@@ -49,6 +49,8 @@ export const API_ENDPOINTS = {
         USER_POINTS_ADD: (id: string) => `/api/v2/users/${id}/points/add`,
         USER_POINTS_DEDUCT: (id: string) => `/api/v2/users/${id}/points/deduct`,
         USER_PROMOTE_CREATOR: (id: string) => `/api/v2/users/${id}/promote-creator`,
+        // Admin on/off switches (PUT { enabled, business_name? }).
+        USER_ACCESS: (id: string, kind: "creator" | "business") => `/api/v2/users/${id}/${kind}`,
     },
     CREATOR_APPLICATIONS: {
         LIST: "/api/v2/creator-applications",
@@ -236,7 +238,7 @@ export const API_ENDPOINTS = {
         BASE: "/api/v2/businesses/admin",
         CATEGORIES: "/api/v2/businesses/categories",
         BY_ID: (id: string) => `/api/v2/businesses/admin/${id}`,
-        CLAIM_INVITES: (id: string) => `/api/v2/businesses/admin/${id}/claim-invites`,
+        OWNER: (id: string) => `/api/v2/businesses/admin/${id}/owner`,
     },
     COLLABS_ADMIN: {
         ANALYTICS: "/api/v2/admin/collabs/analytics",

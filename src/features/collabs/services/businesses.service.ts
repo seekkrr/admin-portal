@@ -8,7 +8,6 @@ import type {
     BusinessCategory,
     BusinessApplicationsListResponse,
     BusinessesListResponse,
-    ClaimInvite,
     CreateBusinessPayload,
     ListBusinessApplicationsParams,
     ListBusinessesParams,
@@ -17,7 +16,7 @@ import type {
 
 /**
  * Business profiles (admin) + business applications intake.
- * GETs are open to moderators; create / PATCH / claim invites need admin.
+ * GETs are open to moderators; create / PATCH / owner changes need admin.
  * Applications approve/reject are allowed for moderators too.
  */
 export const businessesService = {
@@ -47,11 +46,10 @@ export const businessesService = {
         return data.business;
     },
 
-    createClaimInvite: async (id: string, phone?: string): Promise<ClaimInvite> => {
-        const { data } = await api.post<{ invite: ClaimInvite }>(API_ENDPOINTS.BUSINESSES_ADMIN.CLAIM_INVITES(id), {
-            phone: phone || null,
-        });
-        return data.invite;
+    /** Make a user (ID or email) the owner; the business goes live. */
+    setOwner: async (id: string, userRef: string): Promise<AdminBusiness> => {
+        const { data } = await api.put<{ business: AdminBusiness }>(API_ENDPOINTS.BUSINESSES_ADMIN.OWNER(id), { user_id: userRef });
+        return data.business;
     },
 
     // ── Business applications ──

@@ -1,9 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-    Search, Users, Trash2, Ban, Store,
-    Shield, RefreshCw, AlertTriangle, CheckCircle2, XCircle,
-    X, Filter, Coins, Star, TrendingUp
+    Search, Users, Trash2, Ban, Shield, RefreshCw, AlertTriangle, CheckCircle2, X, Filter, Coins, Star, TrendingUp
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@store/auth.store";
@@ -11,7 +9,6 @@ import { AccessDenied } from "@components/AccessDenied";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { usersService } from "../services/users.service";
 import { isRedundantRoleChange, effectiveRole } from "../roles";
-import { creatorsService } from "@/features/creators/services/creators.service";
 import { Badge } from "@/components/ui/Badge";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Pagination } from "@/components/ui/Pagination";
@@ -62,8 +59,40 @@ type ConfirmAction =
     | { type: "bulk-delete"; payload: { ids: string[] } }
     | { type: "single-delete"; payload: { userId: string } }
     | { type: "promote"; payload: { userId: string; role: string; current: string[] } }
-    | { type: "promote-creator"; payload: { userId: string; name: string } }
-    | { type: "promote-business"; payload: { userId: string; name: string; current: string[] } };
+    | { type: "access"; payload: { userId: string; name: string; kind: AccessKind; enabled: boolean } };
+
+type AccessKind = "creator" | "business";
+
+/** On/off switch for creator or business access. */
+function AccessSwitch({ on, label, onToggle, disabled }: { on: boolean; label: string; onToggle: () => void; disabled?: boolean }) {
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={on}
+            aria-label={label}
+            title={label}
+            disabled={disabled}
+            onClick={onToggle}
+            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:opacity-50 ${on ? "bg-emerald-500" : "bg-neutral-300"}`}
+        >
+            <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${on ? "translate-x-4" : "translate-x-0.5"}`} />
+        </button>
+    );
+}
+
+const ACCESS_COPY: Record<AccessKind, { on: (n: string) => string; off: (n: string) => string; label: string }> = {
+    creator: {
+        label: "Creator",
+        on: (n) => `"${n}" becomes a creator and can use the Creator Portal straight away.`,
+        off: (n) => `"${n}" loses Creator Portal access. Their quests and history are kept, and turning this back on restores them.`,
+    },
+    business: {
+        label: "Business",
+        on: (n) => `"${n}" gets an active business they own and can open the Partner Portal straight away. If they had a business before, it comes back.`,
+        off: (n) => `"${n}" loses Partner Portal access and their business is hidden from the app and website. Nothing is deleted; turning this back on restores it.`,
+    },
+};
 
 // ---- Filter Dropdown Options ----
 const STATUS_OPTIONS: DropdownOption[] = [
@@ -315,15 +344,17 @@ export function UsersPage() {
         onError: (err: Error) => { toast.error(err.message); setConfirmAction(null); },
     });
 
-    const promoteCreatorMutation = useMutation({
-        mutationFn: (userId: string) => creatorsService.provisionCreator(userId),
-        onSuccess: () => {
-            toast.success("User promoted to creator");
+    const [accessBusinessName, setAccessBusinessName] = useState("");
+    const accessMutation = useMutation({
+        mutationFn: ({ userId, kind, enabled }: { userId: string; kind: AccessKind; enabled: boolean }) =>
+            usersService.setAccess(userId, kind, enabled, kind === "business" && enabled ? accessBusinessName.trim() || undefined : undefined),
+        onSuccess: (_, { kind, enabled }) => {
+            toast.success(`${ACCESS_COPY[kind].label} access turned ${enabled ? "on" : "off"}`);
             queryClient.invalidateQueries({ queryKey: ["admin-users"] });
-            queryClient.invalidateQueries({ queryKey: ["admin-creators"] });
             queryClient.invalidateQueries({ queryKey: ["admin-user-stats"] });
-            queryClient.invalidateQueries({ queryKey: ["admin-creator-platform-stats"] });
+            queryClient.invalidateQueries({ queryKey: kind === "creator" ? ["admin-creators"] : ["collabs-businesses"] });
             setConfirmAction(null);
+            setAccessBusinessName("");
         },
         onError: (err: Error) => { toast.error(err.message); setConfirmAction(null); },
     });
@@ -361,7 +392,7 @@ export function UsersPage() {
         setPage(1);
     }, []);
 
-    const isBusy = bulkActionMutation.isPending || roleMutation.isPending || deleteMutation.isPending || promoteCreatorMutation.isPending;
+    const isBusy = bulkActionMutation.isPending || roleMutation.isPending || deleteMutation.isPending || accessMutation.isPending;
     const allOnPageSelected = filteredUsers.length > 0 && filteredUsers.every((u) => selectedIds.has(u._id));
 
     // ---- Confirm handler (type-safe via switch) ----
@@ -380,18 +411,11 @@ export function UsersPage() {
             case "promote":
                 roleMutation.mutate(confirmAction.payload);
                 break;
-            case "promote-creator":
-                promoteCreatorMutation.mutate(confirmAction.payload.userId);
-                break;
-            case "promote-business":
-                roleMutation.mutate({
-                    userId: confirmAction.payload.userId,
-                    role: "business",
-                    current: confirmAction.payload.current
-                });
+            case "access":
+                accessMutation.mutate(confirmAction.payload);
                 break;
         }
-    }, [confirmAction, bulkActionMutation, deleteMutation, roleMutation, promoteCreatorMutation, hardDelete]);
+    }, [confirmAction, bulkActionMutation, deleteMutation, roleMutation, accessMutation, hardDelete]);
 
     // ---- Render ----
     if (!isAdmin) {
@@ -576,6 +600,7 @@ export function UsersPage() {
                                     <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Role</th>
                                     <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Status</th>
                                     <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Creator</th>
+                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Business</th>
                                     <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Joined</th>
                                     <th className="text-right px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Actions</th>
                                 </tr>
@@ -607,9 +632,6 @@ export function UsersPage() {
                                             </td>
                                             <td className="px-4 py-3 space-x-1">
                                                 <Badge label={rc.label} styles={rc.bg} />
-                                                {u.role?.includes("business") && (
-                                                    <Badge label="Business" styles="bg-orange-50 text-orange-700 border-orange-200" />
-                                                )}
                                             </td>
                                             <td className="px-4 py-3">
                                                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${sc.bg}`}>
@@ -617,13 +639,24 @@ export function UsersPage() {
                                                     {sc.label}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3">
-                                                {u.is_creator ? (
-                                                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                                                ) : (
-                                                    <XCircle className="w-4 h-4 text-neutral-300" />
-                                                )}
-                                            </td>
+                                            {(["creator", "business"] as const).map((kind) => {
+                                                const on = kind === "creator" ? !!u.is_creator : !!u.role?.includes("business");
+                                                return (
+                                                    <td key={kind} className="px-4 py-3">
+                                                        <AccessSwitch
+                                                            on={on}
+                                                            label={`${ACCESS_COPY[kind].label} access ${on ? "on" : "off"} for ${u.first_name} ${u.last_name}`}
+                                                            disabled={isBusy}
+                                                            onToggle={() =>
+                                                                setConfirmAction({
+                                                                    type: "access",
+                                                                    payload: { userId: u._id, name: `${u.first_name} ${u.last_name}`.trim(), kind, enabled: !on },
+                                                                })
+                                                            }
+                                                        />
+                                                    </td>
+                                                );
+                                            })}
                                             <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">
                                                 {new Date(u.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
                                             </td>
@@ -636,24 +669,6 @@ export function UsersPage() {
                                                     >
                                                         <Coins className="w-4 h-4" />
                                                     </button>
-                                                    {!u.is_creator && (
-                                                        <button
-                                                            onClick={() => setConfirmAction({ type: "promote-creator", payload: { userId: u._id, name: `${u.first_name} ${u.last_name}` } })}
-                                                            title="Promote to creator"
-                                                            className="p-1.5 rounded-lg text-neutral-400 hover:text-teal-600 hover:bg-teal-50 transition-colors"
-                                                        >
-                                                            <Star className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                    {!u.role?.includes("business") && (
-                                                        <button
-                                                            onClick={() => setConfirmAction({ type: "promote-business", payload: { userId: u._id, name: `${u.first_name} ${u.last_name}`, current: u.role ?? [] } })}
-                                                            title="Promote to business"
-                                                            className="p-1.5 rounded-lg text-neutral-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
-                                                        >
-                                                            <Store className="w-4 h-4" />
-                                                        </button>
-                                                    )}
                                                     <button
                                                         onClick={() => setPromotingUser(u)}
                                                         title="Change role"
@@ -795,29 +810,42 @@ export function UsersPage() {
                 isPending={roleMutation.isPending}
             />
 
-            {/* Promote to Creator Confirmation */}
-            <ConfirmModal
-                open={confirmAction?.type === "promote-creator"}
-                title="Promote to Creator"
-                message={`This will promote "${confirmAction?.type === "promote-creator" ? confirmAction.payload.name : ""}" to creator status, bypassing the application workflow. This action cannot be reversed automatically.`}
-                confirmLabel="Promote to Creator"
-                confirmStyle="bg-teal-600 hover:bg-teal-700"
-                onConfirm={executeConfirmedAction}
-                onCancel={() => setConfirmAction(null)}
-                isPending={promoteCreatorMutation.isPending}
-            />
-
-            {/* Promote to Business Confirmation */}
-            <ConfirmModal
-                open={confirmAction?.type === "promote-business"}
-                title="Promote to Business"
-                message={`This will grant the business role to "${confirmAction?.type === "promote-business" ? confirmAction.payload.name : ""}". They will gain access to the Creator Portal's Business Dashboard.`}
-                confirmLabel="Promote to Business"
-                confirmStyle="bg-orange-600 hover:bg-orange-700"
-                onConfirm={executeConfirmedAction}
-                onCancel={() => setConfirmAction(null)}
-                isPending={roleMutation.isPending}
-            />
+            {/* Creator / Business access switch */}
+            {confirmAction?.type === "access" && (() => {
+                const { kind, enabled, name } = confirmAction.payload;
+                const copy = ACCESS_COPY[kind];
+                return (
+                    <ConfirmModal
+                        open
+                        title={`Turn ${enabled ? "on" : "off"} ${copy.label.toLowerCase()} access`}
+                        message={enabled ? copy.on(name) : copy.off(name)}
+                        confirmLabel={enabled ? "Turn on" : "Turn off"}
+                        confirmStyle={enabled ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"}
+                        theme={enabled ? "info" : "warning"}
+                        onConfirm={executeConfirmedAction}
+                        onCancel={() => { setConfirmAction(null); setAccessBusinessName(""); }}
+                        isPending={accessMutation.isPending}
+                    >
+                        {kind === "business" && enabled && (
+                            <div className="mt-4 text-left">
+                                <label htmlFor="access-business-name" className="block text-sm font-medium text-neutral-700 mb-1">
+                                    Business name <span className="text-neutral-400 font-normal">(optional)</span>
+                                </label>
+                                <input
+                                    id="access-business-name"
+                                    type="text"
+                                    maxLength={150}
+                                    value={accessBusinessName}
+                                    onChange={(e) => setAccessBusinessName(e.target.value)}
+                                    placeholder={`${name.split(" ")[0] || "Their"}'s business`}
+                                    className="w-full px-3 py-2 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                                />
+                                <p className="mt-1 text-xs text-neutral-500">They can change it in the Partner Portal.</p>
+                            </div>
+                        )}
+                    </ConfirmModal>
+                );
+            })()}
 
             {/* Loading overlay for mutations */}
             {isBusy && !confirmAction && (

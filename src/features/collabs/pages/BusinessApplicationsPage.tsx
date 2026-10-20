@@ -189,7 +189,7 @@ export function BusinessApplicationsPage() {
                                     {approvedBusiness.name} · <StatusPill status={approvedBusiness.status} /> · plan {approvedBusiness.plan_code}
                                     {approvedBusiness.owner_user_id
                                         ? " · owner attached (they now set their redeem code in the app)"
-                                        : " · no SeekKrr account matched the applicant yet — send a claim link from the business page"}
+                                        : " · no SeekKrr account matched the applicant yet — assign an owner from the business page"}
                                 </p>
                                 <Link
                                     to={`/collabs/businesses/${approvedBusiness.id}`}
