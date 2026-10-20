@@ -6,7 +6,7 @@ import { useAuthStore } from "@/store/auth.store";
  *             reports, fraud flags, creator verification, business applications.
  *  - admin  = admin | super_admin → money (plans, coupons, subscriptions,
  *             overrides), algorithm (match config), rollout/terms, business
- *             create/edit/claim invites, forced application transitions.
+ *             create/edit/owners, forced application transitions.
  */
 export const COLLAB_STAFF_ROLES = ["admin", "super_admin", "moderator"];
 export const COLLAB_ADMIN_ROLES = ["admin", "super_admin"];

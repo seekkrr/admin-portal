@@ -121,8 +121,3 @@ export function socialProfileUrl(platform: string, handle: string): string | nul
             return null;
     }
 }
-
-/** WhatsApp share link for a claim URL (no recipient — admin picks the chat). */
-export function whatsappShareUrl(text: string): string {
-    return `https://wa.me/?text=${encodeURIComponent(text)}`;
-}

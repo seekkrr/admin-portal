@@ -505,9 +505,10 @@ export interface UpdateBusinessPayload {
     marker_ids?: string[];
 }
 
-/** POST /businesses/admin — created as pending_claim + verified. */
+/** POST /businesses/admin — live straight away when an owner (user ID or email) is given. */
 export interface CreateBusinessPayload {
     name: string;
+    owner_user_id?: string;
     tagline?: string;
     description?: string;
     categories?: string[];
@@ -526,13 +527,6 @@ export interface CreateBusinessPayload {
 export interface BusinessCategory {
     name: string;
     sub_categories: string[];
-}
-
-export interface ClaimInvite {
-    claim_url: string;
-    expires_at: string | null;
-    phone: string | null;
-    requires_phone_verification: boolean;
 }
 
 // ── Business applications ──────────────────────────────────

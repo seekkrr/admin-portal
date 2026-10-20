@@ -3,6 +3,8 @@ import type { AdminBusiness, BusinessStatus, CreateBusinessPayload, UpdateBusine
 /** Editable form state for a business profile (create + admin edit). */
 export interface BusinessDraft {
     name: string;
+    /** Create only: owner's user ID or email. */
+    owner: string;
     tagline: string;
     description: string;
     categories: string[];
@@ -21,6 +23,7 @@ export interface BusinessDraft {
 export function emptyBusinessDraft(): BusinessDraft {
     return {
         name: "",
+        owner: "",
         tagline: "",
         description: "",
         categories: [],
@@ -40,6 +43,7 @@ export function emptyBusinessDraft(): BusinessDraft {
 export function draftFromBusiness(b: AdminBusiness): BusinessDraft {
     return {
         name: b.name ?? "",
+        owner: "",
         tagline: b.tagline ?? "",
         description: b.description ?? "",
         categories: b.categories ?? [],
@@ -85,6 +89,7 @@ export function diffBusinessDraft(draft: BusinessDraft, b: AdminBusiness): Updat
 
 export function createPayloadFromDraft(draft: BusinessDraft): CreateBusinessPayload {
     const out: CreateBusinessPayload = { name: draft.name.trim() };
+    if (draft.owner.trim()) out.owner_user_id = draft.owner.trim();
     if (draft.tagline.trim()) out.tagline = draft.tagline.trim();
     if (draft.description.trim()) out.description = draft.description.trim();
     if (draft.categories.length) out.categories = draft.categories;

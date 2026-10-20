@@ -103,7 +103,7 @@ export function CollabsOverviewPage() {
                                 <AnalyticsCard title="Active businesses" value={data.businesses.active} icon={Store} colorClass="ring-teal-100 text-teal-600" />
                             </Link>
                             <Link to="/collabs/businesses?status=pending_claim">
-                                <AnalyticsCard title="Pending claims" value={data.businesses.pending_claim} icon={Building2} colorClass="ring-amber-100 text-amber-600" subtitle="Created on behalf, not yet claimed" />
+                                <AnalyticsCard title="No owner yet" value={data.businesses.pending_claim} icon={Building2} colorClass="ring-amber-100 text-amber-600" subtitle="Created by an admin, owner not assigned" />
                             </Link>
                             <Link to="/collabs/business-applications">
                                 <AnalyticsCard title="Pending applications" value={data.businesses.pending_applications} icon={Inbox} colorClass="ring-indigo-100 text-indigo-600" />
