@@ -5,6 +5,7 @@ export interface User {
     _id: string;
     first_name: string;
     last_name: string;
+    email?: string | null;
     contact_id: string;
     security_id: string;
     profile_id: string;

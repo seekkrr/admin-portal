@@ -9,6 +9,15 @@ import type { TimelineFilterItem } from "@/types";
 
 const ALLOWED = ["admin", "super_admin", "moderator"];
 
+// Feeds the app's timeline can load; every chip opens one of them.
+const FEEDS = [
+    { key: "travel_logs", label: "Main Quest" },
+    { key: "friends", label: "Friends" },
+    { key: "community", label: "Community" },
+    { key: "all", label: "Everything" },
+] as const;
+const isFeed = (key: string) => FEEDS.some((f) => f.key === key);
+
 export function TimelineFiltersPage() {
     const { user } = useAuthStore();
     const queryClient = useQueryClient();
@@ -32,6 +41,7 @@ export function TimelineFiltersPage() {
 
     const save = async (row: TimelineFilterItem) => {
         if (!row.label.trim()) { toast.error("Label is required"); return; }
+        if (!isFeed(row.key)) { toast.error("Pick which feed this chip opens"); return; }
         try {
             await timelineFiltersService.update(row.id, {
                 key: row.key, label: row.label, icon: row.icon, color: row.color,
@@ -42,11 +52,13 @@ export function TimelineFiltersPage() {
         } catch (e) { toast.error(e instanceof Error ? e.message : "Save failed"); }
     };
 
+    const unusedFeed = FEEDS.find((f) => !rows.some((r) => r.key === f.key));
+
     const add = async () => {
+        if (!unusedFeed) return;
         try {
-            const label = "New Filter";
             await timelineFiltersService.create({
-                label, key: `filter-${Date.now()}`, color: "#003634", order: rows.length,
+                label: unusedFeed.label, key: unusedFeed.key, color: "#003634", order: rows.length,
             });
             toast.success("Filter added");
             queryClient.invalidateQueries({ queryKey: ["admin-timeline-filters"] });
@@ -66,9 +78,10 @@ export function TimelineFiltersPage() {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-neutral-900 tracking-tight">Timeline Filters</h1>
-                    <p className="text-neutral-500 text-sm mt-0.5">Chips shown on the app's Timeline feed</p>
+                    <p className="text-neutral-500 text-sm mt-0.5">Chips shown on the app's Timeline feed. Each one opens a feed; with none set the app shows Main Quest, Friends and Community.</p>
                 </div>
-                <button onClick={add} className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:brightness-105">
+                <button onClick={add} disabled={!unusedFeed} title={unusedFeed ? undefined : "Every feed already has a chip"}
+                    className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:brightness-105 disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
                     <Plus className="w-4 h-4" /> Add filter
                 </button>
             </div>
@@ -90,7 +103,7 @@ export function TimelineFiltersPage() {
                     <div className="space-y-2">
                         <div className="hidden sm:grid grid-cols-12 gap-2 px-1 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
                             <span className="col-span-3">Label</span>
-                            <span className="col-span-3">Key</span>
+                            <span className="col-span-3">Opens feed</span>
                             <span className="col-span-2">Icon</span>
                             <span className="col-span-1">Color</span>
                             <span className="col-span-1">Order</span>
@@ -101,8 +114,16 @@ export function TimelineFiltersPage() {
                             <div key={r.id} className="grid grid-cols-12 gap-2 items-center">
                                 <input className="col-span-3 h-9 rounded-lg border border-neutral-200 px-2 text-sm" value={r.label}
                                     onChange={(e) => patch(r.id, { label: e.target.value })} placeholder="Label" />
-                                <input className="col-span-3 h-9 rounded-lg border border-neutral-200 px-2 text-sm font-mono" value={r.key}
-                                    onChange={(e) => patch(r.id, { key: e.target.value })} placeholder="key" />
+                                <select
+                                    className={`col-span-3 h-9 rounded-lg border px-2 text-sm bg-white ${isFeed(r.key) ? "border-neutral-200" : "border-red-300 text-red-600"}`}
+                                    value={isFeed(r.key) ? r.key : ""}
+                                    title={isFeed(r.key) ? undefined : "Hidden in the app until it opens a feed"}
+                                    onChange={(e) => patch(r.id, { key: e.target.value })}>
+                                    {!isFeed(r.key) && <option value="" disabled>Not shown in app: pick a feed</option>}
+                                    {FEEDS.map((f) => (
+                                        <option key={f.key} value={f.key}>{f.label}</option>
+                                    ))}
+                                </select>
                                 <input className="col-span-2 h-9 rounded-lg border border-neutral-200 px-2 text-sm" value={r.icon ?? ""}
                                     onChange={(e) => patch(r.id, { icon: e.target.value })} placeholder="icon" />
                                 <input type="color" className="col-span-1 h-9 w-full rounded-lg border border-neutral-200" value={r.color || "#003634"}

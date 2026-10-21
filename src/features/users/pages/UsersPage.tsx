@@ -10,6 +10,7 @@ import { LoadingFallback } from "@components/LoadingFallback";
 import { usersService } from "../services/users.service";
 import { isRedundantRoleChange, effectiveRole } from "../roles";
 import { Badge } from "@/components/ui/Badge";
+import { CopyText } from "@/components/ui/CopyText";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Pagination } from "@/components/ui/Pagination";
 import { FilterDropdown } from "@/components/FilterDropdown";
@@ -289,6 +290,7 @@ export function UsersPage() {
         const q = searchInput.trim().toLowerCase();
         return users.filter((u) =>
             `${u.first_name} ${u.last_name}`.toLowerCase().includes(q) ||
+            (u.email ?? "").toLowerCase().includes(q) ||
             u._id.toLowerCase().includes(q)
         );
     }, [users, searchInput, debouncedQuery]);
@@ -486,7 +488,7 @@ export function UsersPage() {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
                         <input
                             type="text"
-                            placeholder="Search by name or ID..."
+                            placeholder="Search by name, email or ID..."
                             value={searchInput}
                             onChange={(e) => setSearchInput(e.target.value)}
                             className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
@@ -596,7 +598,8 @@ export function UsersPage() {
                                             className="w-4 h-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer accent-indigo-600"
                                         />
                                     </th>
-                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Name</th>
+                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Name · User ID</th>
+                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Email</th>
                                     <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Role</th>
                                     <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Status</th>
                                     <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Creator</th>
@@ -628,7 +631,12 @@ export function UsersPage() {
                                                 <div className="font-medium text-neutral-900">
                                                     {u.first_name} {u.last_name}
                                                 </div>
-                                                <div className="text-[11px] text-neutral-400 font-mono mt-0.5">{u._id}</div>
+                                                <div className="text-[11px] text-neutral-400 mt-0.5">
+                                                    <CopyText value={u._id} mono truncate={false} title="Copy user ID" />
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 max-w-[240px] text-neutral-700">
+                                                <CopyText value={u.email} title="Copy email" />
                                             </td>
                                             <td className="px-4 py-3 space-x-1">
                                                 <Badge label={rc.label} styles={rc.bg} />
