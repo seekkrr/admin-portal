@@ -285,5 +285,7 @@ export const API_ENDPOINTS = {
         FEATURE_BY_KEY: (key: string) => `/api/v2/config/features/${key}`,
         TERMS: "/api/v2/terms",
         TERMS_BY_DOC: (doc: string) => `/api/v2/terms/${doc}`,
+        // GET: any signed-in user; PUT: admin|super_admin.
+        PARTNER_PORTAL: "/api/v2/config/partner-portal",
     },
 } as const;

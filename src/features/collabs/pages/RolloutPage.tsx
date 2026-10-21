@@ -1,22 +1,44 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Rocket, Power, Globe, Save, FileText, ExternalLink, Upload } from "lucide-react";
+import { Rocket, Power, Globe, Save, FileText, ExternalLink, Upload, LayoutPanelLeft } from "lucide-react";
 import { AccessDenied } from "@components/AccessDenied";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Card } from "@/components/ui/Card";
 import { platformConfigService } from "../services/platform-config.service";
+import { collabsAdminService } from "../services/collabs-admin.service";
 import { useCollabAccess } from "../roles";
 import { Field, LoadingButtonIcon, PageHeader, PanelState, SectionCard, btnPrimary, inputClass } from "../components/CollabsUi";
 import { RegionMultiSelect } from "../components/CollabPickers";
 import { fmtDateTime } from "../utils";
-import type { FeatureFlag, TermsDoc, TermsVersion } from "../types";
+import type {
+    FeatureFlag,
+    PartnerPortalSection,
+    PartnerPortalSections,
+    PartnerPortalSettings,
+    TermsDoc,
+    TermsVersion,
+    UpdatePartnerPortalPayload,
+} from "../types";
 
 const FLAG_KEY = "collabs";
 
 const TERMS_DOCS: { doc: TermsDoc; label: string; who: string }[] = [
     { doc: "creator_collab_terms", label: "Creator collab terms", who: "creators" },
     { doc: "business_terms", label: "Business terms", who: "business owners" },
+];
+
+const PARTNER_PORTAL_KEY = ["platform-partner-portal"] as const;
+
+const PARTNER_PORTAL_SECTIONS: { key: PartnerPortalSection; label: string; hint: string }[] = [
+    { key: "plans", label: "Plans & billing", hint: "Plan & billing page, plan names, usage limits and upgrade prompts." },
+    { key: "matchmaking", label: "Matchmaking", hint: "Discover creators, match scores, profile reveals and invites." },
+    { key: "attribution", label: "Attribution", hint: "Visits and clicks traced back to each creator and UGC brief." },
+    { key: "content_library", label: "Redemptions & content", hint: "Redemption history and the library of creator content." },
+    { key: "offers", label: "Check-in offers", hint: "Offers shown to explorers who check in at the place." },
+    { key: "team", label: "Team", hint: "Invite managers and staff to help run the business." },
+    { key: "messages", label: "Messages", hint: "Chat threads with creators about each collab." },
+    { key: "blocked_creators", label: "Blocked creators", hint: "Creators the business has blocked, and unblocking them." },
 ];
 
 const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
@@ -134,6 +156,126 @@ function FlagEditor({ flag }: { flag: FeatureFlag }) {
     );
 }
 
+function Switch({ on, onToggle, label, disabled }: { on: boolean; onToggle: () => void; label: string; disabled?: boolean }) {
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={on}
+            aria-label={label}
+            disabled={disabled}
+            onClick={onToggle}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 disabled:opacity-50 ${
+                on ? "bg-teal-600" : "bg-neutral-300"
+            }`}
+        >
+            <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${on ? "translate-x-5" : "translate-x-0.5"}`} />
+        </button>
+    );
+}
+
+function PartnerPortalEditor({ settings }: { settings: PartnerPortalSettings }) {
+    const queryClient = useQueryClient();
+    const [sections, setSections] = useState<PartnerPortalSections>(settings.sections);
+    const [plan, setPlan] = useState(settings.default_plan);
+    const [reason, setReason] = useState("");
+
+    const plansQuery = useQuery({ queryKey: ["collabs-plans"], queryFn: collabsAdminService.listPlans, staleTime: 5 * 60 * 1000 });
+    const planOptions = useMemo(() => {
+        const options = (plansQuery.data ?? [])
+            .filter((p) => p.active || p.code === settings.default_plan)
+            .map((p) => ({ code: p.code, name: p.name ?? p.code }));
+        if (!options.some((o) => o.code === settings.default_plan)) options.unshift({ code: settings.default_plan, name: settings.default_plan });
+        return options;
+    }, [plansQuery.data, settings.default_plan]);
+
+    const changedSections = PARTNER_PORTAL_SECTIONS.filter((s) => sections[s.key] !== settings.sections[s.key]).map((s) => s.key);
+    const planChanged = plan !== settings.default_plan;
+    const dirty = changedSections.length > 0 || planChanged;
+
+    const save = useMutation({
+        mutationFn: () => {
+            const payload: UpdatePartnerPortalPayload = {};
+            if (changedSections.length) payload.sections = Object.fromEntries(changedSections.map((k) => [k, sections[k]]));
+            if (planChanged) payload.default_plan = plan;
+            if (reason.trim()) payload.reason = reason.trim();
+            return platformConfigService.updatePartnerPortal(payload);
+        },
+        onSuccess: (updated) => {
+            queryClient.setQueryData(PARTNER_PORTAL_KEY, updated);
+            toast.success("Partner Portal settings saved");
+        },
+        onError: (e: Error) => toast.error(e.message || "Failed to save the Partner Portal settings"),
+    });
+
+    return (
+        <SectionCard
+            title="Partner Portal sections"
+            icon={LayoutPanelLeft}
+            actions={
+                <button type="button" onClick={() => save.mutate()} disabled={!dirty || save.isPending} className={btnPrimary}>
+                    <LoadingButtonIcon loading={save.isPending} icon={Save} /> Save
+                </button>
+            }
+        >
+            <p className="text-sm text-neutral-500 mb-4">
+                Choose what businesses see in the Partner Portal and the app.
+                {settings.updated_at ? ` Last changed ${fmtDateTime(settings.updated_at)}.` : ""}
+            </p>
+            <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {PARTNER_PORTAL_SECTIONS.map((s) => {
+                    const on = sections[s.key];
+                    return (
+                        <li key={s.key} className="flex items-start justify-between gap-4 p-3 rounded-xl border border-neutral-100 bg-neutral-50/60">
+                            <div className="min-w-0">
+                                <p className="text-sm font-medium text-neutral-900">
+                                    {s.label}
+                                    <span className={`ml-2 text-xs font-semibold ${on ? "text-teal-700" : "text-neutral-400"}`}>{on ? "Shown" : "Hidden"}</span>
+                                </p>
+                                <p className="text-xs text-neutral-500 mt-0.5">{s.hint}</p>
+                            </div>
+                            <Switch
+                                on={on}
+                                label={s.label}
+                                disabled={save.isPending}
+                                onToggle={() => setSections((prev) => ({ ...prev, [s.key]: !prev[s.key] }))}
+                            />
+                        </li>
+                    );
+                })}
+            </ul>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-5">
+                <Field label="Plan for every business" htmlFor="pp-default-plan" hint="Used for every business without an override. Growth for now.">
+                    <select
+                        id="pp-default-plan"
+                        value={plan}
+                        onChange={(e) => setPlan(e.target.value)}
+                        className={inputClass}
+                        disabled={plansQuery.isLoading || save.isPending}
+                    >
+                        {planOptions.map((p) => (
+                            <option key={p.code} value={p.code}>
+                                {p.name}
+                            </option>
+                        ))}
+                    </select>
+                </Field>
+                <Field label="Reason" htmlFor="pp-reason" hint="Optional. Saved to the admin audit log.">
+                    <input
+                        id="pp-reason"
+                        type="text"
+                        maxLength={300}
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                        className={inputClass}
+                        placeholder="e.g. Hiding plans until billing launches"
+                    />
+                </Field>
+            </div>
+        </SectionCard>
+    );
+}
+
 function TermsCard({ doc, label, who, current }: { doc: TermsDoc; label: string; who: string; current: TermsVersion | undefined }) {
     const queryClient = useQueryClient();
     const [version, setVersion] = useState("");
@@ -201,6 +343,7 @@ export function RolloutPage() {
     const { isAdmin } = useCollabAccess();
     const flagsQuery = useQuery({ queryKey: ["platform-feature-flags"], queryFn: platformConfigService.listFlags, enabled: isAdmin });
     const termsQuery = useQuery({ queryKey: ["platform-terms"], queryFn: platformConfigService.getTerms, enabled: isAdmin });
+    const portalQuery = useQuery({ queryKey: PARTNER_PORTAL_KEY, queryFn: platformConfigService.getPartnerPortal, enabled: isAdmin });
 
     if (!isAdmin) return <AccessDenied message="Only admins can change the collabs rollout." />;
 
@@ -210,10 +353,26 @@ export function RolloutPage() {
 
     return (
         <div className="p-6 max-w-[1200px] mx-auto space-y-5 animate-fade-in">
-            <PageHeader icon={Rocket} title="Rollout" gradient="from-amber-500 to-amber-600" subtitle="Feature flag, region rollout and collab terms versions" />
+            <PageHeader icon={Rocket} title="Rollout" gradient="from-amber-500 to-amber-600" subtitle="Feature flag, region rollout, Partner Portal sections and collab terms versions" />
 
             <PanelState isLoading={flagsQuery.isLoading} error={flagsQuery.error} isEmpty={!flag} emptyIcon={Rocket} emptyText="Feature flag unavailable" onRetry={() => flagsQuery.refetch()}>
                 {flag && <FlagEditor key={`${flag.key}-${flag.updated_at ?? ""}`} flag={flag} />}
+            </PanelState>
+
+            <PanelState
+                isLoading={portalQuery.isLoading}
+                error={portalQuery.error}
+                isEmpty={!portalQuery.data}
+                emptyIcon={LayoutPanelLeft}
+                emptyText="Partner Portal settings unavailable"
+                onRetry={() => portalQuery.refetch()}
+            >
+                {portalQuery.data && (
+                    <PartnerPortalEditor
+                        key={`${portalQuery.data.updated_at ?? ""}-${portalQuery.data.default_plan}-${JSON.stringify(portalQuery.data.sections)}`}
+                        settings={portalQuery.data}
+                    />
+                )}
             </PanelState>
 
             <div>

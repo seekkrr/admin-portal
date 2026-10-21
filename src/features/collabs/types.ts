@@ -591,6 +591,34 @@ export interface UpdateFeatureFlagPayload {
     min_app_version?: string;
 }
 
+// ── Platform config: Partner Portal sections ───────────────
+
+export type PartnerPortalSection =
+    | "plans"
+    | "matchmaking"
+    | "attribution"
+    | "content_library"
+    | "offers"
+    | "team"
+    | "messages"
+    | "blocked_creators";
+
+export type PartnerPortalSections = Record<PartnerPortalSection, boolean>;
+
+/** What businesses see in the Partner Portal and the app (one platform-wide document). */
+export interface PartnerPortalSettings {
+    sections: PartnerPortalSections;
+    /** Plan every business gets unless it has an override or a paid subscription. */
+    default_plan: string;
+    updated_at?: string | null;
+}
+
+export interface UpdatePartnerPortalPayload {
+    sections?: Partial<PartnerPortalSections>;
+    default_plan?: string;
+    reason?: string;
+}
+
 export type TermsDoc = "creator_collab_terms" | "business_terms";
 
 export interface TermsVersion {
