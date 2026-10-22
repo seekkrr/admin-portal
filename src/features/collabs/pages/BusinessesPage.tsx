@@ -10,7 +10,7 @@ import { businessesService } from "../services/businesses.service";
 import { useCollabAccess } from "../roles";
 import { useBusinessCategories, useDebouncedValue } from "../hooks";
 import {
-    Chip, LoadingButtonIcon, Modal, PageHeader, PanelState, SearchBox, StatusPill, Toolbar, btnPrimary, btnSecondary, thClass,
+    Chip, FeatureChips, LoadingButtonIcon, Modal, PageHeader, PanelState, SearchBox, StatusPill, Toolbar, btnPrimary, btnSecondary, thClass,
 } from "../components/CollabsUi";
 import { RegionName } from "../components/CollabPickers";
 import { BusinessFormFields } from "../components/BusinessFormFields";
@@ -138,6 +138,7 @@ export function BusinessesPage() {
                                     <th className={thClass}>Region</th>
                                     <th className={thClass}>Status</th>
                                     <th className={thClass}>Plan</th>
+                                    <th className={thClass}>Features</th>
                                     <th className={thClass}>Website</th>
                                     <th className={thClass}>Places</th>
                                     <th className={thClass}>Created</th>
@@ -162,6 +163,11 @@ export function BusinessesPage() {
                                             <StatusPill status={b.status} />
                                         </td>
                                         <td className="px-4 py-3 text-neutral-600 capitalize">{b.plan_code?.replace(/_/g, " ") ?? "free"}</td>
+                                        <td className="px-4 py-3">
+                                            <div className="flex flex-wrap gap-1">
+                                                <FeatureChips business={b} />
+                                            </div>
+                                        </td>
                                         <td className="px-4 py-3">
                                             <div className="flex flex-wrap gap-1">
                                                 {b.website_featured && (

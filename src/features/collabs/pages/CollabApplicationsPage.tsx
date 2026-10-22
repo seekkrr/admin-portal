@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { GitPullRequestArrow, Filter, Zap, ExternalLink, CheckCircle2, XCircle, Star, History, Link as LinkIcon } from "lucide-react";
+import { GitPullRequestArrow, Filter, Zap, ExternalLink, CheckCircle2, XCircle, Star, History, Link as LinkIcon, Lock } from "lucide-react";
 import { AccessDenied } from "@components/AccessDenied";
 import { FilterDropdown, type DropdownOption } from "@/components/FilterDropdown";
 import { Pagination } from "@/components/ui/Pagination";
@@ -15,7 +15,7 @@ import {
 } from "../components/CollabsUi";
 import { MarkerLink } from "../components/CollabPickers";
 import { fmtDate, fmtDateTime, humanize, totalPagesOf } from "../utils";
-import { APPLICATION_STATUSES, type AdminCollabApplication } from "../types";
+import { APPLICATION_STATUSES, type AdminCollabApplication, type ApplicationRating } from "../types";
 
 const STATUS_OPTIONS: DropdownOption[] = [{ value: "", label: "All statuses" }, ...APPLICATION_STATUSES.map((s) => ({ value: s, label: humanize(s) }))];
 
@@ -41,6 +41,48 @@ function Timeline({ app }: { app: AdminCollabApplication }) {
                 </li>
             ))}
         </ol>
+    );
+}
+
+function Stars({ score }: { score: number }) {
+    return (
+        <span className="inline-flex items-center gap-0.5" aria-label={`${score} out of 5 stars`}>
+            {[1, 2, 3, 4, 5].map((n) => (
+                <Star key={n} className={`w-4 h-4 ${n <= score ? "fill-amber-400 text-amber-400" : "text-neutral-300"}`} />
+            ))}
+            <span className="ml-1.5 text-xs font-medium text-neutral-600">{score}/5</span>
+        </span>
+    );
+}
+
+function ReviewCard({ label, review }: { label: string; review: ApplicationRating | null }) {
+    return (
+        <div className="p-3 rounded-xl border border-neutral-200 bg-neutral-50/60 space-y-1.5">
+            <div className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">{label}</div>
+            {review ? (
+                <>
+                    <Stars score={review.score} />
+                    {review.comment ? (
+                        <p className="text-sm text-neutral-800 whitespace-pre-line break-words">{review.comment}</p>
+                    ) : (
+                        <p className="text-sm text-neutral-400 italic">No comment</p>
+                    )}
+                    <p className="text-xs text-neutral-500">
+                        {review.by_name ?? "Unknown"}
+                        {review.by && (
+                            <>
+                                {" "}
+                                <MonoId id={review.by} />
+                            </>
+                        )}
+                        {" · "}
+                        {fmtDateTime(review.at)}
+                    </p>
+                </>
+            ) : (
+                <p className="text-sm text-neutral-400">Not reviewed yet</p>
+            )}
+        </div>
     );
 }
 
@@ -258,25 +300,17 @@ export function CollabApplicationsPage() {
                             </section>
                         )}
 
-                        {(selected.ratings?.business_to_creator || selected.ratings?.creator_to_business) && (
-                            <section className="space-y-2">
-                                <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-2 border-b border-neutral-100 pb-2">
-                                    <Star className="w-4 h-4" /> Ratings
-                                </h4>
-                                {selected.ratings?.business_to_creator && (
-                                    <DetailRow
-                                        label="Business → creator"
-                                        value={`${selected.ratings.business_to_creator.score}/5${selected.ratings.business_to_creator.comment ? ` — ${selected.ratings.business_to_creator.comment}` : ""}`}
-                                    />
-                                )}
-                                {selected.ratings?.creator_to_business && (
-                                    <DetailRow
-                                        label="Creator → business"
-                                        value={`${selected.ratings.creator_to_business.score}/5${selected.ratings.creator_to_business.comment ? ` — ${selected.ratings.creator_to_business.comment}` : ""}`}
-                                    />
-                                )}
-                            </section>
-                        )}
+                        <section className="space-y-3">
+                            <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-2 border-b border-neutral-100 pb-2">
+                                <Star className="w-4 h-4" /> Reviews
+                            </h4>
+                            <ReviewCard label="Business → creator" review={selected.ratings?.business_to_creator ?? null} />
+                            <ReviewCard label="Creator → business" review={selected.ratings?.creator_to_business ?? null} />
+                            <p className="flex items-start gap-1.5 text-[11px] text-neutral-400">
+                                <Lock className="w-3 h-3 mt-0.5 shrink-0" />
+                                Reviews are private: the business and the creator never see each other&apos;s review.
+                            </p>
+                        </section>
 
                         <section className="space-y-3">
                             <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-2 border-b border-neutral-100 pb-2">

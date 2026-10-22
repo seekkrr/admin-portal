@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Video, Map, UserPlus, MessageSquare, BarChart3, MapPin, BookOpen, Star, Globe, Trophy, ListOrdered, Settings2, Activity, ArrowLeftRight, RotateCcw, Wallet, Banknote, ReceiptText, Tag, Store, CalendarDays, ListFilter, BellRing, Handshake, Inbox, Building2, ShieldCheck, Flag, Siren, GitPullRequestArrow, UserCheck, CreditCard, SlidersHorizontal, Rocket, Mail, Compass, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, Users, Video, Map, UserPlus, MessageSquare, BarChart3, MapPin, BookOpen, Star, Globe, Trophy, ListOrdered, Settings2, Activity, ArrowLeftRight, RotateCcw, Wallet, Banknote, ReceiptText, Tag, Store, CalendarDays, ListFilter, BellRing, Handshake, Inbox, Building2, ShieldCheck, Flag, Siren, GitPullRequestArrow, UserCheck, CreditCard, SlidersHorizontal, Rocket, Mail, Compass, Ticket, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
     icon: LucideIcon;
@@ -89,6 +89,7 @@ export const NAV_GROUPS: NavGroup[] = [
             { icon: Handshake, label: "Overview", to: "/collabs/overview", roles: [...COLLAB_STAFF_NAV_ROLES] },
             { icon: Inbox, label: "Business Applications", to: "/collabs/business-applications", roles: [...COLLAB_STAFF_NAV_ROLES] },
             { icon: Building2, label: "Businesses", to: "/collabs/businesses", roles: [...COLLAB_STAFF_NAV_ROLES] },
+            { icon: Ticket, label: "Experiences", to: "/collabs/experiences", roles: [...COLLAB_STAFF_NAV_ROLES] },
             { icon: ShieldCheck, label: "Moderation", to: "/collabs/moderation", roles: [...COLLAB_STAFF_NAV_ROLES] },
             { icon: Flag, label: "Reports", to: "/collabs/reports", roles: [...COLLAB_STAFF_NAV_ROLES] },
             { icon: Siren, label: "Fraud Flags", to: "/collabs/fraud-flags", roles: [...COLLAB_STAFF_NAV_ROLES] },

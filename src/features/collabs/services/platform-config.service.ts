@@ -1,9 +1,35 @@
 import { api } from "@/services/api";
 import { API_ENDPOINTS } from "@/config/api";
-import type { FeatureFlag, TermsDoc, TermsMap, TermsVersion, UpdateFeatureFlagPayload } from "../types";
+import type {
+    FeatureFlag,
+    PartnerPortalSettings,
+    TermsDoc,
+    TermsMap,
+    TermsVersion,
+    UpdateFeatureFlagPayload,
+    UpdatePartnerPortalPayload,
+} from "../types";
 
-/** Feature flags (admin|super_admin) and collab terms versions. */
+type PartnerPortalResponse = PartnerPortalSettings & { success?: boolean };
+
+const toPartnerPortal = ({ sections, default_plan, updated_at }: PartnerPortalResponse): PartnerPortalSettings => ({
+    sections,
+    default_plan,
+    updated_at: updated_at ?? null,
+});
+
+/** Feature flags (admin|super_admin), collab terms versions and Partner Portal sections. */
 export const platformConfigService = {
+    getPartnerPortal: async (): Promise<PartnerPortalSettings> => {
+        const { data } = await api.get<PartnerPortalResponse>(API_ENDPOINTS.PLATFORM_CONFIG.PARTNER_PORTAL);
+        return toPartnerPortal(data);
+    },
+
+    updatePartnerPortal: async (payload: UpdatePartnerPortalPayload): Promise<PartnerPortalSettings> => {
+        const { data } = await api.put<PartnerPortalResponse>(API_ENDPOINTS.PLATFORM_CONFIG.PARTNER_PORTAL, payload);
+        return toPartnerPortal(data);
+    },
+
     listFlags: async (): Promise<FeatureFlag[]> => {
         const { data } = await api.get<{ flags: FeatureFlag[] }>(API_ENDPOINTS.PLATFORM_CONFIG.FEATURES_ADMIN);
         return data.flags ?? [];

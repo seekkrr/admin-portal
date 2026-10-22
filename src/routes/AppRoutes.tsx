@@ -75,6 +75,7 @@ const CollabCreatorsPage = lazy(() => import("@/features/collabs/pages/CollabCre
 const PlansBillingPage = lazy(() => import("@/features/collabs/pages/PlansBillingPage").then(m => ({ default: m.PlansBillingPage })));
 const MatchTuningPage = lazy(() => import("@/features/collabs/pages/MatchTuningPage").then(m => ({ default: m.MatchTuningPage })));
 const RolloutPage = lazy(() => import("@/features/collabs/pages/RolloutPage").then(m => ({ default: m.RolloutPage })));
+const ExperiencesAdminPage = lazy(() => import("@/features/collabs/pages/ExperiencesAdminPage").then(m => ({ default: m.ExperiencesAdminPage })));
 // Platform — email templates
 const EmailTemplatesPage = lazy(() => import("@/features/email-templates/pages/EmailTemplatesPage").then(m => ({ default: m.EmailTemplatesPage })));
 const EmailTemplateEditorPage = lazy(() => import("@/features/email-templates/pages/EmailTemplateEditorPage").then(m => ({ default: m.EmailTemplateEditorPage })));
@@ -353,6 +354,11 @@ export const AppRoutes = () => {
                 <Route path="collabs/businesses/:businessId" element={
                     <Suspense fallback={<LoadingFallback message="Loading business..." />}>
                         <BusinessDetailPage />
+                    </Suspense>
+                } />
+                <Route path="collabs/experiences" element={
+                    <Suspense fallback={<LoadingFallback message="Loading experiences..." />}>
+                        <ExperiencesAdminPage />
                     </Suspense>
                 } />
                 <Route path="collabs/moderation" element={
