@@ -497,6 +497,8 @@ export interface ListBusinessesParams {
     search?: string;
     /** Category or sub-category name. */
     category?: string;
+    /** Only businesses with Experiences on (true) or off (false). */
+    experiences?: boolean;
     page?: number;
     page_size?: number;
 }
@@ -671,6 +673,30 @@ export interface ExperiencesListResponse {
     total: number;
     page?: number;
     page_size?: number;
+}
+
+/** POST /admin/experiences/hosts — `id` is a user ID, business ID or user email. */
+export interface SetupHostPayload {
+    id: string;
+    /** Name for a new business (only used when the user owns none). */
+    business_name?: string;
+}
+
+export interface SetupHostResult {
+    business: AdminBusiness;
+    /** A new business was created (Experiences on, Collabs off) with the user as owner. */
+    created: boolean;
+    enabled: boolean;
+    already_enabled?: boolean;
+    user_id?: string;
+    /** Every business the user owns (newest first) when one already existed. */
+    businesses?: string[];
+}
+
+/** POST /businesses/{id}/experiences — starts as a draft. */
+export interface CreateExperiencePayload {
+    title: string;
+    description?: string;
 }
 
 export type TermsDoc = "creator_collab_terms" | "business_terms";

@@ -274,6 +274,10 @@ export const API_ENDPOINTS = {
     EXPERIENCES_ADMIN: {
         BASE: "/api/v2/admin/experiences",
         BY_ID: (id: string) => `/api/v2/admin/experiences/${id}`,
+        /** Set up a host from a user ID, business ID or email (turns Experiences on / creates the business). */
+        HOSTS: "/api/v2/admin/experiences/hosts",
+        /** Business-side create (staff act as owner on any business). */
+        FOR_BUSINESS: (businessId: string) => `/api/v2/businesses/${businessId}/experiences`,
     },
     // Email templates — keys contain dots (layout.header, v1.interest_welcome).
     EMAIL_TEMPLATES: {

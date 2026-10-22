@@ -1,5 +1,18 @@
+import { config } from "@/config/env";
 import { formatDate, formatDateTime } from "@/utils/format";
 import { BUSINESS_FEATURE_DEFAULTS, type AdminBusiness, type BusinessFeatures, type CollabsPage, type EntitlementKey } from "./types";
+
+/**
+ * Partner Portal link that opens a business in its admin view (staff act as owner):
+ * `<portal>/business/experiences[/<experienceId>]?business=<businessId>`.
+ */
+export function partnerPortalUrl(businessId: string, experienceId?: string | null): string {
+    const path = experienceId ? `/business/experiences/${encodeURIComponent(experienceId)}` : "/business/experiences";
+    return `${config.partnerPortal.baseUrl}${path}?business=${encodeURIComponent(businessId)}`;
+}
+
+/** A 24-character hex id (user, business, experience). */
+export const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
 
 /** A business's Collabs / Experiences switches, falling back to the backend defaults for older profiles. */
 export function featuresOf(business: Pick<AdminBusiness, "features">): BusinessFeatures {
