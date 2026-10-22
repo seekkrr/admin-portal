@@ -2,18 +2,19 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Eye, EyeOff, Filter, ImageOff, Ticket } from "lucide-react";
+import { ExternalLink, Eye, EyeOff, Filter, ImageOff, Plus, Ticket, UserPlus } from "lucide-react";
 import { AccessDenied } from "@components/AccessDenied";
 import { FilterDropdown, type DropdownOption } from "@/components/FilterDropdown";
 import { Pagination } from "@/components/ui/Pagination";
 import { experiencesAdminService } from "../services/experiences-admin.service";
+import { NewExperienceModal, SetupHostModal } from "../components/ExperienceSetupModals";
 import { useCollabAccess } from "../roles";
 import { useDebouncedValue } from "../hooks";
 import {
     Chip, LoadingButtonIcon, Modal, PageHeader, PanelState, SearchBox, StatusPill, Toolbar, btnDanger, btnPrimary, btnSecondary,
     btnSmNeutral, btnSmReject, thClass,
 } from "../components/CollabsUi";
-import { fmtDate, totalPagesOf } from "../utils";
+import { OBJECT_ID_RE, fmtDate, partnerPortalUrl, totalPagesOf } from "../utils";
 import type { AdminExperience, ExperienceStatus, ListExperiencesParams } from "../types";
 
 const STATUS_OPTIONS: DropdownOption[] = [
@@ -41,6 +42,9 @@ export function ExperiencesAdminPage() {
     const search = useDebouncedValue(searchInput);
     const [page, setPage] = useState(1);
     const [target, setTarget] = useState<AdminExperience | null>(null);
+    const [hostOpen, setHostOpen] = useState(false);
+    // undefined = closed; "" = open without a business picked.
+    const [newForBusiness, setNewForBusiness] = useState<string | undefined>(undefined);
 
     useEffect(() => setPage(1), [status, businessId, search]);
 
@@ -81,6 +85,16 @@ export function ExperiencesAdminPage() {
                 title="Experiences"
                 gradient="from-violet-500 to-violet-600"
                 subtitle={data ? `${data.total} experiences listed by businesses` : "Loading..."}
+                actions={
+                    <>
+                        <button type="button" onClick={() => setHostOpen(true)} className={btnSecondary}>
+                            <UserPlus className="w-4 h-4" /> Set up a host
+                        </button>
+                        <button type="button" onClick={() => setNewForBusiness(OBJECT_ID_RE.test(businessId) ? businessId : "")} className={btnPrimary}>
+                            <Plus className="w-4 h-4" /> New experience
+                        </button>
+                    </>
+                }
             />
 
             <Toolbar>
@@ -140,8 +154,8 @@ export function ExperiencesAdminPage() {
                                                         </span>
                                                     )}
                                                     <div className="min-w-0">
-                                                        <div className="font-medium text-neutral-900 truncate max-w-[280px]">{e.title || "Untitled"}</div>
-                                                        <div className="text-[11px] text-neutral-400 truncate max-w-[280px]">
+                                                        <div className="font-medium text-neutral-900 truncate max-w-[220px]">{e.title || "Untitled"}</div>
+                                                        <div className="text-[11px] text-neutral-400 truncate max-w-[220px]">
                                                             {[e.region_name, e.tagline].filter(Boolean).join(" · ") || "—"}
                                                         </div>
                                                     </div>
@@ -169,10 +183,21 @@ export function ExperiencesAdminPage() {
                                             <td className="px-4 py-3 text-right text-neutral-600">{e.stats?.bookings ?? 0}</td>
                                             <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">{fmtDate(e.updated_at ?? e.created_at)}</td>
                                             <td className="px-4 py-3 text-right">
-                                                <button type="button" onClick={() => setTarget(e)} className={e.hidden_by_admin ? btnSmNeutral : btnSmReject}>
-                                                    {e.hidden_by_admin ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                                                    {e.hidden_by_admin ? "Unhide" : "Hide"}
-                                                </button>
+                                                <div className="flex flex-wrap items-center justify-end gap-2">
+                                                    <a
+                                                        href={partnerPortalUrl(e.business_id, e.id)}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className={`${btnSmNeutral} whitespace-nowrap`}
+                                                        title="Edit content, photos and slots in the Partner Portal (admin view)"
+                                                    >
+                                                        <ExternalLink className="w-3.5 h-3.5" /> Open in Partner Portal
+                                                    </a>
+                                                    <button type="button" onClick={() => setTarget(e)} className={e.hidden_by_admin ? btnSmNeutral : btnSmReject}>
+                                                        {e.hidden_by_admin ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                                                        {e.hidden_by_admin ? "Unhide" : "Hide"}
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     );
@@ -220,6 +245,25 @@ export function ExperiencesAdminPage() {
                     )}
                 </p>
             </Modal>
+
+            <SetupHostModal
+                open={hostOpen}
+                onClose={() => setHostOpen(false)}
+                onNewExperience={(business) => {
+                    setHostOpen(false);
+                    setNewForBusiness(business.id);
+                }}
+            />
+            <NewExperienceModal
+                open={newForBusiness !== undefined}
+                initialBusinessId={newForBusiness}
+                onClose={() => setNewForBusiness(undefined)}
+                onShowInList={(bid) => {
+                    setStatus("");
+                    setSearchInput("");
+                    setBusinessInput(bid);
+                }}
+            />
         </div>
     );
 }
