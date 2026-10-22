@@ -270,6 +270,11 @@ export const API_ENDPOINTS = {
         MATCH_PREVIEW: "/api/v2/admin/collabs/match/preview",
         MATCH_EVALUATION: "/api/v2/admin/collabs/match/evaluation",
     },
+    // Experiences (bookable tours/classes listed by businesses with features.experiences).
+    EXPERIENCES_ADMIN: {
+        BASE: "/api/v2/admin/experiences",
+        BY_ID: (id: string) => `/api/v2/admin/experiences/${id}`,
+    },
     // Email templates — keys contain dots (layout.header, v1.interest_welcome).
     EMAIL_TEMPLATES: {
         BASE: "/api/v2/admin/email-templates",

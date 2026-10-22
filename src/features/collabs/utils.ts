@@ -1,5 +1,14 @@
 import { formatDate, formatDateTime } from "@/utils/format";
-import type { CollabsPage, EntitlementKey } from "./types";
+import { BUSINESS_FEATURE_DEFAULTS, type AdminBusiness, type BusinessFeatures, type CollabsPage, type EntitlementKey } from "./types";
+
+/** A business's Collabs / Experiences switches, falling back to the backend defaults for older profiles. */
+export function featuresOf(business: Pick<AdminBusiness, "features">): BusinessFeatures {
+    const f = business.features ?? {};
+    return {
+        collabs: typeof f.collabs === "boolean" ? f.collabs : BUSINESS_FEATURE_DEFAULTS.collabs,
+        experiences: typeof f.experiences === "boolean" ? f.experiences : BUSINESS_FEATURE_DEFAULTS.experiences,
+    };
+}
 
 /**
  * Collab/business serializers emit naive ISO datetimes (no offset) that are

@@ -3,6 +3,8 @@ import { AlertTriangle, Check, Copy, Loader2, Search, X, type LucideIcon } from 
 import { toast } from "sonner";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { Card } from "@/components/ui/Card";
+import { featuresOf } from "../utils";
+import type { AdminBusiness } from "../types";
 
 /**
  * Shared building blocks for the Collabs admin pages. They reproduce the
@@ -102,6 +104,7 @@ const STATUS_TONE_OF: Record<string, Tone> = {
     invited: "amber",
     approved: "emerald",
     active: "emerald",
+    published: "emerald",
     verified: "emerald",
     completed: "emerald",
     redeemed: "emerald",
@@ -119,6 +122,7 @@ const STATUS_TONE_OF: Record<string, Tone> = {
     expired: "neutral",
     archived: "neutral",
     paused: "neutral",
+    draft: "neutral",
     dismissed: "neutral",
     free: "neutral",
 };
@@ -149,6 +153,18 @@ export function Chip({ children, tone = "neutral", title }: { children: ReactNod
         <span title={title} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border ${tones[tone]}`}>
             {children}
         </span>
+    );
+}
+
+/** Small chips for what a business can use (Collabs / Experiences). */
+export function FeatureChips({ business }: { business: Pick<AdminBusiness, "features"> }) {
+    const f = featuresOf(business);
+    if (!f.collabs && !f.experiences) return <Chip title="Collabs and Experiences are off">No features</Chip>;
+    return (
+        <>
+            {f.collabs && <Chip tone="teal">Collabs</Chip>}
+            {f.experiences && <Chip tone="violet">Experiences</Chip>}
+        </>
     );
 }
 
@@ -356,6 +372,24 @@ export function Checkbox({
                 {hint && <span className="block text-xs text-neutral-500">{hint}</span>}
             </span>
         </label>
+    );
+}
+
+export function Switch({ on, onToggle, label, disabled }: { on: boolean; onToggle: () => void; label: string; disabled?: boolean }) {
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={on}
+            aria-label={label}
+            disabled={disabled}
+            onClick={onToggle}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 disabled:opacity-50 ${
+                on ? "bg-teal-600" : "bg-neutral-300"
+            }`}
+        >
+            <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${on ? "translate-x-5" : "translate-x-0.5"}`} />
+        </button>
     );
 }
 

@@ -12,11 +12,12 @@ import { businessesService } from "../services/businesses.service";
 import { collabsAdminService } from "../services/collabs-admin.service";
 import { useCollabAccess } from "../roles";
 import {
-    Chip, DetailRow, LoadingButtonIcon, MonoId, SectionCard, StatusPill, btnPrimary, thClass,
+    Chip, DetailRow, FeatureChips, LoadingButtonIcon, MonoId, SectionCard, StatusPill, btnPrimary, thClass,
 } from "../components/CollabsUi";
 import { BusinessFormFields } from "../components/BusinessFormFields";
 import { OverridePanel } from "../components/OverridePanel";
 import { OwnerPanel } from "../components/OwnerPanel";
+import { FeaturesPanel } from "../components/FeaturesPanel";
 import { diffBusinessDraft, draftFromBusiness, slugError, type BusinessDraft } from "../businessDraft";
 import { fmtDate, fmtDateTime, humanize } from "../utils";
 import type { AdminBusiness } from "../types";
@@ -200,6 +201,7 @@ export function BusinessDetailPage() {
                             {business.created_by_admin && <Chip tone="violet">Created by admin</Chip>}
                             {business.website_featured && <Chip tone="amber">Featured</Chip>}
                             {!business.show_on_website && <Chip>Hidden from website</Chip>}
+                            <FeatureChips business={business} />
                         </div>
                     </div>
                 </div>
@@ -244,6 +246,8 @@ export function BusinessDetailPage() {
 
                 <div className="space-y-4">
                     <OwnerPanel key={business.id} business={business} canEdit={isAdmin} />
+
+                    <FeaturesPanel business={business} canEdit={isStaff} />
 
                     {isAdmin && (
                         <SectionCard title="Plan override" icon={Receipt}>

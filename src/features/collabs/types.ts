@@ -177,10 +177,15 @@ export const APPLICATION_STATUSES = [
 ] as const;
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
+/** A review left after a collab. Private: only admins see both sides' reviews. */
 export interface ApplicationRating {
     score: number;
     comment: string | null;
     at: string | null;
+    /** User id of whoever left it (admin view only). */
+    by?: string | null;
+    /** The reviewer's name; for the business side, "Member (Business)". */
+    by_name?: string | null;
 }
 
 export interface ApplicationDeliverable {
@@ -469,7 +474,17 @@ export interface AdminBusiness {
     owner_user_id: string | null;
     created_by_admin: boolean;
     application_id: string | null;
+    /** Per-business products. Missing values = backend defaults (collabs on, experiences off). */
+    features?: Partial<BusinessFeatures> | null;
 }
+
+/** What a business can use: Collabs, Experiences, or both (admin switches). */
+export interface BusinessFeatures {
+    collabs: boolean;
+    experiences: boolean;
+}
+
+export const BUSINESS_FEATURE_DEFAULTS: BusinessFeatures = { collabs: true, experiences: false };
 
 export interface BusinessesListResponse extends CollabsPage {
     businesses: AdminBusiness[];
@@ -503,6 +518,8 @@ export interface UpdateBusinessPayload {
     public_slug?: string;
     region_id?: string;
     marker_ids?: string[];
+    /** Audit-logged on the backend. */
+    features?: Partial<BusinessFeatures>;
 }
 
 /** POST /businesses/admin — live straight away when an owner (user ID or email) is given. */
@@ -617,6 +634,43 @@ export interface UpdatePartnerPortalPayload {
     sections?: Partial<PartnerPortalSections>;
     default_plan?: string;
     reason?: string;
+}
+
+// ── Experiences (admin) ────────────────────────────────────
+
+export type ExperienceStatus = "draft" | "published" | "paused" | "archived";
+
+/** Item of GET /admin/experiences. */
+export interface AdminExperience {
+    id: string;
+    business_id: string;
+    business?: { id: string; name: string; logo_url?: string | null } | null;
+    business_name?: string | null;
+    title: string;
+    tagline?: string | null;
+    cover_url?: string | null;
+    media?: string[];
+    region_name?: string | null;
+    status: ExperienceStatus;
+    hidden_by_admin: boolean;
+    stats?: { bookings: number; people: number } | null;
+    next_date?: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+}
+
+export interface ListExperiencesParams {
+    status?: ExperienceStatus;
+    business_id?: string;
+    q?: string;
+    page?: number;
+}
+
+export interface ExperiencesListResponse {
+    experiences: AdminExperience[];
+    total: number;
+    page?: number;
+    page_size?: number;
 }
 
 export type TermsDoc = "creator_collab_terms" | "business_terms";

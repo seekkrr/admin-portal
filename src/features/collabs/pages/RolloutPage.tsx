@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { platformConfigService } from "../services/platform-config.service";
 import { collabsAdminService } from "../services/collabs-admin.service";
 import { useCollabAccess } from "../roles";
-import { Field, LoadingButtonIcon, PageHeader, PanelState, SectionCard, btnPrimary, inputClass } from "../components/CollabsUi";
+import { Field, LoadingButtonIcon, PageHeader, PanelState, SectionCard, Switch, btnPrimary, inputClass } from "../components/CollabsUi";
 import { RegionMultiSelect } from "../components/CollabPickers";
 import { fmtDateTime } from "../utils";
 import type {
@@ -153,24 +153,6 @@ function FlagEditor({ flag }: { flag: FeatureFlag }) {
                 isPending={update.isPending}
             />
         </>
-    );
-}
-
-function Switch({ on, onToggle, label, disabled }: { on: boolean; onToggle: () => void; label: string; disabled?: boolean }) {
-    return (
-        <button
-            type="button"
-            role="switch"
-            aria-checked={on}
-            aria-label={label}
-            disabled={disabled}
-            onClick={onToggle}
-            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 disabled:opacity-50 ${
-                on ? "bg-teal-600" : "bg-neutral-300"
-            }`}
-        >
-            <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${on ? "translate-x-5" : "translate-x-0.5"}`} />
-        </button>
     );
 }
 
