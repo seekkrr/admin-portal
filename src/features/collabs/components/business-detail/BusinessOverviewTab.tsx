@@ -59,7 +59,8 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 /**
  * SeekKrr's commission on this business's experience bookings
  * (PATCH /businesses/admin/{id} {commission_pct}; audit-logged). It applies to
- * the price before GST, whether GST is on or off; GST is never commissioned.
+ * the price before GST, whether GST is on or off. GST is never commissioned; it is
+ * paid out to the business, which pays it to the government.
  */
 function CommissionCard({ business, canEdit }: { business: AdminBusiness; canEdit: boolean }) {
     const queryClient = useQueryClient();
@@ -118,8 +119,9 @@ function CommissionCard({ business, canEdit }: { business: AdminBusiness; canEdi
                     <p className="text-2xl font-semibold tabular-nums text-ink">{pct(current ?? 0)}</p>
                 )}
                 <p className="text-xs text-ink-muted">
-                    A {inr(1000)} booking → SeekKrr {inr(round2((1000 * example) / 100))} · business {inr(round2(1000 - (1000 * example) / 100))}. GST is
-                    never commissioned or paid to the business.
+                    A {inr(1000)} booking → SeekKrr {inr(round2((1000 * example) / 100))} · business {inr(round2(1000 - (1000 * example) / 100))}. With
+                    18% GST on top ({inr(180)}), the business gets {inr(round2(1180 - (1000 * example) / 100))}: GST isn't commissioned and goes to the
+                    business, which pays it to the government.
                 </p>
                 {notLive && <Notice tone="warn">This isn't available on the server yet.</Notice>}
             </div>

@@ -78,8 +78,8 @@ export function BusinessEarningsTab({ business, canEdit }: { business: AdminBusi
 
             <Notice title="How the money moves">
                 Travelers pay SeekKrr when they book. SeekKrr keeps {commissionPct === null ? "its commission" : `a ${pct(commissionPct)} commission`} on the price
-                before GST (with or without GST) and pays the rest to {business.name} by bank transfer. GST is never commissioned or paid out. Record each
-                transfer here.
+                before GST (with or without GST) and pays the rest to {business.name} by bank transfer, together with any GST collected: the business
+                pays that GST to the government. GST is never commissioned. Record each transfer here.
             </Notice>
 
             <SectionState isLoading={overview.isLoading} error={overview.error} what="Earnings" onRetry={() => overview.refetch()}>
