@@ -390,7 +390,7 @@ function MatchTuningEditor({
                 </SectionCard>
             )}
 
-            <div className="sticky bottom-0 z-10 bg-white/90 backdrop-blur border border-neutral-200 rounded-2xl shadow-lg p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom))] md:bottom-0 z-10 bg-white/90 backdrop-blur border border-neutral-200 rounded-2xl shadow-lg p-4 flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-neutral-600">
                     {dirty ? "Unsaved changes — preview them first, then save to go live." : "Showing the live configuration."}
                 </p>
@@ -471,7 +471,7 @@ export function MatchTuningPage() {
     if (!isAdmin) return <AccessDenied message="Only admins can tune SeekKrr Match." />;
 
     return (
-        <div className="p-6 max-w-[1400px] mx-auto space-y-5 animate-fade-in">
+        <div className="space-y-5 animate-fade-in">
             <PageHeader
                 icon={SlidersHorizontal}
                 title="Match Tuning"

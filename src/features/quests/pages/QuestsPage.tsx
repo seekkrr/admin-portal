@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     Search, Compass, Trash2,
@@ -108,7 +109,9 @@ export function QuestsPage() {
     const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
     const [hardDelete, setHardDelete] = useState(false);
 
-    const [activeTab, setActiveTab] = useState<"all" | "review-queue">("all");
+    // ?tab=review-queue opens the review queue (links from Today).
+    const [searchParams] = useSearchParams();
+    const [activeTab, setActiveTab] = useState<"all" | "review-queue">(searchParams.get("tab") === "review-queue" ? "review-queue" : "all");
     const [actionModal, setActionModal] = useState<{
         action: QuestActionType;
         questId: string;
@@ -279,7 +282,7 @@ export function QuestsPage() {
     }
 
     return (
-        <div className="p-6 max-w-[1400px] mx-auto space-y-5 animate-fade-in">
+        <div className="space-y-5 animate-fade-in">
             {/* Header */}
             <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">

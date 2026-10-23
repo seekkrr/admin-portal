@@ -102,7 +102,7 @@ export function CreatorEditPage() {
     }
 
     return (
-        <div className="p-6 max-w-[960px] mx-auto space-y-6 animate-fade-in">
+        <div className="max-w-[960px] space-y-6 animate-fade-in">
             {/* Back Button + Header */}
             <div className="flex items-center gap-4">
                 <button

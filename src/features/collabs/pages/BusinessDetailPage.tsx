@@ -159,7 +159,7 @@ export function BusinessDetailPage() {
     }
 
     return (
-        <div className="p-6 animate-fade-in max-w-[1400px] mx-auto space-y-4">
+        <div className="animate-fade-in space-y-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
                 <Link
                     to="/collabs/businesses"

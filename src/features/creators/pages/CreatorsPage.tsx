@@ -173,7 +173,7 @@ export function CreatorsPage() {
     }
 
     return (
-        <div className="p-6 max-w-[1400px] mx-auto space-y-5 animate-fade-in">
+        <div className="space-y-5 animate-fade-in">
             {/* Header */}
             <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">

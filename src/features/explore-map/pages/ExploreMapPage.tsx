@@ -341,7 +341,7 @@ function RegionOrderEditor({ regions }: { regions: ExploreRegion[] }) {
             {dirty && (
                 <>
                     <div className="h-20" aria-hidden="true" />
-                    <div className="fixed z-40 bottom-4 left-4 right-4 md:left-auto md:right-8 md:max-w-xl animate-slide-up" role="region" aria-label="Unsaved order">
+                    <div className="fixed z-40 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] md:bottom-4 left-4 right-4 md:left-auto md:right-8 md:max-w-xl animate-slide-up" role="region" aria-label="Unsaved order">
                         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-teal-200 bg-white/95 backdrop-blur px-4 py-3 shadow-[0_12px_40px_-8px_rgba(0,0,0,0.25)]">
                             <p className="text-sm text-neutral-700">
                                 <span className="font-semibold">Unsaved order.</span>{" "}
@@ -378,7 +378,7 @@ export function ExploreMapPage() {
     const regions = regionsQuery.data ?? [];
 
     return (
-        <div className="p-6 max-w-[1100px] mx-auto space-y-5 animate-fade-in">
+        <div className="max-w-[1100px] space-y-5 animate-fade-in">
             <PageHeader
                 icon={Compass}
                 title="Explore map"

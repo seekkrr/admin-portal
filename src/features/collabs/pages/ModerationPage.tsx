@@ -73,7 +73,7 @@ export function ModerationPage() {
     const collabs = data?.collabs ?? [];
 
     return (
-        <div className="p-6 max-w-[1200px] mx-auto space-y-5 animate-fade-in">
+        <div className="space-y-5 animate-fade-in">
             <PageHeader
                 icon={ShieldCheck}
                 title="Moderation Queue"

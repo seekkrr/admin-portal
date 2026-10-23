@@ -38,7 +38,7 @@ export function BusinessOffersPage() {
     const totalPages = Math.ceil((data?.total || 0) / pageSize);
 
     return (
-        <div className="p-6 max-w-7xl mx-auto space-y-6">
+        <div className="space-y-6">
             <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
                     <Store className="w-5 h-5 text-orange-600" />

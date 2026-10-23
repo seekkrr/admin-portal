@@ -297,4 +297,19 @@ export const API_ENDPOINTS = {
         // GET: any signed-in user; PUT: admin|super_admin.
         PARTNER_PORTAL: "/api/v2/config/partner-portal",
     },
+    // Admin search across users, businesses, places, quests, experiences, regions
+    // (header search, Ctrl/Cmd+K) and the change history (admin audit log).
+    // GET ?q=&types=&limit= → { results: { user: [hit], ... } }; hit.url_path is a portal route.
+    ADMIN_SEARCH: "/api/v2/admin/search",
+    // GET ?entity_type=&entity_id=&actor_id=&action=&page=&page_size= → { items, total }
+    ADMIN_AUDIT: "/api/v2/admin/audit",
+    // Command chat (no AI): text → choose / need / preview / answer → run. Any signed-in user;
+    // what each may run depends on role. Owned by src/services/commands.service.ts.
+    COMMANDS: {
+        SUGGEST: "/api/v2/commands/suggest",
+        UNDERSTAND: "/api/v2/commands/understand",
+        RUN: "/api/v2/commands/run",
+        HISTORY: "/api/v2/commands/history",
+        CATALOG: "/api/v2/commands/catalog",
+    },
 } as const;

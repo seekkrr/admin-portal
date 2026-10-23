@@ -112,7 +112,7 @@ export function ReportsPage() {
     };
 
     return (
-        <div className="p-6 max-w-[1400px] mx-auto space-y-5 animate-fade-in">
+        <div className="space-y-5 animate-fade-in">
             <PageHeader
                 icon={Flag}
                 title="Reports"

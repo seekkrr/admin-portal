@@ -50,7 +50,7 @@ export function CollabsOverviewPage() {
     const payingByPlan = Object.entries(revenue?.paying_by_plan ?? {});
 
     return (
-        <div className="p-6 max-w-[1400px] mx-auto space-y-5 animate-fade-in">
+        <div className="space-y-5 animate-fade-in">
             <PageHeader
                 icon={Handshake}
                 title="Collabs Overview"

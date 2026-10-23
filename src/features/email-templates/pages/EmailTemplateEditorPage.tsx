@@ -600,7 +600,7 @@ export function EmailTemplateEditorPage() {
     }
 
     return (
-        <div className="p-6 max-w-[1600px] mx-auto animate-fade-in">
+        <div className="animate-fade-in">
             <TemplateEditor key={template.key} template={template} />
         </div>
     );

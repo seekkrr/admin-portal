@@ -1,3 +1,21 @@
 export * from "./Footer";
 export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "./Card";
 export * from "./Sidebar";
+// Shared building blocks (one design for every page)
+export * from "./Button";
+export * from "./buttonStyles";
+export * from "./Menu";
+export * from "./PageHeader";
+export * from "./FilterBar";
+export * from "./filters";
+export * from "./DataTable";
+export * from "./Pagination";
+export * from "./Modal";
+export * from "./ConfirmDialog";
+export * from "./ConfirmModal";
+export * from "./StatusPill";
+export * from "./status";
+export * from "./States";
+export * from "./Tabs";
+export * from "./Field";
+export * from "./Panel";

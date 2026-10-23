@@ -485,7 +485,7 @@ export function PlansBillingPage() {
     if (!isAdmin) return <AccessDenied message="Only admins can manage plans and billing." />;
 
     return (
-        <div className="p-6 max-w-[1400px] mx-auto space-y-5 animate-fade-in">
+        <div className="space-y-5 animate-fade-in">
             <PageHeader icon={CreditCard} title="Plans & Billing" gradient="from-emerald-500 to-emerald-600" subtitle="Business plans (INR + GST via Razorpay), plan coupons and subscriptions" />
             <SegmentedTabs<Tab>
                 value={tab}

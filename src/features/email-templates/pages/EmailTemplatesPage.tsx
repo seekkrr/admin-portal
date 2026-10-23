@@ -69,7 +69,7 @@ export function EmailTemplatesPage() {
     const customized = data?.templates.filter((t) => t.has_override).length ?? 0;
 
     return (
-        <div className="p-6 max-w-[1200px] mx-auto space-y-5 animate-fade-in">
+        <div className="space-y-5 animate-fade-in">
             <PageHeader
                 icon={Mail}
                 title="Email Templates"

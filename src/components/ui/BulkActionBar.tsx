@@ -28,13 +28,13 @@ export function BulkActionBar({
     count,
     onClear,
     actions,
-    accent = "bg-neutral-900",
+    accent = "bg-brand-900",
     busy = false,
 }: BulkActionBarProps) {
     if (count === 0) return null;
     return (
-        <div className="sticky bottom-4 z-30 flex justify-center pointer-events-none">
-            <div className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-neutral-200/80 bg-white/95 px-4 py-2.5 shadow-[0_12px_40px_-8px_rgba(0,0,0,0.2)] ring-1 ring-neutral-900/5 backdrop-blur-md animate-slide-up">
+        <div className="sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom))] md:bottom-4 z-30 flex justify-center pointer-events-none">
+            <div className="pointer-events-auto flex max-w-full items-center gap-3 overflow-x-auto rounded-card border border-line bg-surface/95 px-4 py-2.5 shadow-pop backdrop-blur-md animate-slide-up">
                 <span className={`inline-flex items-center justify-center rounded-lg ${accent} px-2.5 py-1 text-xs font-bold text-white shadow-sm tabular-nums`}>
                     {count} selected
                 </span>

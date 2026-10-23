@@ -79,7 +79,7 @@ export function ExperiencesAdminPage() {
     const hiding = target ? !target.hidden_by_admin : false;
 
     return (
-        <div className="p-6 max-w-[1400px] mx-auto space-y-5 animate-fade-in">
+        <div className="space-y-5 animate-fade-in">
             <PageHeader
                 icon={Ticket}
                 title="Experiences"

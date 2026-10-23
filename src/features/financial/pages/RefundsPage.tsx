@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
     Receipt,
@@ -39,7 +39,12 @@ export function RefundsPage() {
 
     const [page, setPage] = useState(1);
     const [perPage] = useState(20);
-    const [status, setStatus] = useState<"" | RefundStatus>("");
+    // ?status=initiated opens the refunds awaiting approval (links from Today).
+    const [searchParams] = useSearchParams();
+    const [status, setStatus] = useState<"" | RefundStatus>(() => {
+        const s = searchParams.get("status");
+        return s === "initiated" || s === "processing" || s === "completed" || s === "failed" ? s : "";
+    });
     const [userId, setUserId] = useState("");
     const [debouncedUserId, setDebouncedUserId] = useState("");
 

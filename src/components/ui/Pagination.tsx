@@ -2,7 +2,9 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { usePaginationRange } from "@/hooks/usePagination";
+import { cx } from "@/utils/cx";
 
+/** @deprecated Pagination has one neutral style now; the theme is ignored. */
 export type PaginationTheme = "indigo" | "orange" | "teal" | "emerald" | "rose" | "amber" | "cyan" | "violet";
 
 export interface PaginationProps {
@@ -10,21 +12,18 @@ export interface PaginationProps {
     totalPages: number;
     total: number;
     onPageChange: (page: number) => void;
+    /** Rows per page; when given the bar shows "21–40 of 1,234". */
+    pageSize?: number;
+    /** @deprecated ignored — one neutral style everywhere. */
     theme?: PaginationTheme;
+    className?: string;
 }
 
-const themeStyles: Record<PaginationTheme, { active: string; focus: string }> = {
-    indigo: { active: "bg-indigo-50 text-indigo-600 font-semibold", focus: "focus:ring-indigo-500" },
-    orange: { active: "bg-orange-50 text-orange-600 font-semibold", focus: "focus:ring-orange-500" },
-    teal: { active: "bg-teal-50 text-teal-600 font-semibold", focus: "focus:ring-teal-500" },
-    emerald: { active: "bg-emerald-50 text-emerald-600 font-semibold", focus: "focus:ring-emerald-500" },
-    rose: { active: "bg-rose-50 text-rose-600 font-semibold", focus: "focus:ring-rose-500" },
-    amber: { active: "bg-amber-50 text-amber-600 font-semibold", focus: "focus:ring-amber-500" },
-    cyan: { active: "bg-cyan-50 text-cyan-600 font-semibold", focus: "focus:ring-cyan-500" },
-    violet: { active: "bg-violet-50 text-violet-600 font-semibold", focus: "focus:ring-violet-500" },
-};
+const navBtn =
+    "inline-flex h-9 w-9 items-center justify-center rounded-control border border-line-strong bg-surface text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-40";
 
-export function Pagination({ page, totalPages, onPageChange, theme = "indigo" }: PaginationProps) {
+/** The one pagination bar. Compact (‹ Page 2 of 9 ›) on phones. */
+export function Pagination({ page, totalPages, total, onPageChange, pageSize, className }: PaginationProps) {
     const paginationRange = usePaginationRange(totalPages, page);
     const [goToPage, setGoToPage] = useState("");
 
@@ -39,60 +38,89 @@ export function Pagination({ page, totalPages, onPageChange, theme = "indigo" }:
         }
     };
 
-    const currentTheme = themeStyles[theme];
+    const summary =
+        pageSize && total > 0
+            ? `${((page - 1) * pageSize + 1).toLocaleString("en-IN")}–${Math.min(page * pageSize, total).toLocaleString("en-IN")} of ${total.toLocaleString("en-IN")}`
+            : `Page ${page} of ${totalPages}`;
 
     return (
-        <div className="p-4 border-t border-neutral-200 flex flex-col sm:flex-row sm:items-center justify-between bg-white gap-4 sm:gap-0">
-            <span className="text-sm text-neutral-500 text-center sm:text-left">
-                Showing Page {page} of {totalPages}
-            </span>
-            <div className="flex flex-wrap items-center justify-center sm:justify-end gap-3 sm:gap-4">
-                <form onSubmit={handleGoToPage} className="hidden sm:flex items-center gap-2">
-                    <span className="text-sm text-neutral-500">Go to</span>
-                    <input
-                        type="number"
-                        min={1}
-                        max={totalPages}
-                        value={goToPage}
-                        onChange={(e) => setGoToPage(e.target.value)}
-                        placeholder="Page #"
-                        className={`w-22 h-9 rounded-lg border border-neutral-200 bg-white px-2 py-1 text-sm text-neutral-700 focus:outline-none focus:ring-2 ${currentTheme.focus} focus:border-transparent text-center transition-all`}
-                    />
-                </form>
+        <nav aria-label="Pagination" className={cx("flex items-center justify-between gap-3 border-t border-line bg-surface px-4 py-3", className)}>
+            <span className="hidden text-sm text-ink-muted sm:inline">{summary}</span>
+
+            {/* Phone: compact */}
+            <div className="flex w-full items-center justify-between gap-2 sm:hidden">
+                <button type="button" onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page <= 1} className={navBtn} aria-label="Previous page">
+                    <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="text-sm text-ink-muted" aria-live="polite">
+                    Page {page} of {totalPages}
+                </span>
+                <button
+                    type="button"
+                    onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+                    disabled={page >= totalPages}
+                    className={navBtn}
+                    aria-label="Next page"
+                >
+                    <ChevronRight className="h-4 w-4" />
+                </button>
+            </div>
+
+            {/* Tablet/desktop */}
+            <div className="hidden items-center gap-3 sm:flex">
+                {totalPages > 7 && (
+                    <form onSubmit={handleGoToPage} className="hidden items-center gap-2 lg:flex">
+                        <label htmlFor="pagination-go-to" className="text-sm text-ink-muted">
+                            Go to
+                        </label>
+                        <input
+                            id="pagination-go-to"
+                            type="number"
+                            min={1}
+                            max={totalPages}
+                            value={goToPage}
+                            onChange={(e) => setGoToPage(e.target.value)}
+                            placeholder="#"
+                            className="h-9 w-16 rounded-control border border-line-strong bg-surface px-2 text-center text-sm text-ink focus:border-transparent focus:outline-none focus:ring-2 focus:ring-accent-500"
+                        />
+                    </form>
+                )}
                 <div className="flex items-center gap-1">
-                    <button
-                        onClick={() => onPageChange(Math.max(1, page - 1))}
-                        disabled={page <= 1}
-                        className="p-2 border border-neutral-200 rounded-lg hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none"
-                    >
-                        <ChevronLeft className="w-4 h-4" />
+                    <button type="button" onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page <= 1} className={navBtn} aria-label="Previous page">
+                        <ChevronLeft className="h-4 w-4" />
                     </button>
                     {paginationRange.map((p, idx) =>
                         p === "..." ? (
-                            <span key={`ellipsis-${idx}`} className="px-3 py-2 text-neutral-400 select-none">…</span>
+                            <span key={`ellipsis-${idx}`} className="select-none px-2 text-ink-faint" aria-hidden>
+                                …
+                            </span>
                         ) : (
                             <button
                                 key={p}
+                                type="button"
                                 onClick={() => onPageChange(p as number)}
-                                className={`px-3 py-2 rounded-lg text-sm transition-colors focus:outline-none ${
-                                    page === p
-                                        ? currentTheme.active
-                                        : "text-neutral-600 hover:bg-neutral-100 font-medium"
-                                }`}
+                                aria-current={page === p ? "page" : undefined}
+                                aria-label={`Page ${p}`}
+                                className={cx(
+                                    "inline-flex h-9 min-w-9 items-center justify-center rounded-control px-2.5 text-sm tabular-nums transition-colors",
+                                    page === p ? "bg-brand-900 font-semibold text-white" : "font-medium text-ink-muted hover:bg-brand-50 hover:text-ink"
+                                )}
                             >
                                 {p}
                             </button>
                         )
                     )}
                     <button
+                        type="button"
                         onClick={() => onPageChange(Math.min(totalPages, page + 1))}
                         disabled={page >= totalPages}
-                        className="p-2 border border-neutral-200 rounded-lg hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none"
+                        className={navBtn}
+                        aria-label="Next page"
                     >
-                        <ChevronRight className="w-4 h-4" />
+                        <ChevronRight className="h-4 w-4" />
                     </button>
                 </div>
             </div>
-        </div>
+        </nav>
     );
 }

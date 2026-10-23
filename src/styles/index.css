@@ -1,6 +1,86 @@
 @import "tailwindcss";
 
-/* Custom Design Tokens */
+/*
+ * SeekKrr admin design tokens (Tailwind v4 theme).
+ * Every token here becomes a utility: bg-brand-900, text-ink-muted, border-line,
+ * bg-good-soft, rounded-card, max-w-page, shadow-card ...
+ * Brand: dark teal #003634 (primary), teal #00A49E (accent), yellow #FECD36
+ * (highlight). Green / amber / red are for status only.
+ */
+@theme {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  /* Primary — SeekKrr dark teal */
+  --color-brand-50: #e7f1f0;
+  --color-brand-100: #c9e0de;
+  --color-brand-200: #97c3c0;
+  --color-brand-300: #5f9f9b;
+  --color-brand-400: #2f7d79;
+  --color-brand-500: #0f5f5b;
+  --color-brand-600: #084d4a;
+  --color-brand-700: #04423f;
+  --color-brand-800: #003c3a;
+  --color-brand-900: #003634;
+  --color-brand-950: #00201f;
+
+  /* Accent — teal (decoration, focus, selection; use 700 for text on white) */
+  --color-accent-50: #e6f7f6;
+  --color-accent-100: #c0ecea;
+  --color-accent-200: #8adcd8;
+  --color-accent-300: #4ec9c3;
+  --color-accent-400: #1fb7b0;
+  --color-accent-500: #00a49e;
+  --color-accent-600: #008b86;
+  --color-accent-700: #00716d;
+
+  /* Highlight — yellow (counts, "new", attention) */
+  --color-highlight: #fecd36;
+  --color-highlight-soft: #fff4d1;
+  --color-highlight-ink: #6b4f00;
+
+  /* Status — only for status */
+  --color-good: #15803d;
+  --color-good-soft: #e8f6ee;
+  --color-good-line: #bfe5cd;
+  --color-warn: #b45309;
+  --color-warn-soft: #fdf3e1;
+  --color-warn-line: #f3d6a3;
+  --color-bad: #b91c1c;
+  --color-bad-soft: #fdecec;
+  --color-bad-line: #f5c2c2;
+  --color-info: #1d5fa8;
+  --color-info-soft: #eaf2fb;
+  --color-info-line: #c3d8f0;
+
+  /* Surfaces, lines and text */
+  --color-canvas: #f4f7f7;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f7faf9;
+  --color-line: #e2e8e7;
+  --color-line-strong: #cbd5d4;
+  --color-ink: #0e2423;
+  --color-ink-muted: #526664;
+  --color-ink-faint: #879695;
+
+  /* One radius for controls, one for cards */
+  --radius-control: 0.625rem;
+  --radius-card: 0.875rem;
+
+  /* One page width (the gutter lives in the app shell) */
+  --container-page: 1400px;
+
+  --shadow-card: 0 1px 2px rgb(0 54 52 / 0.04), 0 1px 3px rgb(0 54 52 / 0.06);
+  --shadow-pop: 0 16px 40px -12px rgb(0 32 31 / 0.28), 0 2px 6px rgb(0 32 31 / 0.08);
+}
+
+/* Shell measurements pages can use for sticky offsets, e.g.
+   top-[calc(var(--app-header-h)+1rem)] */
+:root {
+  --app-header-h: 3.5rem;
+  --app-bottom-bar-h: calc(4rem + env(safe-area-inset-bottom));
+}
+
+/* Legacy tokens (kept for older pages) */
 :root {
   /* Primary Colors - Deep Indigo - Matching Creator Portal for consistency */
   --color-primary-50: #eef2ff;
@@ -36,9 +116,6 @@
   --bg-primary: #ffffff;
   --bg-secondary: #fafafa;
   --bg-tertiary: #f5f5f5;
-
-  /* Typography */
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
   /* Shadows */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
@@ -80,10 +157,8 @@ html {
 }
 
 body {
-  background-color: var(--bg-secondary);
-  background-image: radial-gradient(var(--color-neutral-200) 1px, transparent 1px);
-  background-size: 24px 24px;
-  color: var(--color-neutral-900);
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
   min-height: 100vh;
 }
 
@@ -93,10 +168,13 @@ body {
   flex-direction: column;
 }
 
-/* Focus Styles */
-:focus-visible {
-  outline: 2px solid var(--color-primary-500);
-  outline-offset: 2px;
+/* Focus Styles — in the base layer so a component's own focus style
+   (outline-none + ring) wins over this default. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-accent-500);
+    outline-offset: 2px;
+  }
 }
 
 /* Scrollbar Styles */
@@ -262,4 +340,82 @@ body {
   
   /* Smooth scroll */
   scroll-behavior: smooth;
+}
+
+/* Phone bottom bar: keep content clear of it (and of the iPhone home bar) */
+.pb-bottom-bar {
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 768px) {
+  .pb-bottom-bar {
+    padding-bottom: 0;
+  }
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Horizontal scrollers (tabs, chips) without a visible bar */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-slide-in-up {
+  animation: slideInUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-in-right,
+  .animate-slide-in-left,
+  .animate-slide-in-up,
+  .animate-scale-in,
+  .animate-slide-up,
+  .animate-fade-in {
+    animation: none;
+  }
 }

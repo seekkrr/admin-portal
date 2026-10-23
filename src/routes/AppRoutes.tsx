@@ -6,8 +6,13 @@ import { LoginPage } from "@/features/auth/pages/LoginPage";
 import { AccessDeniedPage } from "@/features/auth/pages/AccessDeniedPage";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { LoadingFallback } from "@components/LoadingFallback";
+import { NotFoundPage } from "@/components/shell/NotFoundPage";
 
 // Lazy-loaded page components
+// Today — the to-do inbox (default page after login)
+const TodayPage = lazy(() => import("@/features/today/pages/TodayPage").then(m => ({ default: m.TodayPage })));
+// Command chat (no AI) — built in src/features/command-chat
+const CommandChatPage = lazy(() => import("@/features/command-chat/pages/CommandChatPage"));
 const DashboardPage = lazy(() => import("@/features/dashboard/pages/DashboardPage").then(m => ({ default: m.DashboardPage })));
 const UsersPage = lazy(() => import("@/features/users/pages/UsersPage").then(m => ({ default: m.UsersPage })));
 const CreatorsPage = lazy(() => import("@/features/creators/pages/CreatorsPage").then(m => ({ default: m.CreatorsPage })));
@@ -106,7 +111,17 @@ export const AppRoutes = () => {
                         </ProtectedRoute>
                     }
                 />
-                <Route index element={<Navigate to="/dashboard" replace />} />
+                <Route index element={<Navigate to="/today" replace />} />
+                <Route path="today" element={
+                    <Suspense fallback={<LoadingFallback message="Loading today..." />}>
+                        <TodayPage />
+                    </Suspense>
+                } />
+                <Route path="chat" element={
+                    <Suspense fallback={<LoadingFallback message="Loading chat..." />}>
+                        <CommandChatPage />
+                    </Suspense>
+                } />
                 <Route path="dashboard" element={
                     <Suspense fallback={<LoadingFallback message="Loading dashboard..." />}>
                         <DashboardPage />
@@ -413,6 +428,9 @@ export const AppRoutes = () => {
                         <EmailTemplateEditorPage />
                     </Suspense>
                 } />
+
+                {/* Anything else: a proper "page not found" inside the app frame */}
+                <Route path="*" element={<NotFoundPage />} />
             </Route>
         </Routes>
     );

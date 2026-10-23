@@ -76,7 +76,7 @@ export function BusinessApplicationsPage() {
     const busy = approve.isPending || reject.isPending;
 
     return (
-        <div className="p-6 max-w-[1400px] mx-auto space-y-5 animate-fade-in">
+        <div className="space-y-5 animate-fade-in">
             <PageHeader
                 icon={Inbox}
                 title="Business Applications"

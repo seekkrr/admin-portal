@@ -334,7 +334,7 @@ export function RolloutPage() {
         (flagsQuery.data ? { key: FLAG_KEY, enabled: false, regions_enabled: [], min_app_version: null, updated_at: null } : undefined);
 
     return (
-        <div className="p-6 max-w-[1200px] mx-auto space-y-5 animate-fade-in">
+        <div className="max-w-[1200px] space-y-5 animate-fade-in">
             <PageHeader icon={Rocket} title="Rollout" gradient="from-amber-500 to-amber-600" subtitle="Feature flag, region rollout, Partner Portal sections and collab terms versions" />
 
             <PanelState isLoading={flagsQuery.isLoading} error={flagsQuery.error} isEmpty={!flag} emptyIcon={Rocket} emptyText="Feature flag unavailable" onRetry={() => flagsQuery.refetch()}>
