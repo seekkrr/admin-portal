@@ -5,8 +5,9 @@ import type { FinanceSummary } from "../types";
 
 /**
  * Gross · Refunds · Commission · GST collected · Net owed · Paid out · Balance.
- * Commission is on the price before GST, whether GST is on or off; GST is never
- * commissioned and never part of what the business is owed.
+ * Commission is on the price before GST, whether GST is on or off. GST is never
+ * commissioned; it is part of what the business is owed (the business pays it to
+ * the government).
  */
 export function FinanceSummaryTiles({
     summary,
@@ -30,8 +31,8 @@ export function FinanceSummaryTiles({
                 value={inr(summary.commission)}
                 hint={commissionPct !== undefined ? `${pct(commissionPct)} of the price before GST` : "On the price before GST"}
             />
-            <StatTile label="GST collected" icon={Landmark} value={inr(summary.gst_collected)} hint="Not commissioned" />
-            <StatTile label={owedLabel} icon={Scale} value={inr(summary.net_owed)} hint="After commission and refunds" />
+            <StatTile label="GST collected" icon={Landmark} value={inr(summary.gst_collected)} hint="Not commissioned · paid to the business" />
+            <StatTile label={owedLabel} icon={Scale} value={inr(summary.net_owed)} hint="After commission and refunds, incl. GST" />
             <StatTile label="Paid out" icon={Banknote} value={inr(summary.paid_out)} hint="Bank transfers" />
             <StatTile
                 label="Balance"

@@ -194,7 +194,7 @@ export function ExperiencePricingTab({
                     <p className="rounded-control border border-line bg-surface-muted px-3.5 py-2.5 text-sm font-medium tabular-nums text-ink" aria-live="polite">
                         {gstExample(examplePrice, form.gst)}
                     </p>
-                    <p className="text-xs text-ink-muted">SeekKrr's commission is on the price before GST, with or without GST. GST is never commissioned or paid to the business.</p>
+                    <p className="text-xs text-ink-muted">SeekKrr's commission is on the price before GST, with or without GST. GST isn't commissioned: it's paid out to the business, which pays it to the government.</p>
                 </div>
             </Panel>
 
