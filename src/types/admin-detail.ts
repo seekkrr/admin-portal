@@ -185,7 +185,27 @@ export interface ExperienceOption {
     name: string;
     description: string | null;
     duration_minutes: number | null;
+    /** Per person; set by SeekKrr admins only (Pricing tab). Null = the experience's price per person. */
     price: number | null;
+}
+
+/** GST rates an experience can charge. */
+export const GST_RATES = [5, 12, 18, 28] as const;
+
+/** Per-experience GST (admin-set). `inclusive` = the price already includes GST. */
+export interface ExperienceGst {
+    enabled: boolean;
+    rate_pct: number;
+    inclusive: boolean;
+}
+
+export const GST_DEFAULTS: ExperienceGst = { enabled: false, rate_pct: 18, inclusive: false };
+
+/** PATCH /api/v2/admin/experiences/{id}/pricing — any subset. */
+export interface ExperiencePricingPatch {
+    price_per_person?: number | null;
+    options?: Array<{ id: string; price: number | null }>;
+    gst?: ExperienceGst;
 }
 
 export interface ExperienceCurator {
@@ -229,6 +249,9 @@ export interface ExperienceDetail {
     faqs: ExperienceFaq[];
     gallery: string[];
     options: ExperienceOption[];
+    /** Admin-set price per person (null = not set). Slot price = option price ?? this ?? free. */
+    price_per_person?: number | null;
+    gst?: ExperienceGst | null;
     price_from: number | null;
     currency: string;
     status: ExperienceStatus;
@@ -261,7 +284,8 @@ export interface ExperiencePatch {
     cancellation_policy?: TitledText[];
     faqs?: ExperienceFaq[];
     gallery?: string[];
-    options?: Array<Omit<ExperienceOption, "id"> & { id?: string }>;
+    /** `price` is only echoed back unchanged (prices are set on the Pricing tab). */
+    options?: Array<Omit<ExperienceOption, "id" | "price"> & { id?: string; price?: number | null }>;
 }
 
 export interface ExperienceSlot {
@@ -277,6 +301,7 @@ export interface ExperienceSlot {
     capacity: number;
     booked: number;
     remaining: number;
+    /** Computed: option price ?? experience price per person ?? 0 (read-only). */
     price: number | null;
     sold_out: boolean;
     status: "open" | "cancelled";
@@ -292,7 +317,6 @@ export interface BulkSlotsPayload {
     weekdays?: number[];
     times: Array<{ start: string; end: string }>;
     capacity: number;
-    price?: number | null;
 }
 
 export interface BulkSlotsResult {
@@ -304,12 +328,38 @@ export interface BulkSlotsResult {
 
 export interface SlotPatch {
     capacity?: number;
-    price?: number;
     start_time?: string;
     end_time?: string;
 }
 
-export type ExperienceBookingStatus = "confirmed" | "cancelled" | "checked_in" | "no_show";
+export type ExperienceBookingStatus = "pending_payment" | "confirmed" | "cancelled" | "checked_in" | "no_show" | "expired";
+
+export type ExperiencePaymentStatus = "not_required" | "pending" | "paid" | "refund_pending" | "refunded" | "failed";
+
+/** Razorpay payment of one booking (amount in rupees). */
+export interface ExperienceBookingPayment {
+    status: ExperiencePaymentStatus;
+    amount?: number | null;
+    currency?: string | null;
+    order_id?: string | null;
+    payment_id?: string | null;
+    refund_id?: string | null;
+    paid_at?: string | null;
+    refunded_at?: string | null;
+}
+
+/** Price breakdown stored on the booking when it was made. */
+export interface ExperienceBookingPricing {
+    unit_price?: number | null;
+    people?: number | null;
+    /** Taxable value. */
+    subtotal?: number | null;
+    gst_enabled?: boolean;
+    gst_rate_pct?: number | null;
+    gst_inclusive?: boolean;
+    gst_amount?: number | null;
+    total?: number | null;
+}
 
 export interface ExperienceBookingItem {
     slot_id: string | null;
@@ -340,6 +390,11 @@ export interface ExperienceBooking {
     cancelled_at: string | null;
     cancel_reason?: string | null;
     checked_in_at: string | null;
+    payment?: ExperienceBookingPayment | null;
+    pricing?: ExperienceBookingPricing | null;
+    hold_expires_at?: string | null;
+    cancellable_until?: string | null;
+    source?: "app" | "offline" | null;
 }
 
 export interface ExperienceBookingsPage {

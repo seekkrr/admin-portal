@@ -23,6 +23,7 @@ import type {
     ExperienceBookingsPage,
     ExperienceDetail,
     ExperiencePatch,
+    ExperiencePricingPatch,
     ExperienceSlot,
     ExperienceStatus,
     MarkerCollabsInfo,
@@ -93,7 +94,7 @@ function readableDetail(detail: unknown): string | null {
     return null;
 }
 
-async function call<T>(config: AxiosRequestConfig): Promise<T> {
+export async function call<T>(config: AxiosRequestConfig): Promise<T> {
     const res = await api.request<T>({
         ...config,
         validateStatus: (s) => (s >= 200 && s < 300) || HANDLED.has(s),
@@ -115,7 +116,7 @@ async function call<T>(config: AxiosRequestConfig): Promise<T> {
     throw new DetailApiError(message || `Request failed (${res.status})`, res.status, code, body?.details ?? null);
 }
 
-function qs(params: Record<string, unknown>): string {
+export function qs(params: Record<string, unknown>): string {
     const sp = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
         if (v === undefined || v === null || v === "") return;
@@ -252,6 +253,14 @@ export const experienceDetailApi = {
             method: "post",
             url: `${bx(businessId)}/experiences/${enc(experienceId)}/status`,
             data: { status },
+        }).then((d) => d.experience),
+
+    /** Prices and GST (admin only; businesses can't change them). Audit-logged. */
+    setPricing: (experienceId: string, patch: ExperiencePricingPatch) =>
+        call<{ experience: ExperienceDetail }>({
+            method: "patch",
+            url: `/api/v2/admin/experiences/${enc(experienceId)}/pricing`,
+            data: patch,
         }).then((d) => d.experience),
 
     setHidden: (experienceId: string, hidden: boolean, reason?: string) =>

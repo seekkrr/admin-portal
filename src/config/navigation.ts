@@ -12,6 +12,7 @@ import {
     Flag,
     Globe,
     GitPullRequestArrow,
+    HandCoins,
     Handshake,
     History,
     Inbox,
@@ -156,6 +157,14 @@ export const NAV_GROUPS: NavGroup[] = [
             { icon: ArrowLeftRight, label: "Transactions", to: "/transactions", roles: [...FINANCE_ROLES], keywords: ["payments"], detailLabel: "Transaction" },
             // GET /api/v2/bookings needs bookings:manage (moderator, admin, super_admin).
             { icon: TicketCheck, label: "Quest bookings", to: "/quest-bookings", roles: [...COLLAB_STAFF_NAV_ROLES], keywords: ["bookings", "booked quests"] },
+            // SeekKrr collects experience payments, keeps a commission and pays businesses out.
+            {
+                icon: HandCoins,
+                label: "Experience payments",
+                to: "/experience-payments",
+                roles: [...FINANCE_ROLES],
+                keywords: ["experience bookings", "commission", "business payouts", "razorpay", "gst", "earnings"],
+            },
             { icon: RotateCcw, label: "Refunds", to: "/refunds", roles: [...FINANCE_ROLES], detailLabel: "Refund" },
             { icon: ReceiptText, label: "Payment events", to: "/payment-events", roles: [...FINANCE_ROLES] },
             { icon: Banknote, label: "Payouts", to: "/payouts", roles: [...FINANCE_ROLES], detailLabel: "Payout" },

@@ -476,6 +476,8 @@ export interface AdminBusiness {
     application_id: string | null;
     /** Per-business products. Missing values = backend defaults (collabs on, experiences off). */
     features?: Partial<BusinessFeatures> | null;
+    /** SeekKrr's commission on experience bookings, 0–100 (on the price before GST). Missing = not on the server yet. */
+    commission_pct?: number | null;
 }
 
 /** What a business can use: Collabs, Experiences, or both (admin switches). */
@@ -522,6 +524,8 @@ export interface UpdateBusinessPayload {
     marker_ids?: string[];
     /** Audit-logged on the backend. */
     features?: Partial<BusinessFeatures>;
+    /** Experience bookings commission, 0–100. */
+    commission_pct?: number;
 }
 
 /** POST /businesses/admin — live straight away when an owner (user ID or email) is given. */

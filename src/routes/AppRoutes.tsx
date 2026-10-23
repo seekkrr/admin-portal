@@ -8,7 +8,7 @@ import { ProtectedRoute } from "./ProtectedRoute";
 import { RequireRole } from "./RequireRole";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { NotFoundPage } from "@/components/shell/NotFoundPage";
-import { ADMIN_NAV_ROLES } from "@/config/navigation";
+import { ADMIN_NAV_ROLES, FINANCE_ROLES } from "@/config/navigation";
 
 // Lazy-loaded page components
 // Today — the to-do inbox (default page after login)
@@ -61,6 +61,7 @@ const PayoutAccountsPage = lazy(() => import("@/features/payouts/pages/PayoutAcc
 const PayoutAccountDetailPage = lazy(() => import("@/features/payouts/pages/PayoutAccountDetailPage").then(m => ({ default: m.PayoutAccountDetailPage })));
 const PayoutsPage = lazy(() => import("@/features/payouts/pages/PayoutsPage").then(m => ({ default: m.PayoutsPage })));
 const PayoutDetailPage = lazy(() => import("@/features/payouts/pages/PayoutDetailPage").then(m => ({ default: m.PayoutDetailPage })));
+const ExperiencePaymentsPage = lazy(() => import("@/features/experience-payments/pages/ExperiencePaymentsPage"));
 const CouponsPage = lazy(() => import("@/features/coupons/pages/CouponsPage").then(m => ({ default: m.CouponsPage })));
 const CouponDetailPage = lazy(() => import("@/features/coupons/pages/CouponDetailPage").then(m => ({ default: m.CouponDetailPage })));
 // Businesses — collabs (creator × business), experiences, check-in offers
@@ -203,6 +204,15 @@ export const AppRoutes = () => {
                 <Route path="transactions" element={page(<TransactionsPage />, "Loading transactions...")} />
                 <Route path="transactions/:transactionId" element={page(<TransactionDetailPage />, "Loading transaction...")} />
                 <Route path="quest-bookings" element={page(<QuestBookingsPage />, "Loading quest bookings...")} />
+                <Route
+                    path="experience-payments"
+                    element={page(
+                        <RequireRole roles={FINANCE_ROLES} message="You need an admin or finance role to see experience payments.">
+                            <ExperiencePaymentsPage />
+                        </RequireRole>,
+                        "Loading experience payments..."
+                    )}
+                />
                 <Route path="refunds" element={page(<RefundsPage />, "Loading refunds...")} />
                 <Route path="refunds/:refundId" element={page(<RefundDetailPage />, "Loading refund...")} />
                 <Route path="payment-events" element={page(<PaymentEventsPage />, "Loading payment events...")} />

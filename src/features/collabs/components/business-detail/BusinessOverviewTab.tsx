@@ -2,12 +2,14 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Info, Store, ToggleRight, UserCheck } from "lucide-react";
+import { BadgePercent, Info, Store, ToggleRight, UserCheck } from "lucide-react";
 import { Panel, DetailList, DetailRow } from "@/components/ui/Panel";
 import { StatusPill, Tag } from "@/components/ui/StatusPill";
 import { Switch, Field, TextInput } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { CopyText } from "@/components/ui/CopyText";
+import { Notice } from "@/components/detail/DetailStates";
+import { inr, pct } from "@/features/experience-payments/money";
 import { formatDate, formatDateTime } from "@/utils/date";
 import { businessesService } from "../../services/businesses.service";
 import { featuresOf, humanize } from "../../utils";
@@ -47,6 +49,79 @@ function FeaturesCard({ business, canEdit }: { business: AdminBusiness; canEdit:
                         onChange={(on) => save.mutate({ [f.key]: on })}
                     />
                 ))}
+            </div>
+        </Panel>
+    );
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * SeekKrr's commission on this business's experience bookings
+ * (PATCH /businesses/admin/{id} {commission_pct}; audit-logged). It applies to
+ * the price before GST, whether GST is on or off; GST is never commissioned.
+ */
+function CommissionCard({ business, canEdit }: { business: AdminBusiness; canEdit: boolean }) {
+    const queryClient = useQueryClient();
+    const current = typeof business.commission_pct === "number" ? business.commission_pct : null;
+    const [value, setValue] = useState(current === null ? "" : String(current));
+    const [seen, setSeen] = useState(current);
+    const [notLive, setNotLive] = useState(false);
+    if (seen !== current) {
+        setSeen(current);
+        setValue(current === null ? "" : String(current));
+    }
+    const n = Number(value);
+    const valid = value.trim() !== "" && Number.isFinite(n) && n >= 0 && n <= 100;
+    const dirty = valid && round2(n) !== (current ?? 0);
+    const example = valid ? round2(n) : (current ?? 0);
+
+    const save = useMutation({
+        mutationFn: () => businessesService.update(business.id, { commission_pct: round2(n) }),
+        onSuccess: (updated) => {
+            const saved = typeof updated.commission_pct === "number" ? updated.commission_pct : null;
+            // An older server ignores the field and answers 200 without it.
+            if (saved === null || Math.abs(saved - round2(n)) > 1e-6) {
+                setNotLive(true);
+                toast.error("This isn't available on the server yet.");
+                return;
+            }
+            setNotLive(false);
+            queryClient.setQueryData(["collabs-business", business.id], { ...business, ...updated });
+            queryClient.invalidateQueries({ queryKey: ["collabs-businesses"] });
+            queryClient.invalidateQueries({ queryKey: ["experience-finance"] });
+            queryClient.invalidateQueries({ queryKey: ["admin-audit", "business", business.id] });
+            toast.success(`Commission set to ${pct(saved)}`);
+        },
+        onError: (e: Error) => toast.error(e.message || "Couldn't save the commission"),
+    });
+
+    return (
+        <Panel title="Commission" icon={BadgePercent} description="SeekKrr's share of each experience booking, on the price before GST (with or without GST).">
+            <div className="space-y-3">
+                {canEdit ? (
+                    <form
+                        className="flex items-end gap-2"
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            if (dirty && !save.isPending) save.mutate();
+                        }}
+                    >
+                        <Field label="Commission %" className="flex-1" error={value.trim() && !valid ? "0 to 100." : undefined}>
+                            <TextInput type="number" min={0} max={100} step="0.01" inputMode="decimal" value={value} placeholder="0" onChange={(e) => setValue(e.target.value)} />
+                        </Field>
+                        <Button type="submit" variant="primary" disabled={!dirty} loading={save.isPending}>
+                            Save
+                        </Button>
+                    </form>
+                ) : (
+                    <p className="text-2xl font-semibold tabular-nums text-ink">{pct(current ?? 0)}</p>
+                )}
+                <p className="text-xs text-ink-muted">
+                    A {inr(1000)} booking → SeekKrr {inr(round2((1000 * example) / 100))} · business {inr(round2(1000 - (1000 * example) / 100))}. GST is
+                    never commissioned or paid to the business.
+                </p>
+                {notLive && <Notice tone="warn">This isn't available on the server yet.</Notice>}
             </div>
         </Panel>
     );
@@ -120,6 +195,7 @@ export function BusinessOverviewTab({ business, isAdmin, isStaff }: { business: 
                         <DetailRow label="Status" value={<StatusPill status={business.status} />} />
                         <DetailRow label="Verified" value={business.verified ? <Tag tone="good">Verified</Tag> : <Tag>Not verified</Tag>} />
                         <DetailRow label="Plan" value={<Tag tone="brand">{humanize(business.plan_code ?? "free")}</Tag>} />
+                        <DetailRow label="Commission" value={typeof business.commission_pct === "number" ? pct(business.commission_pct) : "—"} />
                         <DetailRow label="Contact phone" value={business.contact_phone ? <CopyText value={business.contact_phone} /> : "—"} />
                         <DetailRow label="Contact email" value={business.contact_email ? <CopyText value={business.contact_email} /> : "—"} />
                         <DetailRow
@@ -140,6 +216,7 @@ export function BusinessOverviewTab({ business, isAdmin, isStaff }: { business: 
             </div>
             <div className="space-y-5">
                 <FeaturesCard business={business} canEdit={isStaff} />
+                <CommissionCard business={business} canEdit={isAdmin} />
                 <Panel title="Details" icon={Info}>
                     <DetailList>
                         <DetailRow label="ID" value={<CopyText value={business.id} mono truncate={false} />} />

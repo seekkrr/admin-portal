@@ -9,9 +9,11 @@ import { Pagination } from "@/components/ui/Pagination";
 import { Button, IconButton } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Field, SelectInput, TextInput } from "@/components/ui/Field";
-import { StatusPill } from "@/components/ui/StatusPill";
+import { StatusPill, Tag } from "@/components/ui/StatusPill";
 import { SectionState } from "@/components/detail/DetailStates";
-import { calendarDate, hhmmLabel, rupees } from "@/components/detail/detailFormat";
+import { calendarDate, hhmmLabel } from "@/components/detail/detailFormat";
+import { inr } from "@/features/experience-payments/money";
+import { PaymentStatusPill } from "@/features/experience-payments/components/PaymentStatusPill";
 import { experienceDetailApi } from "@/services/admin-detail.service";
 import { formatDateTime, formatRelative } from "@/utils/date";
 import type { ExperienceBooking, ExperienceDetail } from "@/types/admin-detail";
@@ -20,10 +22,28 @@ const PAGE_SIZE = 50;
 const STATUS_OPTIONS = [
     { value: "", label: "All statuses" },
     { value: "confirmed", label: "Confirmed" },
+    { value: "pending_payment", label: "Awaiting payment" },
     { value: "checked_in", label: "Checked in" },
     { value: "cancelled", label: "Cancelled" },
     { value: "no_show", label: "No-show" },
+    { value: "expired", label: "Expired (not paid)" },
 ];
+
+/** What the customer paid / owes for the booking (rupees). */
+function amountOf(b: ExperienceBooking): number | null {
+    return b.payment?.amount ?? b.pricing?.total ?? b.total_amount ?? null;
+}
+
+/** Cancelling a paid booking refunds the customer in full. */
+function refundNote(b: ExperienceBooking): string {
+    return b.payment?.status === "paid" ? ` This refunds ${inr(amountOf(b))} to the customer.` : "";
+}
+
+function BookingStatus({ b }: { b: ExperienceBooking }) {
+    if (b.status === "pending_payment") return <StatusPill status="pending" label="Awaiting payment" />;
+    if (b.status === "expired") return <StatusPill status="expired" label="Expired (not paid)" />;
+    return <StatusPill status={b.status} />;
+}
 
 function guest(b: ExperienceBooking): string {
     return b.user?.name || b.contact?.name || (b.user_id ? `User …${b.user_id.slice(-6)}` : "Guest");
@@ -68,7 +88,7 @@ export function ExperienceBookingsTab({ experience, canEdit }: { experience: Exp
     const cancel = useMutation({
         mutationFn: ({ b, reason }: { b: ExperienceBooking; reason?: string }) => experienceDetailApi.cancelBooking(businessId, b.id, reason),
         onSuccess: (_, { b }) => {
-            toast.success(`Booking ${b.code ?? ""} cancelled; ${guest(b)} is told`);
+            toast.success(`Booking ${b.code ?? ""} cancelled; ${guest(b)} is told${b.payment?.status === "paid" ? ` and refunded ${inr(amountOf(b))}` : ""}`);
             setCancelling(null);
             refresh();
         },
@@ -90,14 +110,34 @@ export function ExperienceBookingsTab({ experience, canEdit }: { experience: Exp
                     ) : (
                         <span className="font-medium text-ink">{guest(b)}</span>
                     )}
-                    <div className="font-mono text-xs text-ink-faint">{b.code ?? b.id.slice(-8)}</div>
+                    <div className="flex items-center gap-1.5 font-mono text-xs text-ink-faint">
+                        {b.code ?? b.id.slice(-8)}
+                        {b.source === "offline" && <Tag className="font-sans">Offline</Tag>}
+                    </div>
                 </div>
             ),
         },
         { id: "when", header: "When", sortValue: (b) => b.starts_at ?? "", cell: (b) => <span className="whitespace-nowrap text-ink-muted">{when(b)}</span> },
         { id: "people", header: "People", align: "right", sortValue: (b) => b.total_people, cell: (b) => <span className="tabular-nums">{b.total_people}</span> },
-        { id: "amount", header: "Amount", align: "right", sortValue: (b) => b.total_amount ?? 0, cell: (b) => <span className="tabular-nums">{rupees(b.total_amount)}</span> },
-        { id: "status", header: "Status", sortValue: (b) => b.status, cell: (b) => <StatusPill status={b.status} /> },
+        {
+            id: "amount",
+            header: "Amount",
+            align: "right",
+            sortValue: (b) => amountOf(b) ?? 0,
+            cell: (b) => (
+                <span className="whitespace-nowrap tabular-nums">
+                    {amountOf(b) ? inr(amountOf(b)) : "Free"}
+                    {!!b.pricing?.gst_amount && <span className="block text-xs text-ink-faint">incl. {inr(b.pricing.gst_amount)} GST</span>}
+                </span>
+            ),
+        },
+        {
+            id: "payment",
+            header: "Payment",
+            sortValue: (b) => b.payment?.status ?? "",
+            cell: (b) => <PaymentStatusPill status={b.payment?.status ?? (amountOf(b) ? null : "not_required")} />,
+        },
+        { id: "status", header: "Status", sortValue: (b) => b.status, cell: (b) => <BookingStatus b={b} /> },
         {
             id: "booked",
             header: "Booked",
@@ -162,7 +202,7 @@ export function ExperienceBookingsTab({ experience, canEdit }: { experience: Exp
                         toolbar={false}
                         frame="bare"
                         empty={{ icon: Ticket, title: status || date ? "No bookings match" : "No bookings yet" }}
-                        card={{ title: guest, subtitle: when, fields: ["people", "amount", "status", "booked"] }}
+                        card={{ title: guest, subtitle: when, fields: ["people", "amount", "payment", "status"] }}
                         rowActions={
                             canEdit
                                 ? (b) =>
@@ -184,7 +224,11 @@ export function ExperienceBookingsTab({ experience, canEdit }: { experience: Exp
             <ConfirmDialog
                 open={!!cancelling}
                 title="Cancel this booking?"
-                description={cancelling ? `${guest(cancelling)} · ${when(cancelling)} · ${cancelling.total_people} ${cancelling.total_people === 1 ? "person" : "people"}. They get a notification.` : undefined}
+                description={
+                    cancelling
+                        ? `${guest(cancelling)} · ${when(cancelling)} · ${cancelling.total_people} ${cancelling.total_people === 1 ? "person" : "people"}. They get a notification.${refundNote(cancelling)}`
+                        : undefined
+                }
                 confirmLabel="Cancel booking"
                 cancelLabel="Keep booking"
                 tone="danger"

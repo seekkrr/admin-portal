@@ -23,6 +23,7 @@ export interface OptionForm extends Record<string, string> {
     name: string;
     description: string;
     duration_minutes: string;
+    /** Not edited here (Pricing tab); echoed back unchanged so the business route accepts the save. */
     price: string;
 }
 
@@ -145,12 +146,14 @@ function payloadOf(f: ContentForm): Required<Omit<ExperiencePatch, "region_id" |
             .filter((o) => filled(o.name, o.description, o.duration_minutes, o.price))
             .map((o) => {
                 const minutes = num(o.duration_minutes);
+                const price = num(o.price);
                 return {
                     ...(o.id ? { id: o.id } : {}),
                     name: o.name.trim(),
                     description: text(o.description),
                     duration_minutes: minutes === null ? null : Math.round(minutes),
-                    price: num(o.price),
+                    // Prices are admin-only (Pricing tab); a changed price here would be refused.
+                    ...(price !== null ? { price } : {}),
                 };
             }),
     };
@@ -185,7 +188,6 @@ export function formErrors(f: ContentForm): string[] {
     if (opts.some((o) => !o.name.trim())) errs.push("Every option needs a name.");
     const names = opts.map((o) => o.name.trim().toLowerCase()).filter(Boolean);
     if (new Set(names).size !== names.length) errs.push("Two options have the same name.");
-    if (opts.some((o) => o.price.trim() && (num(o.price) === null || (num(o.price) ?? 0) < 0))) errs.push("Option prices must be 0 or more.");
     if (opts.some((o) => o.duration_minutes.trim() && ((num(o.duration_minutes) ?? 0) < 1 || (num(o.duration_minutes) ?? 0) > 1440)))
         errs.push("Option durations are 1 to 1440 minutes.");
     if (f.curator.years.trim() && ((num(f.curator.years) ?? -1) < 0 || (num(f.curator.years) ?? 101) > 100)) errs.push("Curator years must be 0 to 100.");
