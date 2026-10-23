@@ -560,7 +560,8 @@ export interface AdminBusinessApplication {
     id: string;
     business_name: string;
     contact_name: string;
-    email: string;
+    /** Null on the app's quick call-back request (mobile only). */
+    email: string | null;
     phone: string;
     claimed_marker_id: string | null;
     maps_url: string | null;

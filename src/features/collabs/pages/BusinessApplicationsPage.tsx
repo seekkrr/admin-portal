@@ -104,11 +104,11 @@ export function BusinessApplicationsPage() {
             id: "contact",
             header: "Contact",
             sortValue: (a) => a.contact_name,
-            csv: (a) => `${a.contact_name} <${a.email}>`,
+            csv: (a) => (a.email ? `${a.contact_name} <${a.email}>` : `${a.contact_name} (${a.phone})`),
             cell: (a) => (
                 <div className="min-w-0">
                     <div className="text-ink">{a.contact_name}</div>
-                    <div className="mt-0.5 max-w-[220px] truncate text-xs text-ink-faint">{a.email}</div>
+                    <div className="mt-0.5 max-w-[220px] truncate text-xs text-ink-faint">{a.email || a.phone}</div>
                 </div>
             ),
         },
@@ -190,7 +190,7 @@ export function BusinessApplicationsPage() {
                 storageKey="business-applications"
                 exportName="business-applications"
                 summary={data ? `${apps.length} of ${data.total.toLocaleString("en-IN")}` : undefined}
-                card={{ title: (a) => a.business_name, subtitle: (a) => `${a.contact_name} · ${a.email}`, fields: ["status", "place", "plan", "applied"] }}
+                card={{ title: (a) => a.business_name, subtitle: (a) => `${a.contact_name} · ${a.email || a.phone}`, fields: ["status", "place", "plan", "applied"] }}
                 footer={data && <Pagination page={page} totalPages={data.total_pages || 1} total={data.total} pageSize={PAGE_SIZE} onPageChange={(p) => set({ page: p })} />}
             />
 
@@ -259,9 +259,13 @@ export function BusinessApplicationsPage() {
                                 <DetailRow
                                     label="Email"
                                     value={
-                                        <a href={`mailto:${selected.email}`} className="inline-flex items-center gap-1 text-accent-700 hover:underline">
-                                            <Mail className="h-3.5 w-3.5" aria-hidden /> {selected.email}
-                                        </a>
+                                        selected.email ? (
+                                            <a href={`mailto:${selected.email}`} className="inline-flex items-center gap-1 text-accent-700 hover:underline">
+                                                <Mail className="h-3.5 w-3.5" aria-hidden /> {selected.email}
+                                            </a>
+                                        ) : (
+                                            "Not given (asked for a call back)"
+                                        )
                                     }
                                 />
                                 <DetailRow
