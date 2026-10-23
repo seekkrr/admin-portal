@@ -54,7 +54,12 @@ export interface Creator {
 export interface CreatorApplication {
     id: string;
     name: string;
-    email: string;
+    /** Null for an app applicant without a real email (e.g. Apple "Hide my email"). */
+    email: string | null;
+    /** "app": filed from the app's Become a Creator form (approval opens the Collabs tab). */
+    source?: "website" | "app" | null;
+    /** The app account that applied; approving makes this user a creator. */
+    applicant_user_id?: string | null;
     phone: string | null;
     social_links: string[];
     social_links_verified: boolean;

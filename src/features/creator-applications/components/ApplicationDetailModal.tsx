@@ -102,7 +102,14 @@ export function ApplicationDetailModal({ open, application, onClose }: Applicati
                     <SectionHeading>Applicant</SectionHeading>
                     <DetailList>
                         <DetailRow label="Name" value={application.name} />
-                        <DetailRow label="Email" value={<CopyText value={application.email} title="Copy email" />} />
+                        <DetailRow
+                            label="Email"
+                            value={application.email ? <CopyText value={application.email} title="Copy email" /> : "Not shared"}
+                        />
+                        <DetailRow label="Source" value={application.source === "app" ? "SeekKrr app (Become a Creator)" : "Website"} />
+                        {application.applicant_user_id && (
+                            <DetailRow label="Applicant" value={<IdLink kind="user" id={application.applicant_user_id} />} />
+                        )}
                         <DetailRow label="Phone" value={application.phone || "Not provided"} />
                         <DetailRow label="Applied" value={formatDateTime(application.applied_at)} />
                         {application.actioned_at && <DetailRow label="Decided" value={formatDateTime(application.actioned_at)} />}
