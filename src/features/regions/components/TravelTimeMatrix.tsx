@@ -3,12 +3,18 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Route as RouteIcon, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { regionsService } from "../services/regions.service";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
+import { Panel } from "@/components/ui/Panel";
+import { Button } from "@/components/ui/Button";
+import { DataTable, type DataColumn } from "@/components/ui/DataTable";
+import { Pagination } from "@/components/ui/Pagination";
+import { IdLink } from "@/components/ui/IdLink";
 
 interface TravelTimeMatrixProps {
     regionId: string;
     canApprove: boolean;
 }
+
+const PER_PAGE = 25;
 
 function formatDuration(seconds: number | undefined | null): string {
     if (seconds === null || seconds === undefined || !Number.isFinite(seconds) || seconds < 0) return "—";
@@ -24,8 +30,18 @@ function formatDistance(metres: number | undefined | null): string {
     return `${Math.round(metres)} m`;
 }
 
+interface Pair {
+    key: string;
+    from: string | null;
+    to: string | null;
+    walkS: number | null;
+    driveS: number | null;
+    distM: number | null;
+}
+
 export function TravelTimeMatrix({ regionId, canApprove }: TravelTimeMatrixProps) {
     const [matrixPolling, setMatrixPolling] = useState(false);
+    const [page, setPage] = useState(1);
 
     const matrixQuery = useQuery({
         queryKey: ["region-matrix", regionId],
@@ -44,106 +60,72 @@ export function TravelTimeMatrix({ regionId, canApprove }: TravelTimeMatrixProps
         onError: (e: Error) => toast.error(e.message || "Failed to queue matrix refresh"),
     });
 
-    // Normalise pair fields — the API returns from_marker_id / to_marker_id /
-    // walk_duration_s / drive_duration_s / walk_distance_m. The type stub uses
-    // generic `origin` / `destination` / `duration_s`; handle both shapes.
-    const pairs = matrixQuery.data?.pairs ?? [];
+    // The API returns from_marker_id / to_marker_id / walk_duration_s / drive_duration_s /
+    // walk_distance_m; older responses used origin / destination / duration_s. Handle both.
+    const pairs: Pair[] = (matrixQuery.data?.pairs ?? []).map((pair, idx) => {
+        const p = pair as Record<string, unknown>;
+        const from = (p.from_marker_id ?? p.origin ?? null) as string | null;
+        const to = (p.to_marker_id ?? p.destination ?? null) as string | null;
+        return {
+            key: `${from}-${to}-${idx}`,
+            from,
+            to,
+            walkS: (p.walk_duration_s ?? p.duration_s ?? null) as number | null,
+            driveS: (p.drive_duration_s ?? null) as number | null,
+            distM: (p.walk_distance_m ?? p.distance_m ?? p.distance ?? null) as number | null,
+        };
+    });
+    const totalPages = Math.max(1, Math.ceil(pairs.length / PER_PAGE));
+    const current = Math.min(page, totalPages);
+    const rows = pairs.slice((current - 1) * PER_PAGE, current * PER_PAGE);
+
+    const columns: DataColumn<Pair>[] = [
+        { id: "from", header: "From", csv: (p) => p.from, cell: (p) => <IdLink kind="place" id={p.from} /> },
+        { id: "to", header: "To", csv: (p) => p.to, cell: (p) => <IdLink kind="place" id={p.to} /> },
+        { id: "walk", header: "Walk", align: "right", sortValue: (p) => p.walkS, cell: (p) => <span className="whitespace-nowrap tabular-nums">{formatDuration(p.walkS)}</span> },
+        { id: "drive", header: "Drive", align: "right", sortValue: (p) => p.driveS, cell: (p) => <span className="whitespace-nowrap tabular-nums">{formatDuration(p.driveS)}</span> },
+        {
+            id: "distance",
+            header: "Distance",
+            align: "right",
+            sortValue: (p) => p.distM,
+            cell: (p) => <span className="whitespace-nowrap tabular-nums text-ink-muted">{formatDistance(p.distM)}</span>,
+        },
+    ];
 
     return (
-        <Card padding="md">
-            <CardHeader className="border-b border-neutral-100 pb-4 mb-4 flex flex-row items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <RouteIcon className="w-5 h-5 text-cyan-600" />
-                    <CardTitle>Travel-Time Matrix</CardTitle>
-                </div>
-                {canApprove && (
-                    <button
-                        onClick={() => refreshMatrixMutation.mutate()}
-                        disabled={refreshMatrixMutation.isPending}
-                        className="py-2 px-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors text-cyan-700 bg-cyan-50 hover:bg-cyan-100 text-sm disabled:opacity-50"
-                    >
-                        <RefreshCw className={`w-4 h-4 ${matrixPolling ? "animate-spin" : ""}`} />
-                        Refresh Matrix
-                    </button>
-                )}
-            </CardHeader>
-            <CardContent>
-                <div className="space-y-4">
-                    {matrixQuery.isLoading ? (
-                        <p className="text-sm text-neutral-500">Loading matrix...</p>
-                    ) : (
-                        <>
-                            <p className="text-sm text-neutral-600">
-                                <span className="font-semibold text-neutral-900">{matrixQuery.data?.count ?? pairs.length}</span> travel-time
-                                pairs computed for this region.
-                                {matrixPolling && <span className="ml-2 text-cyan-600">Refreshing…</span>}
-                            </p>
-                            {pairs.length === 0 ? (
-                                <p className="text-sm text-neutral-400">No travel-time pairs available yet. Use "Refresh Matrix" to compute them.</p>
-                            ) : (
-                                <div className="mt-4 max-h-80 overflow-y-auto rounded-xl border border-neutral-200">
-                                    <table className="min-w-full divide-y divide-neutral-200 text-sm">
-                                        <thead className="bg-neutral-50 sticky top-0">
-                                            <tr>
-                                                <th className="px-4 py-3 text-left font-semibold text-neutral-500 uppercase tracking-wider text-xs">
-                                                    From
-                                                </th>
-                                                <th className="px-4 py-3 text-left font-semibold text-neutral-500 uppercase tracking-wider text-xs">
-                                                    To
-                                                </th>
-                                                <th className="px-4 py-3 text-right font-semibold text-neutral-500 uppercase tracking-wider text-xs">
-                                                    Walk
-                                                </th>
-                                                <th className="px-4 py-3 text-right font-semibold text-neutral-500 uppercase tracking-wider text-xs">
-                                                    Drive
-                                                </th>
-                                                <th className="px-4 py-3 text-right font-semibold text-neutral-500 uppercase tracking-wider text-xs">
-                                                    Distance
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-white divide-y divide-neutral-100">
-                                            {pairs.map((pair, idx) => {
-                                                // Support both API shapes:
-                                                //   new: from_marker_id / to_marker_id / walk_duration_s / drive_duration_s / walk_distance_m
-                                                //   old stub: origin / destination / duration_s
-                                                const p = pair as Record<string, unknown>;
-                                                const from = (p.from_marker_id ?? p.origin ?? "—") as string;
-                                                const to = (p.to_marker_id ?? p.destination ?? "—") as string;
-                                                const walkS = (p.walk_duration_s ?? p.duration_s ?? null) as number | null;
-                                                const driveS = (p.drive_duration_s ?? null) as number | null;
-                                                const distM = (p.walk_distance_m ?? p.distance_m ?? p.distance ?? null) as number | null;
-                                                return (
-                                                    <tr
-                                                        key={`${from}-${to}-${idx}`}
-                                                        className="hover:bg-neutral-50 transition-colors"
-                                                    >
-                                                        <td className="px-4 py-3 text-neutral-700 font-mono text-xs truncate max-w-[160px]" title={from}>
-                                                            {from}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-neutral-700 font-mono text-xs truncate max-w-[160px]" title={to}>
-                                                            {to}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-right text-neutral-700 whitespace-nowrap">
-                                                            {formatDuration(walkS)}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-right text-neutral-700 whitespace-nowrap">
-                                                            {formatDuration(driveS)}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-right text-neutral-500 whitespace-nowrap text-xs">
-                                                            {formatDistance(distM)}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </>
-                    )}
-                </div>
-            </CardContent>
-        </Card>
+        <Panel
+            title="Travel-time matrix"
+            icon={RouteIcon}
+            description={
+                <>
+                    {(matrixQuery.data?.count ?? pairs.length).toLocaleString("en-IN")} travel-time pairs for this region
+                    {matrixPolling && <span className="text-accent-700"> · refreshing…</span>}
+                </>
+            }
+            actions={
+                canApprove && (
+                    <Button size="sm" variant="secondary" icon={RefreshCw} onClick={() => refreshMatrixMutation.mutate()} loading={refreshMatrixMutation.isPending}>
+                        Refresh matrix
+                    </Button>
+                )
+            }
+            bodyClassName="p-0"
+        >
+            <DataTable
+                label="Travel times"
+                rows={rows}
+                columns={columns}
+                rowKey={(p) => p.key}
+                isLoading={matrixQuery.isLoading}
+                error={matrixQuery.error}
+                onRetry={() => matrixQuery.refetch()}
+                empty={{ icon: RouteIcon, title: "No travel times yet.", description: canApprove ? "Use Refresh matrix to compute them." : undefined }}
+                frame="bare"
+                toolbar={false}
+                card={{ title: (p) => <IdLink kind="place" id={p.from} />, subtitle: () => "to", fields: ["to", "walk", "drive", "distance"] }}
+                footer={<Pagination page={current} totalPages={totalPages} total={pairs.length} pageSize={PER_PAGE} onPageChange={setPage} />}
+            />
+        </Panel>
     );
 }

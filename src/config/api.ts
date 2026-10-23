@@ -303,6 +303,43 @@ export const API_ENDPOINTS = {
     ADMIN_SEARCH: "/api/v2/admin/search",
     // GET ?entity_type=&entity_id=&actor_id=&action=&page=&page_size= → { items, total }
     ADMIN_AUDIT: "/api/v2/admin/audit",
+    // ── Screens added in the rebuild (phase 2) ──
+    // Push broadcast (admin): POST {title, body, group_key, image?, long_body?, send_at?};
+    // scheduled list (pending) and cancel.
+    NOTIFICATIONS: {
+        BROADCAST: "/api/v2/notifications/broadcast",
+        SCHEDULED: "/api/v2/notifications/scheduled",
+        SCHEDULED_BY_ID: (id: string) => `/api/v2/notifications/scheduled/${id}`,
+    },
+    // Place categories (admin list/create/update; public = active only).
+    CATEGORIES: {
+        PUBLIC: "/api/v2/categories/public",
+        ADMIN: "/api/v2/categories/admin",
+        ADMIN_BY_ID: (id: string) => `/api/v2/categories/admin/${id}`,
+    },
+    // Partner hub admin workspace: queue counts, held chat messages, reported threads.
+    PARTNER_ADMIN: {
+        HUB: "/api/v2/admin/hub",
+        HELD_MESSAGES: "/api/v2/admin/chat/held",
+        HELD_REVIEW: (messageId: string) => `/api/v2/admin/chat/held/${messageId}`,
+        THREAD: (threadId: string) => `/api/v2/admin/chat/threads/${threadId}`,
+    },
+    // Quest bookings (admin list: ?quest_id=&user_id=&status=&page=&page_size=).
+    BOOKINGS: {
+        ADMIN_LIST: "/api/v2/bookings",
+        BY_ID: (id: string) => `/api/v2/bookings/${id}`,
+    },
+    // Competition leaderboards (explorer / creator / crowd favourite) and their rebuild.
+    COMPETITIONS: {
+        RECOMPUTE: "/api/v2/leaderboards/recompute-competitions",
+        EXPLORER: "/api/v2/leaderboards/competition/explorer",
+        CREATOR: "/api/v2/leaderboards/competition/creator",
+        CROWD_FAVORITE: "/api/v2/leaderboards/competition/crowd-favorite",
+    },
+    // Collab lifecycle sweep (expire stale requests, close finished collabs) — admin.
+    COLLABS_LIFECYCLE_SWEEP: "/api/v2/admin/collabs/lifecycle/sweep",
+    // Check-in offers: admin edit / disable (PATCH {title, description, discount fields, active, expires_at}).
+    OFFERS_ADMIN_BY_ID: (offerId: string) => `/api/v2/offers/admin/${offerId}`,
     // Command chat (no AI): text → choose / need / preview / answer → run. Any signed-in user;
     // what each may run depends on role. Owned by src/services/commands.service.ts.
     COMMANDS: {

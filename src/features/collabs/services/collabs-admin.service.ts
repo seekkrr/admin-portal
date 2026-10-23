@@ -177,4 +177,15 @@ export const collabsAdminService = {
         const { data } = await api.get<{ versions: MatchEvaluationRow[] }>(E.MATCH_EVALUATION);
         return data.versions ?? [];
     },
+
+    // ── Lifecycle (admin) ──
+    /**
+     * Run the collab lifecycle sweep now (it also runs on a schedule): expires
+     * stale requests/invites/approvals, marks overdue and no-show collabs and
+     * sends reminders. Returns how many of each it changed.
+     */
+    lifecycleSweep: async (): Promise<Record<string, number>> => {
+        const { data } = await api.post<{ counts?: Record<string, number> }>(API_ENDPOINTS.COLLABS_LIFECYCLE_SWEEP);
+        return data.counts ?? {};
+    },
 };

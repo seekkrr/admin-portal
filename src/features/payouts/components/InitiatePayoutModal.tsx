@@ -1,11 +1,18 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, RefreshCw, AlertTriangle, CheckCircle, Building2, Smartphone, Star } from "lucide-react";
+import { AlertTriangle, Banknote, Building2, CheckCircle, Loader2, Smartphone, Star } from "lucide-react";
 import { toast } from "sonner";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Field, TextArea, TextInput } from "@/components/ui/Field";
+import { Tag } from "@/components/ui/StatusPill";
+import { cx } from "@/utils/cx";
+import { formatCurrency } from "@/utils/format";
 import { payoutsService } from "../services/payouts.service";
 import { payoutAccountsService } from "../services/payout-accounts.service";
 import { PayoutAccountStatusBadge } from "./PayoutAccountStatusBadge";
-import { formatCurrency } from "@/utils/format";
+import { CreatorPicker } from "./CreatorPicker";
+import { maskedDetail, methodLabel } from "./accountDisplay";
 import type { AdminPayoutAccount } from "@/types";
 
 interface InitiatePayoutModalProps {
@@ -15,67 +22,58 @@ interface InitiatePayoutModalProps {
     defaultAmount?: string;
 }
 
-const inputCls =
-    "w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50/60 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:bg-white focus:border-transparent";
+const OBJECT_ID = /^[a-f0-9]{24}$/i;
 
-function AccountCard({
-    account,
-    selected,
-    onSelect,
-}: {
-    account: AdminPayoutAccount;
-    selected: boolean;
-    onSelect: () => void;
-}) {
+function AccountOption({ account, selected, onSelect }: { account: AdminPayoutAccount; selected: boolean; onSelect?: () => void }) {
     const isBank = account.method === "bank_transfer";
+    const usable = account.status === "verified";
     return (
         <button
             type="button"
+            role="radio"
+            aria-checked={selected}
+            disabled={!usable}
             onClick={onSelect}
-            className={`w-full text-left rounded-xl border p-3.5 transition-all ${
-                selected
-                    ? "border-emerald-400 bg-emerald-50/60 shadow-sm"
-                    : "border-neutral-200 bg-neutral-50/40 hover:border-neutral-300"
-            } ${account.status !== "verified" ? "opacity-60" : ""}`}
+            className={cx(
+                "w-full rounded-control border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+                selected ? "border-accent-300 bg-accent-50" : "border-line-strong bg-surface hover:border-brand-200"
+            )}
         >
             <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2.5">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${selected ? "bg-emerald-100 text-emerald-600" : "bg-neutral-100 text-neutral-500"}`}>
-                        {isBank ? <Building2 className="w-4 h-4" /> : <Smartphone className="w-4 h-4" />}
-                    </div>
-                    <div className="text-sm">
-                        <p className="font-semibold text-neutral-900 capitalize">
-                            {account.method.replace(/_/g, " ")}
+                <div className="flex min-w-0 items-center gap-2.5">
+                    <span className={cx("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", selected ? "bg-accent-100 text-accent-700" : "bg-brand-50 text-brand-700")}>
+                        {isBank ? <Building2 className="h-4 w-4" aria-hidden /> : <Smartphone className="h-4 w-4" aria-hidden />}
+                    </span>
+                    <div className="min-w-0 text-sm">
+                        <p className="flex flex-wrap items-center gap-1.5 font-medium text-ink">
+                            {methodLabel(account.method)}
                             {account.is_primary && (
-                                <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] text-amber-600 font-medium">
-                                    <Star className="w-2.5 h-2.5 fill-current" /> Primary
-                                </span>
+                                <Tag tone="warn">
+                                    <Star className="h-2.5 w-2.5 fill-current" aria-hidden /> Primary
+                                </Tag>
                             )}
                         </p>
-                        <p className="text-neutral-500 text-xs font-mono mt-0.5">
-                            {isBank
-                                ? account.bank_details?.account_number_masked ?? "—"
-                                : account.upi_id ?? "—"}
-                        </p>
-                        {isBank && account.bank_details?.bank_name && (
-                            <p className="text-neutral-400 text-xs">{account.bank_details.bank_name}</p>
-                        )}
+                        <p className="mt-0.5 font-mono text-xs text-ink-muted">{maskedDetail(account)}</p>
+                        {isBank && account.bank_details?.bank_name && <p className="text-xs text-ink-faint">{account.bank_details.bank_name}</p>}
                     </div>
                 </div>
-                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                <div className="flex shrink-0 flex-col items-end gap-1.5">
                     <PayoutAccountStatusBadge status={account.status} />
-                    {selected && <CheckCircle className="w-4 h-4 text-emerald-500" />}
+                    {selected && <CheckCircle className="h-4 w-4 text-accent-600" aria-label="Selected" />}
                 </div>
             </div>
         </button>
     );
 }
 
+/**
+ * Initiate a creator disbursement (admin/super_admin). Two steps: fill in the
+ * payout, then review and confirm — it moves money and can't be undone.
+ */
 export function InitiatePayoutModal({ open, onClose, defaultCreatorId, defaultAmount }: InitiatePayoutModalProps) {
     const queryClient = useQueryClient();
 
     const [creatorId, setCreatorId] = useState("");
-    const [debouncedCreatorId, setDebouncedCreatorId] = useState("");
     const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
     const [amount, setAmount] = useState("");
     const [currency, setCurrency] = useState("INR");
@@ -88,7 +86,6 @@ export function InitiatePayoutModal({ open, onClose, defaultCreatorId, defaultAm
     useEffect(() => {
         if (open) {
             setCreatorId(defaultCreatorId ?? "");
-            setDebouncedCreatorId(defaultCreatorId ?? "");
             setSelectedAccountId(null);
             setAmount(defaultAmount ?? "");
             setCurrency("INR");
@@ -100,48 +97,40 @@ export function InitiatePayoutModal({ open, onClose, defaultCreatorId, defaultAm
         }
     }, [open, defaultCreatorId, defaultAmount]);
 
-    // Debounce creator id input (only query when it looks like an ObjectId)
-    useEffect(() => {
-        const t = setTimeout(() => {
-            setDebouncedCreatorId(creatorId.trim().length >= 24 ? creatorId.trim() : "");
-        }, 500);
-        return () => clearTimeout(t);
-    }, [creatorId]);
+    const lookupId = OBJECT_ID.test(creatorId.trim()) ? creatorId.trim() : "";
 
     const { data: accountsData, isLoading: loadingAccounts } = useQuery({
-        queryKey: ["payout-accounts-for-creator", debouncedCreatorId],
-        queryFn: () => payoutAccountsService.list({ creator_id: debouncedCreatorId, page_size: 50 }),
-        enabled: !!debouncedCreatorId,
+        queryKey: ["payout-accounts-for-creator", lookupId],
+        queryFn: () => payoutAccountsService.list({ creator_id: lookupId, page_size: 50 }),
+        enabled: open && !!lookupId,
         staleTime: 60 * 1000,
         select: (d) => d.accounts ?? [],
     });
 
-    // Auto-select primary verified account when accounts load
-    useEffect(() => {
-        if (!accountsData) return;
-        if (selectedAccountId) return; // keep user's manual selection
-        const primary = accountsData.find((a) => a.is_primary && a.status === "verified");
-        const fallback = accountsData.find((a) => a.status === "verified");
-        const auto = primary ?? fallback ?? null;
-        setSelectedAccountId(auto?.id ?? null);
-    }, [accountsData, selectedAccountId]);
-
-    // Reset account selection when creator changes
+    // Reset account selection when the creator changes
     useEffect(() => {
         setSelectedAccountId(null);
-    }, [debouncedCreatorId]);
+    }, [lookupId]);
+
+    // Auto-select the primary verified account when accounts load
+    useEffect(() => {
+        if (!accountsData || selectedAccountId) return;
+        const primary = accountsData.find((a) => a.is_primary && a.status === "verified");
+        const fallback = accountsData.find((a) => a.status === "verified");
+        setSelectedAccountId((primary ?? fallback)?.id ?? null);
+    }, [accountsData, selectedAccountId]);
 
     const selectedAccount = accountsData?.find((a) => a.id === selectedAccountId) ?? null;
 
     const validate = (): boolean => {
         const e: Record<string, string> = {};
-        if (!creatorId.trim()) e.creator_id = "Creator ID is required.";
-        else if (creatorId.trim().length < 24) e.creator_id = "Enter a valid ObjectId (24 chars).";
+        if (!creatorId.trim()) e.creator_id = "Choose a creator.";
+        else if (!OBJECT_ID.test(creatorId.trim())) e.creator_id = "Enter a valid creator ID (24 characters).";
         const amt = Number(amount);
         if (!amount.trim() || Number.isNaN(amt) || amt <= 0) e.amount = "Enter an amount greater than zero.";
         if (!selectedAccountId) e.account = "Select a verified payout account.";
-        else if (selectedAccount?.status !== "verified") e.account = "Selected account must be verified.";
-        if (periodStart && periodEnd && periodStart > periodEnd) e.periodEnd = "Period end must be on or after the start.";
+        else if (selectedAccount?.status !== "verified") e.account = "The selected account must be verified.";
+        if (periodStart && periodEnd && periodStart > periodEnd) e.periodEnd = "The period end must be on or after the start.";
         setErrors(e);
         return Object.keys(e).length === 0;
     };
@@ -172,254 +161,128 @@ export function InitiatePayoutModal({ open, onClose, defaultCreatorId, defaultAm
         },
     });
 
-    if (!open) return null;
-
-    const handleNext = () => {
-        if (!validate()) return;
-        setConfirming(true);
-    };
-
     const verifiedAccounts = accountsData?.filter((a) => a.status === "verified") ?? [];
     const otherAccounts = accountsData?.filter((a) => a.status !== "verified") ?? [];
 
-    const accountIdentifier = selectedAccount
-        ? selectedAccount.method === "bank_transfer"
-            ? selectedAccount.bank_details?.account_number_masked ?? "—"
-            : selectedAccount.upi_id ?? "—"
-        : "—";
+    const footer = confirming ? (
+        <>
+            <Button variant="secondary" onClick={() => setConfirming(false)} disabled={mutation.isPending}>
+                Back
+            </Button>
+            <Button variant="primary" onClick={() => mutation.mutate()} loading={mutation.isPending}>
+                Confirm and initiate
+            </Button>
+        </>
+    ) : (
+        <>
+            <Button variant="secondary" onClick={onClose}>
+                Cancel
+            </Button>
+            <Button variant="primary" onClick={() => validate() && setConfirming(true)}>
+                Review
+            </Button>
+        </>
+    );
 
     return (
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-[3px] animate-fade-in p-4"
-            onClick={onClose}
+        <Modal
+            open={open}
+            onClose={onClose}
+            dismissible={!mutation.isPending}
+            icon={Banknote}
+            title={confirming ? "Confirm payout" : "Initiate payout"}
+            size="lg"
+            footer={footer}
         >
-            <div
-                className="bg-white rounded-2xl shadow-2xl ring-1 ring-neutral-900/5 w-full max-w-lg animate-scale-in max-h-[90vh] overflow-y-auto"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 sticky top-0 bg-white z-10">
-                    <h3 className="text-lg font-bold text-neutral-900 tracking-tight">Initiate Payout</h3>
-                    <button
-                        onClick={onClose}
-                        className="p-1.5 rounded-lg text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
+            {confirming ? (
+                <div className="flex items-start gap-3 rounded-control border border-warn-line bg-warn-soft p-4">
+                    <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warn" aria-hidden />
+                    <dl className="space-y-1 text-sm text-ink">
+                        <div>
+                            <dt className="inline text-ink-muted">Amount: </dt>
+                            <dd className="inline font-semibold">{formatCurrency(Number(amount), currency || "INR")}</dd>
+                        </div>
+                        <div>
+                            <dt className="inline text-ink-muted">Creator: </dt>
+                            <dd className="inline font-mono text-xs">{creatorId.trim()}</dd>
+                        </div>
+                        <div>
+                            <dt className="inline text-ink-muted">Account: </dt>
+                            <dd className="inline">
+                                <span className="font-medium">{methodLabel(selectedAccount?.method)}</span>{" "}
+                                <span className="font-mono text-xs">{selectedAccount ? maskedDetail(selectedAccount) : "—"}</span>
+                                {selectedAccount?.bank_details?.bank_name && <span className="text-ink-muted"> · {selectedAccount.bank_details.bank_name}</span>}
+                            </dd>
+                        </div>
+                        <p className="pt-1 text-xs font-medium text-warn">This moves money and can&apos;t be undone.</p>
+                    </dl>
                 </div>
+            ) : (
+                <form
+                    className="space-y-4"
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        if (validate()) setConfirming(true);
+                    }}
+                >
+                    <Field label="Creator" htmlFor="payout-creator" required error={errors.creator_id}>
+                        <CreatorPicker id="payout-creator" value={creatorId} onChange={setCreatorId} invalid={!!errors.creator_id} />
+                    </Field>
 
-                {confirming ? (
-                    <div className="p-6 space-y-4">
-                        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/70 p-4">
-                            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                            <div className="text-sm text-amber-800 space-y-1">
-                                <p className="font-semibold">Confirm disbursement</p>
-                                <p>
-                                    Amount:{" "}
-                                    <span className="font-semibold">
-                                        {formatCurrency(Number(amount), currency || "INR")}
-                                    </span>
+                    {lookupId && (
+                        <div>
+                            <p className="mb-1.5 text-sm font-medium text-ink">Payout account</p>
+                            {loadingAccounts ? (
+                                <p role="status" className="flex items-center justify-center gap-2 rounded-control border border-line bg-surface-muted p-4 text-sm text-ink-muted">
+                                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading accounts…
                                 </p>
-                                <p>
-                                    Creator:{" "}
-                                    <span className="font-mono text-xs">{creatorId.trim()}</span>
-                                </p>
-                                <p>
-                                    Account:{" "}
-                                    <span className="font-semibold capitalize">
-                                        {selectedAccount?.method.replace(/_/g, " ")}
-                                    </span>{" "}
-                                    <span className="font-mono text-xs">{accountIdentifier}</span>
-                                    {selectedAccount?.bank_details?.bank_name && (
-                                        <span className="text-amber-700"> · {selectedAccount.bank_details.bank_name}</span>
-                                    )}
-                                </p>
-                                <p className="text-xs text-amber-700 pt-1">This action moves money and cannot be undone.</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-2.5">
-                            <button
-                                onClick={() => setConfirming(false)}
-                                disabled={mutation.isPending}
-                                className="px-4 py-2.5 rounded-xl border border-neutral-200 text-sm font-medium text-neutral-600 hover:bg-neutral-50 transition-all flex-1"
-                            >
-                                Back
-                            </button>
-                            <button
-                                onClick={() => mutation.mutate()}
-                                disabled={mutation.isPending}
-                                className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all disabled:opacity-50 flex-1 flex items-center justify-center gap-2"
-                            >
-                                {mutation.isPending && <RefreshCw className="w-4 h-4 animate-spin" />}
-                                Confirm & Initiate
-                            </button>
-                        </div>
-                    </div>
-                ) : (
-                    <>
-                        <div className="p-6 space-y-5">
-                            {/* Creator ID */}
-                            <div>
-                                <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1.5 block">
-                                    Creator ID
-                                </label>
-                                <input
-                                    className={inputCls}
-                                    value={creatorId}
-                                    placeholder="24-char ObjectId"
-                                    onChange={(e) => setCreatorId(e.target.value)}
-                                />
-                                {errors.creator_id && (
-                                    <p className="text-xs text-red-600 mt-1">{errors.creator_id}</p>
-                                )}
-                            </div>
-
-                            {/* Payout accounts for creator */}
-                            {debouncedCreatorId && (
-                                <div>
-                                    <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2 block">
-                                        Payout Account
-                                    </label>
-                                    {loadingAccounts ? (
-                                        <div className="rounded-xl border border-neutral-200 bg-neutral-50/40 p-4 text-center text-sm text-neutral-400">
-                                            <RefreshCw className="w-4 h-4 animate-spin inline mr-2" />
-                                            Loading accounts…
-                                        </div>
-                                    ) : verifiedAccounts.length === 0 && otherAccounts.length === 0 ? (
-                                        <div className="rounded-xl border border-neutral-200 bg-neutral-50/40 p-4 text-center text-sm text-neutral-400">
-                                            No payout accounts found for this creator.
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            {verifiedAccounts.map((acc) => (
-                                                <AccountCard
-                                                    key={acc.id}
-                                                    account={acc}
-                                                    selected={selectedAccountId === acc.id}
-                                                    onSelect={() => setSelectedAccountId(acc.id)}
-                                                />
-                                            ))}
-                                            {otherAccounts.length > 0 && (
-                                                <>
-                                                    {verifiedAccounts.length > 0 && (
-                                                        <p className="text-[11px] text-neutral-400 font-medium uppercase tracking-wide pt-1">
-                                                            Unverified (cannot be used)
-                                                        </p>
-                                                    )}
-                                                    {otherAccounts.map((acc) => (
-                                                        <AccountCard
-                                                            key={acc.id}
-                                                            account={acc}
-                                                            selected={false}
-                                                            onSelect={() => {}} // cannot select unverified
-                                                        />
-                                                    ))}
-                                                </>
+                            ) : verifiedAccounts.length === 0 && otherAccounts.length === 0 ? (
+                                <p className="rounded-control border border-line bg-surface-muted p-4 text-center text-sm text-ink-muted">No payout accounts found for this creator.</p>
+                            ) : (
+                                <div role="radiogroup" aria-label="Payout account" className="space-y-2">
+                                    {verifiedAccounts.map((acc) => (
+                                        <AccountOption key={acc.id} account={acc} selected={selectedAccountId === acc.id} onSelect={() => setSelectedAccountId(acc.id)} />
+                                    ))}
+                                    {otherAccounts.length > 0 && (
+                                        <>
+                                            {verifiedAccounts.length > 0 && (
+                                                <p className="pt-1 text-[11px] font-medium uppercase tracking-wide text-ink-faint">Not verified (can&apos;t be used)</p>
                                             )}
-                                        </div>
-                                    )}
-                                    {errors.account && (
-                                        <p className="text-xs text-red-600 mt-1">{errors.account}</p>
+                                            {otherAccounts.map((acc) => (
+                                                <AccountOption key={acc.id} account={acc} selected={false} />
+                                            ))}
+                                        </>
                                     )}
                                 </div>
                             )}
-
-                            {/* Amount + Currency */}
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                <div className="sm:col-span-2">
-                                    <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1.5 block">
-                                        Amount
-                                    </label>
-                                    <input
-                                        className={inputCls}
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={amount}
-                                        placeholder="0.00"
-                                        onChange={(e) => setAmount(e.target.value)}
-                                    />
-                                    {errors.amount && (
-                                        <p className="text-xs text-red-600 mt-1">{errors.amount}</p>
-                                    )}
-                                </div>
-                                <div>
-                                    <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1.5 block">
-                                        Currency
-                                    </label>
-                                    <input
-                                        className={inputCls}
-                                        value={currency}
-                                        maxLength={3}
-                                        placeholder="INR"
-                                        onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Period */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1.5 block">
-                                        Period Start{" "}
-                                        <span className="normal-case font-normal text-neutral-400">(optional)</span>
-                                    </label>
-                                    <input
-                                        className={inputCls}
-                                        type="date"
-                                        value={periodStart}
-                                        onChange={(e) => setPeriodStart(e.target.value)}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1.5 block">
-                                        Period End{" "}
-                                        <span className="normal-case font-normal text-neutral-400">(optional)</span>
-                                    </label>
-                                    <input
-                                        className={inputCls}
-                                        type="date"
-                                        value={periodEnd}
-                                        onChange={(e) => setPeriodEnd(e.target.value)}
-                                    />
-                                    {errors.periodEnd && (
-                                        <p className="text-xs text-red-600 mt-1">{errors.periodEnd}</p>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Notes */}
-                            <div>
-                                <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-1.5 block">
-                                    Notes{" "}
-                                    <span className="normal-case font-normal text-neutral-400">(optional)</span>
-                                </label>
-                                <textarea
-                                    className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50/60 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:bg-white focus:border-transparent resize-none"
-                                    rows={2}
-                                    value={notes}
-                                    placeholder="Internal note for this disbursement…"
-                                    onChange={(e) => setNotes(e.target.value)}
-                                />
-                            </div>
+                            {errors.account && <p className="mt-1 text-xs font-medium text-bad">{errors.account}</p>}
                         </div>
+                    )}
 
-                        <div className="flex gap-2.5 px-6 py-4 border-t border-neutral-100 sticky bottom-0 bg-white">
-                            <button
-                                onClick={onClose}
-                                className="px-4 py-2.5 rounded-xl border border-neutral-200 text-sm font-medium text-neutral-600 hover:bg-neutral-50 transition-all flex-1"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleNext}
-                                className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all flex-1"
-                            >
-                                Review
-                            </button>
-                        </div>
-                    </>
-                )}
-            </div>
-        </div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                        <Field label="Amount" required error={errors.amount} className="sm:col-span-2">
+                            <TextInput type="number" inputMode="decimal" min="0" step="0.01" value={amount} placeholder="0.00" onChange={(e) => setAmount(e.target.value)} />
+                        </Field>
+                        <Field label="Currency">
+                            <TextInput value={currency} maxLength={3} placeholder="INR" onChange={(e) => setCurrency(e.target.value.toUpperCase())} />
+                        </Field>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <Field label="Period start" hint="Optional">
+                            <TextInput type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+                        </Field>
+                        <Field label="Period end" hint="Optional" error={errors.periodEnd}>
+                            <TextInput type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+                        </Field>
+                    </div>
+
+                    <Field label="Notes" hint="Optional internal note for this disbursement.">
+                        <TextArea rows={2} value={notes} maxLength={1000} onChange={(e) => setNotes(e.target.value)} />
+                    </Field>
+                    <button type="submit" hidden aria-hidden tabIndex={-1} />
+                </form>
+            )}
+        </Modal>
     );
 }

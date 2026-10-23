@@ -1,60 +1,66 @@
-import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useState } from "react";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ExternalLink, Eye, EyeOff, Filter, ImageOff, Plus, Ticket, UserPlus } from "lucide-react";
+import { ExternalLink, Eye, EyeOff, ImageOff, Plus, Ticket, UserPlus } from "lucide-react";
 import { AccessDenied } from "@components/AccessDenied";
-import { FilterDropdown, type DropdownOption } from "@/components/FilterDropdown";
+import { Button, IconButton } from "@/components/ui/Button";
+import { Menu } from "@/components/ui/Menu";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { FilterBar, FilterSelect, type FilterChip, type FilterOption } from "@/components/ui/FilterBar";
+import { chipLabel } from "@/components/ui/filters";
+import { DataTable, type DataColumn } from "@/components/ui/DataTable";
 import { Pagination } from "@/components/ui/Pagination";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { StatusPill, Tag } from "@/components/ui/StatusPill";
+import { IdLink } from "@/components/ui/IdLink";
+import { EntityPicker } from "@/components/ui/EntityPicker";
+import { useDebouncedUrlInput, useUrlState } from "@/hooks/useUrlState";
+import { formatDate } from "@/utils/date";
 import { experiencesAdminService } from "../services/experiences-admin.service";
 import { NewExperienceModal, SetupHostModal } from "../components/ExperienceSetupModals";
 import { useCollabAccess } from "../roles";
-import { useDebouncedValue } from "../hooks";
-import {
-    Chip, LoadingButtonIcon, Modal, PageHeader, PanelState, SearchBox, StatusPill, Toolbar, btnDanger, btnPrimary, btnSecondary,
-    btnSmNeutral, btnSmReject, thClass,
-} from "../components/CollabsUi";
-import { OBJECT_ID_RE, fmtDate, partnerPortalUrl, totalPagesOf } from "../utils";
+import { OBJECT_ID_RE, partnerPortalUrl, totalPagesOf } from "../utils";
 import type { AdminExperience, ExperienceStatus, ListExperiencesParams } from "../types";
 
-const STATUS_OPTIONS: DropdownOption[] = [
-    { value: "", label: "All statuses" },
-    { value: "published", label: "Published", dot: "bg-emerald-500" },
-    { value: "draft", label: "Draft", dot: "bg-neutral-400" },
-    { value: "paused", label: "Paused", dot: "bg-amber-500" },
-    { value: "archived", label: "Archived", dot: "bg-neutral-300" },
+const STATUS_OPTIONS: FilterOption[] = [
+    { value: "published", label: "Published" },
+    { value: "draft", label: "Draft" },
+    { value: "paused", label: "Paused" },
+    { value: "archived", label: "Archived" },
 ];
-
-const idInputClass =
-    "w-56 px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent";
 
 const coverOf = (e: AdminExperience) => e.cover_url || e.media?.[0] || null;
 const businessNameOf = (e: AdminExperience) => e.business?.name || e.business_name || null;
 
+/** `/collabs/experiences?focus=<id>` (older search links) opens the experience's page. */
 export function ExperiencesAdminPage() {
+    const [searchParams] = useSearchParams();
+    const focusId = searchParams.get("focus");
+    if (focusId) return <Navigate to={`/collabs/experiences/${encodeURIComponent(focusId)}`} replace />;
+    return <ExperiencesList />;
+}
+
+function ExperiencesList() {
     const { isStaff } = useCollabAccess();
     const queryClient = useQueryClient();
-    const [searchParams] = useSearchParams();
-    const [status, setStatus] = useState("");
-    const [businessInput, setBusinessInput] = useState(searchParams.get("business_id") ?? "");
-    const [searchInput, setSearchInput] = useState("");
-    const businessId = useDebouncedValue(businessInput);
-    const search = useDebouncedValue(searchInput);
-    const [page, setPage] = useState(1);
+    const navigate = useNavigate();
+    const { state, set, reset } = useUrlState({ q: "", status: "", business_id: "", page: 1 });
+    const status = STATUS_OPTIONS.some((o) => o.value === state.status) ? (state.status as ExperienceStatus) : "";
+    const page = Math.max(1, state.page);
+    const [searchInput, setSearchInput] = useDebouncedUrlInput(state.q, (q) => set({ q }, { replace: true }));
     const [target, setTarget] = useState<AdminExperience | null>(null);
     const [hostOpen, setHostOpen] = useState(false);
     // undefined = closed; "" = open without a business picked.
     const [newForBusiness, setNewForBusiness] = useState<string | undefined>(undefined);
 
-    useEffect(() => setPage(1), [status, businessId, search]);
-
     const params: ListExperiencesParams = {
-        status: (status || undefined) as ExperienceStatus | undefined,
-        business_id: businessId || undefined,
-        q: search || undefined,
+        status: status || undefined,
+        business_id: state.business_id || undefined,
+        q: state.q || undefined,
         page,
     };
-    const { data, isLoading, error, refetch } = useQuery({
+    const { data, isLoading, isFetching, error, refetch } = useQuery({
         queryKey: ["admin-experiences", params],
         queryFn: () => experiencesAdminService.list(params),
         enabled: isStaff,
@@ -74,177 +80,198 @@ export function ExperiencesAdminPage() {
     if (!isStaff) return <AccessDenied message="You need an admin or moderator role to view experiences." />;
 
     const experiences = data?.experiences ?? [];
-    const hasFilters = !!(status || businessInput || searchInput);
     const totalPages = data?.page_size ? totalPagesOf({ total: data.total, page_size: data.page_size }) : 1;
     const hiding = target ? !target.hidden_by_admin : false;
+    const open = (e: AdminExperience) => navigate(`/collabs/experiences/${e.id}`);
+
+    const columns: DataColumn<AdminExperience>[] = [
+        {
+            id: "experience",
+            header: "Experience",
+            hideable: false,
+            sortValue: (e) => e.title,
+            csv: (e) => e.title,
+            cell: (e) => {
+                const cover = coverOf(e);
+                return (
+                    <div className="flex items-center gap-3">
+                        {cover ? (
+                            <img src={cover} alt="" className="h-10 w-14 shrink-0 rounded-lg border border-line object-cover" />
+                        ) : (
+                            <span className="flex h-10 w-14 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-ink-faint">
+                                <ImageOff className="h-4 w-4" aria-hidden />
+                            </span>
+                        )}
+                        <div className="min-w-0">
+                            <Link to={`/collabs/experiences/${e.id}`} className="block max-w-[220px] truncate font-medium text-ink hover:text-accent-700 hover:underline">
+                                {e.title || "Untitled"}
+                            </Link>
+                            <div className="max-w-[220px] truncate text-xs text-ink-faint">{[e.region_name, e.tagline].filter(Boolean).join(" · ") || "—"}</div>
+                        </div>
+                    </div>
+                );
+            },
+        },
+        {
+            id: "business",
+            header: "Business",
+            sortValue: (e) => businessNameOf(e) ?? "",
+            csv: (e) => businessNameOf(e) ?? e.business_id,
+            cell: (e) => <IdLink kind="business" id={e.business_id} label={businessNameOf(e) ?? "Open business"} />,
+        },
+        { id: "status", header: "Status", sortValue: (e) => e.status, cell: (e) => <StatusPill status={e.status} /> },
+        {
+            id: "visibility",
+            header: "Visibility",
+            sortValue: (e) => e.hidden_by_admin,
+            csv: (e) => (e.hidden_by_admin ? "Hidden" : "Visible"),
+            cell: (e) =>
+                e.hidden_by_admin ? (
+                    <Tag tone="bad">
+                        <EyeOff className="h-3 w-3" aria-hidden /> Hidden
+                    </Tag>
+                ) : (
+                    <Tag tone="brand">
+                        <Eye className="h-3 w-3" aria-hidden /> Visible
+                    </Tag>
+                ),
+        },
+        {
+            id: "bookings",
+            header: "Bookings",
+            align: "right",
+            sortValue: (e) => e.stats?.bookings ?? 0,
+            cell: (e) => <span className="tabular-nums text-ink-muted">{(e.stats?.bookings ?? 0).toLocaleString("en-IN")}</span>,
+        },
+        {
+            id: "updated",
+            header: "Updated",
+            sortValue: (e) => e.updated_at ?? e.created_at ?? "",
+            csv: (e) => formatDate(e.updated_at ?? e.created_at),
+            cell: (e) => <span className="whitespace-nowrap text-ink-muted">{formatDate(e.updated_at ?? e.created_at)}</span>,
+        },
+    ];
+
+    const chips: FilterChip[] = [];
+    if (status) chips.push({ key: "status", label: chipLabel("Status", status, STATUS_OPTIONS), onRemove: () => set({ status: "" }) });
+    if (state.business_id) chips.push({ key: "business", label: "Business filter", onRemove: () => set({ business_id: "" }) });
 
     return (
-        <div className="space-y-5 animate-fade-in">
+        <div className="space-y-5">
             <PageHeader
                 icon={Ticket}
                 title="Experiences"
-                gradient="from-violet-500 to-violet-600"
-                subtitle={data ? `${data.total} experiences listed by businesses` : "Loading..."}
-                actions={
+                description={
                     <>
-                        <button type="button" onClick={() => setHostOpen(true)} className={btnSecondary}>
-                            <UserPlus className="w-4 h-4" /> Set up a host
-                        </button>
-                        <button type="button" onClick={() => setNewForBusiness(OBJECT_ID_RE.test(businessId) ? businessId : "")} className={btnPrimary}>
-                            <Plus className="w-4 h-4" /> New experience
-                        </button>
+                        Bookable experiences listed by businesses
+                        {data && <span className="text-ink-faint"> · {data.total.toLocaleString("en-IN")} total</span>}
                     </>
+                }
+                actions={
+                    <Button variant="secondary" icon={UserPlus} onClick={() => setHostOpen(true)}>
+                        Set up a host
+                    </Button>
+                }
+                primaryAction={
+                    <Button variant="primary" icon={Plus} onClick={() => setNewForBusiness(OBJECT_ID_RE.test(state.business_id) ? state.business_id : "")}>
+                        New experience
+                    </Button>
                 }
             />
 
-            <Toolbar>
-                <SearchBox value={searchInput} onChange={setSearchInput} placeholder="Search title..." />
-                <FilterDropdown options={STATUS_OPTIONS} value={status} onChange={setStatus} icon={<Filter className="w-3.5 h-3.5" />} placeholder="Status" theme="teal" />
-                <input
-                    type="text"
-                    value={businessInput}
-                    onChange={(e) => setBusinessInput(e.target.value)}
-                    placeholder="Business id"
-                    className={idInputClass}
-                    aria-label="Filter by business id"
-                />
-                {hasFilters && (
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setStatus("");
-                            setBusinessInput("");
-                            setSearchInput("");
-                        }}
-                        className="px-3 py-2.5 rounded-xl text-sm text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
-                    >
-                        Reset
-                    </button>
-                )}
-            </Toolbar>
-
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-                <PanelState isLoading={isLoading && !data} error={error} isEmpty={experiences.length === 0} emptyIcon={Ticket} emptyText="No experiences found" onRetry={() => refetch()}>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-neutral-100 bg-neutral-50/60">
-                                    <th className={thClass}>Experience</th>
-                                    <th className={thClass}>Business</th>
-                                    <th className={thClass}>Status</th>
-                                    <th className={thClass}>Visibility</th>
-                                    <th className={`${thClass} text-right`}>Bookings</th>
-                                    <th className={thClass}>Updated</th>
-                                    <th className={`${thClass} text-right`}>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-neutral-50">
-                                {experiences.map((e) => {
-                                    const cover = coverOf(e);
-                                    const name = businessNameOf(e);
-                                    return (
-                                        <tr key={e.id} className="transition-colors hover:bg-neutral-50/80">
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center gap-3">
-                                                    {cover ? (
-                                                        <img src={cover} alt="" className="w-14 h-10 rounded-lg object-cover border border-neutral-200 shrink-0" />
-                                                    ) : (
-                                                        <span className="w-14 h-10 rounded-lg bg-neutral-100 text-neutral-400 flex items-center justify-center shrink-0">
-                                                            <ImageOff className="w-4 h-4" />
-                                                        </span>
-                                                    )}
-                                                    <div className="min-w-0">
-                                                        <div className="font-medium text-neutral-900 truncate max-w-[220px]">{e.title || "Untitled"}</div>
-                                                        <div className="text-[11px] text-neutral-400 truncate max-w-[220px]">
-                                                            {[e.region_name, e.tagline].filter(Boolean).join(" · ") || "—"}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <Link to={`/collabs/businesses/${e.business_id}`} className="text-teal-700 font-medium hover:underline" title={e.business_id}>
-                                                    {name ?? "Open business"}
-                                                </Link>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <StatusPill status={e.status} />
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                {e.hidden_by_admin ? (
-                                                    <Chip tone="red">
-                                                        <EyeOff className="w-3 h-3" /> Hidden
-                                                    </Chip>
-                                                ) : (
-                                                    <Chip tone="teal">
-                                                        <Eye className="w-3 h-3" /> Visible
-                                                    </Chip>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-3 text-right text-neutral-600">{e.stats?.bookings ?? 0}</td>
-                                            <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">{fmtDate(e.updated_at ?? e.created_at)}</td>
-                                            <td className="px-4 py-3 text-right">
-                                                <div className="flex flex-wrap items-center justify-end gap-2">
-                                                    <a
-                                                        href={partnerPortalUrl(e.business_id, e.id)}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className={`${btnSmNeutral} whitespace-nowrap`}
-                                                        title="Edit content, photos and slots in the Partner Portal (admin view)"
-                                                    >
-                                                        <ExternalLink className="w-3.5 h-3.5" /> Open in Partner Portal
-                                                    </a>
-                                                    <button type="button" onClick={() => setTarget(e)} className={e.hidden_by_admin ? btnSmNeutral : btnSmReject}>
-                                                        {e.hidden_by_admin ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                                                        {e.hidden_by_admin ? "Unhide" : "Hide"}
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                </PanelState>
-                {data && totalPages > 1 && <Pagination page={page} totalPages={totalPages} total={data.total} onPageChange={setPage} theme="teal" />}
-            </div>
-
-            <Modal
-                open={!!target}
-                onClose={() => !toggleHidden.isPending && setTarget(null)}
-                title={hiding ? "Hide this experience?" : "Unhide this experience?"}
-                icon={hiding ? EyeOff : Eye}
-                size="md"
-                footer={
-                    <>
-                        <button type="button" onClick={() => setTarget(null)} disabled={toggleHidden.isPending} className={btnSecondary}>
-                            Cancel
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => target && toggleHidden.mutate(target)}
-                            disabled={toggleHidden.isPending}
-                            className={hiding ? btnDanger : btnPrimary}
-                        >
-                            <LoadingButtonIcon loading={toggleHidden.isPending} icon={hiding ? EyeOff : Eye} />
-                            {hiding ? "Hide" : "Unhide"}
-                        </button>
-                    </>
-                }
+            <FilterBar
+                search={{ value: searchInput, onChange: setSearchInput, placeholder: "Search title…" }}
+                chips={chips}
+                onReset={() => {
+                    setSearchInput("");
+                    reset();
+                }}
             >
-                <p className="text-sm text-neutral-600 leading-relaxed">
-                    {hiding ? (
+                <FilterSelect label="Status" value={status} onChange={(v) => set({ status: v })} options={STATUS_OPTIONS} allLabel="All statuses" />
+                <EntityPicker type="business" variant="filter" label="Business" value={state.business_id} onChange={(id) => set({ business_id: id })} placeholder="Business…" />
+            </FilterBar>
+
+            <DataTable
+                label="Experiences"
+                rows={experiences}
+                columns={columns}
+                rowKey={(e) => e.id}
+                isLoading={isLoading && !data}
+                isFetching={isFetching && !!data}
+                error={error}
+                onRetry={() => refetch()}
+                empty={{ icon: Ticket, title: "No experiences found", description: chips.length || state.q ? "Try clearing a filter." : undefined }}
+                onRowClick={open}
+                rowActions={(e) => (
+                    <>
+                        <div className="hidden items-center gap-0.5 md:flex">
+                            <IconButton
+                                icon={ExternalLink}
+                                size="sm"
+                                label={`Open ${e.title || "experience"} in the Partner Portal`}
+                                title="Edit content, photos and slots in the Partner Portal (admin view)"
+                                onClick={() => window.open(partnerPortalUrl(e.business_id, e.id), "_blank", "noopener,noreferrer")}
+                            />
+                            <IconButton
+                                icon={e.hidden_by_admin ? Eye : EyeOff}
+                                size="sm"
+                                label={e.hidden_by_admin ? `Unhide ${e.title || "experience"}` : `Hide ${e.title || "experience"}`}
+                                className={e.hidden_by_admin ? undefined : "hover:bg-bad-soft hover:text-bad"}
+                                onClick={() => setTarget(e)}
+                            />
+                        </div>
+                        <div className="md:hidden">
+                            <Menu
+                                label={`Actions for ${e.title || "experience"}`}
+                                triggerVariant="ghost"
+                                size="sm"
+                                items={[
+                                    { label: "Open", icon: Ticket, to: `/collabs/experiences/${e.id}` },
+                                    {
+                                        label: "Open in Partner Portal",
+                                        icon: ExternalLink,
+                                        onSelect: () => window.open(partnerPortalUrl(e.business_id, e.id), "_blank", "noopener,noreferrer"),
+                                    },
+                                    { label: e.hidden_by_admin ? "Unhide" : "Hide", icon: e.hidden_by_admin ? Eye : EyeOff, danger: !e.hidden_by_admin, onSelect: () => setTarget(e) },
+                                ]}
+                            />
+                        </div>
+                    </>
+                )}
+                storageKey="experiences"
+                exportName="experiences"
+                summary={data ? `${experiences.length} of ${data.total.toLocaleString("en-IN")}` : undefined}
+                card={{
+                    title: (e) => e.title || "Untitled",
+                    subtitle: (e) => businessNameOf(e) ?? undefined,
+                    fields: ["status", "visibility", "bookings", "updated"],
+                }}
+                footer={
+                    data && totalPages > 1 && <Pagination page={page} totalPages={totalPages} total={data.total} pageSize={data.page_size} onPageChange={(p) => set({ page: p })} />
+                }
+            />
+
+            <ConfirmDialog
+                open={!!target}
+                title={hiding ? "Hide this experience?" : "Unhide this experience?"}
+                description={
+                    hiding ? (
                         <>
-                            <strong>{target?.title || "This experience"}</strong> disappears from the app and can't be booked. The business still sees it in the
-                            Partner Portal, marked as hidden by SeekKrr. Existing bookings are kept.
+                            <strong className="text-ink">{target?.title || "This experience"}</strong> disappears from the app and can't be booked. The business
+                            still sees it in the Partner Portal, marked as hidden by SeekKrr. Existing bookings are kept.
                         </>
                     ) : (
                         <>
-                            <strong>{target?.title || "This experience"}</strong> shows in the app again if the business has it published.
+                            <strong className="text-ink">{target?.title || "This experience"}</strong> shows in the app again if the business has it published.
                         </>
-                    )}
-                </p>
-            </Modal>
+                    )
+                }
+                confirmLabel={hiding ? "Hide" : "Unhide"}
+                tone={hiding ? "danger" : "primary"}
+                isPending={toggleHidden.isPending}
+                onConfirm={() => target && toggleHidden.mutate(target)}
+                onCancel={() => setTarget(null)}
+            />
 
             <SetupHostModal
                 open={hostOpen}
@@ -259,9 +286,8 @@ export function ExperiencesAdminPage() {
                 initialBusinessId={newForBusiness}
                 onClose={() => setNewForBusiness(undefined)}
                 onShowInList={(bid) => {
-                    setStatus("");
                     setSearchInput("");
-                    setBusinessInput(bid);
+                    set({ status: "", q: "", business_id: bid });
                 }}
             />
         </div>

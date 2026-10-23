@@ -1,247 +1,158 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-    UserPlus, AlertTriangle,
-    Filter, Search, X,
-} from "lucide-react";
+import { Eye, UserPlus } from "lucide-react";
 import { useAuthStore } from "@store/auth.store";
 import { AccessDenied } from "@components/AccessDenied";
-import { LoadingFallback } from "@components/LoadingFallback";
-import { FilterDropdown } from "@/components/FilterDropdown";
-import { Pagination } from "@/components/ui/Pagination";
 import { creatorApplicationsService } from "../services/creator-applications.service";
 import { ApplicationDetailModal } from "../components/ApplicationDetailModal";
-import type { DropdownOption } from "@/components/FilterDropdown";
+import { IconButton } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { FilterBar } from "@/components/ui/FilterBar";
+import { DataTable, type DataColumn } from "@/components/ui/DataTable";
+import { Pagination } from "@/components/ui/Pagination";
+import { Tabs } from "@/components/ui/Tabs";
+import { CountBadge, StatusPill } from "@/components/ui/StatusPill";
+import { useDebouncedUrlInput, useUrlState } from "@/hooks/useUrlState";
+import { formatDate } from "@/utils/date";
 import type { CreatorApplication } from "@/types";
 
 // ---- Constants ----
 const ALLOWED_ROLES = ["admin", "super_admin"];
 const PER_PAGE = 20;
-const SEARCH_DEBOUNCE_MS = 400;
 
-const STATUS_OPTIONS: DropdownOption[] = [
-    { value: "", label: "All Statuses" },
-    { value: "pending", label: "Pending", dot: "bg-amber-500" },
-    { value: "verifying", label: "Verifying", dot: "bg-blue-500" },
-    { value: "approved", label: "Approved", dot: "bg-emerald-500" },
-    { value: "rejected", label: "Rejected", dot: "bg-red-500" },
+type StatusTab = "pending" | "verifying" | "approved" | "rejected" | "all";
+const STATUS_TABS: { value: StatusTab; label: string }[] = [
+    { value: "pending", label: "Pending" },
+    { value: "verifying", label: "Verifying" },
+    { value: "approved", label: "Approved" },
+    { value: "rejected", label: "Rejected" },
+    { value: "all", label: "All" },
 ];
-
-const statusConfig: Record<CreatorApplication["status"], { label: string; dot: string; bg: string }> = {
-    pending: { label: "Pending", dot: "bg-amber-500", bg: "bg-amber-50 text-amber-700 border-amber-200" },
-    verifying: { label: "Verifying", dot: "bg-blue-500", bg: "bg-blue-50 text-blue-700 border-blue-200" },
-    approved: { label: "Approved", dot: "bg-emerald-500", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-    rejected: { label: "Rejected", dot: "bg-red-500", bg: "bg-red-50 text-red-700 border-red-200" },
-};
 
 export function CreatorApplicationsPage() {
     const { user: currentUser } = useAuthStore();
-    const hasAccess = !!currentUser && currentUser.role?.some(r => ALLOWED_ROLES.includes(r));
+    const hasAccess = !!currentUser && currentUser.role?.some((r) => ALLOWED_ROLES.includes(r));
 
-    // ---- State ----
-    const [searchInput, setSearchInput] = useState("");
-    const [debouncedSearch, setDebouncedSearch] = useState("");
-    const [statusFilter, setStatusFilter] = useState<"pending" | "verifying" | "approved" | "rejected" | "">("pending");
-    const [page, setPage] = useState(1);
+    // Status tab, search and page live in the address. The queue opens on "Pending".
+    const { state, set, reset } = useUrlState({ status: "pending", q: "", page: 1 });
+    const [searchInput, setSearchInput] = useDebouncedUrlInput(state.q, (q) => set({ q }, { replace: true }));
+    const status: StatusTab = STATUS_TABS.some((t) => t.value === state.status) ? (state.status as StatusTab) : "pending";
+    const page = Math.max(1, state.page);
 
-    // Modal state
     const [viewingApp, setViewingApp] = useState<CreatorApplication | null>(null);
 
-    // ---- Debounced search ----
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setDebouncedSearch(searchInput.trim());
-            setPage(1);
-        }, SEARCH_DEBOUNCE_MS);
-        return () => clearTimeout(timer);
-    }, [searchInput]);
-
-    // ---- Fetch Applications ----
-    const queryParams = useMemo(() => ({
-        status: statusFilter ? statusFilter : undefined,
-        search: debouncedSearch || undefined,
+    const queryParams = {
+        status: status === "all" ? undefined : status,
+        search: state.q || undefined,
         page,
         page_size: PER_PAGE,
-    }), [statusFilter, debouncedSearch, page]);
+    };
 
-    const { data, isLoading, error } = useQuery({
+    const { data, isLoading, isFetching, error, refetch } = useQuery({
         queryKey: ["admin-creator-applications", queryParams],
         queryFn: () => creatorApplicationsService.listApplications(queryParams),
         placeholderData: (prev) => prev,
+        enabled: hasAccess,
     });
 
-    const applications = useMemo(() => data?.applications ?? [], [data]);
+    const applications = data?.applications ?? [];
     const pagination = data?.pagination;
     const pendingCount = data?.pending_count ?? 0;
 
-    const clearFilters = useCallback(() => {
-        setSearchInput("");
-        setDebouncedSearch("");
-        setStatusFilter("");
-        setPage(1);
-    }, []);
-
-    const hasFilters = !!(searchInput || statusFilter);
-
-    // ---- Pagination ----
-
-
-    // ---- Render ----
     if (!hasAccess) {
         return <AccessDenied message="Only admins can manage creator applications." />;
     }
 
+    const columns: DataColumn<CreatorApplication>[] = [
+        {
+            id: "applicant",
+            header: "Applicant",
+            hideable: false,
+            sortValue: (a) => a.name,
+            cell: (a) => <span className="font-medium text-ink">{a.name}</span>,
+        },
+        {
+            id: "email",
+            header: "Email",
+            sortValue: (a) => a.email,
+            className: "max-w-[240px]",
+            cell: (a) => <span className="block truncate text-ink-muted">{a.email}</span>,
+        },
+        { id: "phone", header: "Phone", csv: (a) => a.phone ?? "", cell: (a) => <span className="text-ink-muted">{a.phone || "—"}</span>, defaultHidden: true },
+        {
+            id: "links",
+            header: "Social links",
+            align: "right",
+            sortValue: (a) => a.social_links?.length ?? 0,
+            cell: (a) => <span className="tabular-nums text-ink-muted">{a.social_links?.length ?? 0}</span>,
+        },
+        { id: "status", header: "Status", sortValue: (a) => a.status, cell: (a) => <StatusPill status={a.status} /> },
+        {
+            id: "applied",
+            header: "Applied",
+            sortValue: (a) => a.applied_at ?? "",
+            csv: (a) => formatDate(a.applied_at),
+            cell: (a) => <span className="whitespace-nowrap text-ink-muted">{formatDate(a.applied_at)}</span>,
+        },
+    ];
+
     return (
-        <div className="space-y-5 animate-fade-in">
-            {/* Header */}
-            <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center shadow-sm">
-                        <UserPlus className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-3">
-                            Creator Applications
-                            {pendingCount > 0 && (
-                                <span className="text-xs font-semibold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
-                                    {pendingCount} Pending
-                                </span>
-                            )}
-                        </h1>
-                        <p className="text-sm text-neutral-500">
-                            {pagination ? `${pagination.total} total applications` : "Loading..."}
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            {/* Toolbar */}
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 flex flex-wrap items-center gap-3">
-                {/* Search */}
-                <div className="relative flex-1 min-w-[240px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                    <input
-                        type="text"
-                        placeholder="Search by name or email..."
-                        value={searchInput}
-                        onChange={(e) => setSearchInput(e.target.value)}
-                        className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                    />
-                    {searchInput && (
-                        <button
-                            onClick={() => { setSearchInput(""); setDebouncedSearch(""); setPage(1); }}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
-                        >
-                            <X className="w-4 h-4" />
-                        </button>
-                    )}
-                </div>
-
-                <FilterDropdown
-                    options={STATUS_OPTIONS}
-                    value={statusFilter}
-                    onChange={(v) => { setStatusFilter(v as "pending" | "verifying" | "approved" | "rejected" | ""); setPage(1); }}
-                    icon={<Filter className="w-3.5 h-3.5" />}
-                    placeholder="Status"
-                />
-
-                {hasFilters && (
-                    <button
-                        onClick={clearFilters}
-                        className="px-3 py-2.5 rounded-xl text-sm text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
-                    >
-                        Reset
-                    </button>
-                )}
-            </div>
-
-            {/* Table */}
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-                {isLoading && !data ? (
-                    <LoadingFallback />
-                ) : error ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-red-500 gap-2">
-                        <AlertTriangle className="w-8 h-8" />
-                        <p className="text-sm">Failed to load applications</p>
-                    </div>
-                ) : applications.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-neutral-400 gap-2">
-                        <UserPlus className="w-8 h-8 opacity-50" />
-                        <p className="text-sm">No applications found</p>
-                    </div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-neutral-100 bg-neutral-50/60">
-                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Applicant</th>
-                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Contact</th>
-                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Status</th>
-                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Applied</th>
-                                    <th className="text-right px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-neutral-50">
-                                {applications.map((u) => {
-                                    const sc = statusConfig[u.status];
-                                    return (
-                                        <tr
-                                            key={u.id}
-                                            className="transition-colors group hover:bg-neutral-50/80 cursor-pointer"
-                                            onClick={() => setViewingApp(u)}
-                                        >
-                                            <td className="px-4 py-3">
-                                                <div className="font-medium text-neutral-900">{u.name}</div>
-                                                <div className="text-[11px] text-neutral-400 font-mono mt-0.5">{u.id}</div>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="text-neutral-600 truncate max-w-[200px]">{u.email}</div>
-                                                {u.phone && <div className="text-[11px] text-neutral-400 mt-0.5">{u.phone}</div>}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${sc.bg}`}>
-                                                    <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
-                                                    {sc.label}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">
-                                                {new Date(u.applied_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-                                            </td>
-                                            <td className="px-4 py-3 text-right">
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); setViewingApp(u); }}
-                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-700 text-xs font-medium hover:bg-indigo-50 transition-colors opacity-0 group-hover:opacity-100"
-                                                >
-                                                    Review
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-
-                {/* Pagination */}
-                {pagination && (
-                    <Pagination
-                        page={page}
-                        totalPages={pagination.total_pages}
-                        total={pagination.total}
-                        onPageChange={setPage}
-                        theme="indigo"
-                    />
-                )}
-            </div>
-
-            {/* Application Detail Modal */}
-            <ApplicationDetailModal
-                open={!!viewingApp}
-                application={viewingApp}
-                onClose={() => setViewingApp(null)}
+        <div className="space-y-5">
+            <PageHeader
+                icon={UserPlus}
+                title="Creator applications"
+                badge={pendingCount > 0 ? <CountBadge count={pendingCount} /> : undefined}
+                description={pagination ? `${pagination.total.toLocaleString("en-IN")} applications in this view` : "People asking to become creators"}
             />
+
+            <Tabs
+                label="Application status"
+                variant="pill"
+                tabs={STATUS_TABS.map((t) => ({ ...t, count: t.value === "pending" ? pendingCount : undefined }))}
+                value={status}
+                onChange={(v) => set({ status: v })}
+            />
+
+            <FilterBar
+                search={{ value: searchInput, onChange: setSearchInput, placeholder: "Search by name or email…" }}
+                onReset={() => {
+                    setSearchInput("");
+                    reset();
+                }}
+            />
+
+            <DataTable
+                label="Creator applications"
+                rows={applications}
+                columns={columns}
+                rowKey={(a) => a.id}
+                isLoading={isLoading && !data}
+                isFetching={isFetching && !!data}
+                error={error}
+                onRetry={() => refetch()}
+                empty={{
+                    icon: UserPlus,
+                    title: status === "pending" && !state.q ? "No applications waiting. You're up to date." : "No applications found",
+                    description: state.q ? "Try a different search." : undefined,
+                }}
+                onRowClick={(a) => setViewingApp(a)}
+                rowActions={(a) => <IconButton icon={Eye} size="sm" label={`Review ${a.name}`} onClick={() => setViewingApp(a)} />}
+                storageKey="creator-applications"
+                exportName="creator-applications"
+                summary={pagination ? `${applications.length} of ${pagination.total.toLocaleString("en-IN")}` : undefined}
+                card={{
+                    title: (a) => a.name,
+                    subtitle: (a) => a.email,
+                    fields: ["status", "applied", "links"],
+                }}
+                footer={
+                    pagination && (
+                        <Pagination page={page} totalPages={pagination.total_pages} total={pagination.total} pageSize={PER_PAGE} onPageChange={(p) => set({ page: p })} />
+                    )
+                }
+            />
+
+            <ApplicationDetailModal open={!!viewingApp} application={viewingApp} onClose={() => setViewingApp(null)} />
         </div>
     );
 }
-

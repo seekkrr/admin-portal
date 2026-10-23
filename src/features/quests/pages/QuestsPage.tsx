@@ -1,584 +1,429 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-    Search, Compass, Trash2,
-    RefreshCw, X, Filter, Eye, MapPin, CheckCircle, XCircle, AlertCircle,
-} from "lucide-react";
+import { AlertCircle, CheckCircle, Compass, Eye, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@store/auth.store";
 import { AccessDenied } from "@components/AccessDenied";
-import { LoadingFallback } from "@components/LoadingFallback";
+import { IconButton } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { FilterBar, FilterSelect, type FilterChip, type FilterOption } from "@/components/ui/FilterBar";
+import { chipLabel } from "@/components/ui/filters";
+import { DataTable, type DataColumn } from "@/components/ui/DataTable";
+import { Pagination } from "@/components/ui/Pagination";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Tabs } from "@/components/ui/Tabs";
+import { Tag } from "@/components/ui/StatusPill";
+import { Checkbox } from "@/components/ui/Field";
+import { EntityPicker } from "@/components/ui/EntityPicker";
+import { Menu } from "@/components/ui/Menu";
+import { useDebouncedUrlInput, useUrlState } from "@/hooks/useUrlState";
+import { formatDate } from "@/utils/date";
 import { questsService } from "../services/quests.service";
 import { formatDuration } from "../utils/formatters";
-import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { FilterDropdown } from "@/components/FilterDropdown";
-import { Pagination } from "@/components/ui/Pagination";
 import { QuestDetailModal } from "../components/QuestDetailModal";
 import { QuestActionModal, type QuestActionType } from "../components/QuestActionModal";
-import { regionsService } from "@/features/regions/services/regions.service";
-import type { DropdownOption } from "@/components/FilterDropdown";
+import { QuestStatusPill } from "../components/QuestStatusPill";
 import type { QuestListEntry } from "@/types";
 
 // ---- Constants ----
 const ALLOWED_ROLES = ["admin", "super_admin", "moderator"];
 const CAN_DELETE_ROLES = ["admin", "super_admin"];
 const PER_PAGE = 10;
-const SEARCH_DEBOUNCE_MS = 400;
 
-// ---- Badge Styles ----
-const questStatusConfig: Record<string, { label: string; dot: string; bg: string }> = {
-    Draft: { label: "Draft", dot: "bg-neutral-400", bg: "bg-neutral-50 text-neutral-600 border-neutral-200" },
-    'Under Review': { label: "Under Review", dot: "bg-blue-500", bg: "bg-blue-50 text-blue-700 border-blue-200" },
-    'Changes Requested': { label: "Changes Requested", dot: "bg-orange-500", bg: "bg-orange-50 text-orange-700 border-orange-200" },
-    Approved: { label: "Approved", dot: "bg-indigo-500", bg: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-    Published: { label: "Published", dot: "bg-emerald-500", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-    Paused: { label: "Paused", dot: "bg-amber-500", bg: "bg-amber-50 text-amber-700 border-amber-200" },
-    Rejected: { label: "Rejected", dot: "bg-rose-500", bg: "bg-rose-50 text-rose-700 border-rose-200" },
-    Archived: { label: "Archived", dot: "bg-red-500", bg: "bg-red-50 text-red-700 border-red-200" },
-};
+// Admin-relevant statuses — Draft (creator-only) and Approved (not used in the admin flow) are left out.
+const ADMIN_STATUSES = "Under Review,Changes Requested,Published,Paused,Rejected,Archived";
 
-
-
-// ---- Discriminated Union for Confirm Actions ----
-type ConfirmAction =
-    | { type: "delete"; payload: { questId: string; title: string } };
-
-// ---- Filter Dropdown Options ----
-const STATUS_OPTIONS: DropdownOption[] = [
-    { value: "", label: "All Statuses" },
-    { value: "Under Review", label: "Under Review", dot: "bg-blue-500" },
-    { value: "Changes Requested", label: "Changes Requested", dot: "bg-orange-500" },
-    { value: "Published", label: "Published", dot: "bg-emerald-500" },
-    { value: "Paused", label: "Paused", dot: "bg-amber-500" },
-    { value: "Rejected", label: "Rejected", dot: "bg-rose-500" },
-    { value: "Archived", label: "Archived", dot: "bg-red-500" },
+const STATUS_OPTIONS: FilterOption[] = [
+    { value: "Under Review", label: "Under review" },
+    { value: "Changes Requested", label: "Changes requested" },
+    { value: "Published", label: "Published" },
+    { value: "Paused", label: "Paused" },
+    { value: "Rejected", label: "Rejected" },
+    { value: "Archived", label: "Archived" },
 ];
 
-// Values MUST be lowercase to match the backend `difficulty` enum
-// (easy | moderate | hard | expert).
-const DIFFICULTY_OPTIONS: DropdownOption[] = [
-    { value: "", label: "All Difficulties" },
-    { value: "easy", label: "Easy", dot: "bg-emerald-400" },
-    { value: "moderate", label: "Moderate", dot: "bg-amber-400" },
-    { value: "hard", label: "Hard", dot: "bg-orange-500" },
-    { value: "expert", label: "Expert", dot: "bg-red-500" },
+// Values MUST be lowercase to match the backend `difficulty` enum (easy | moderate | hard | expert).
+const DIFFICULTY_OPTIONS: FilterOption[] = [
+    { value: "easy", label: "Easy" },
+    { value: "moderate", label: "Moderate" },
+    { value: "hard", label: "Hard" },
+    { value: "expert", label: "Expert" },
 ];
 
-// Theme is a free-form lowercase tag array on the backend; these are the
-// tags actually used across seeded quests.
-const THEME_OPTIONS: DropdownOption[] = [
-    { value: "", label: "All Themes" },
-    { value: "heritage", label: "Heritage" },
-    { value: "history", label: "History" },
-    { value: "architecture", label: "Architecture" },
-    { value: "culture", label: "Culture" },
-    { value: "food", label: "Food" },
-    { value: "nature", label: "Nature" },
-    { value: "wellness", label: "Wellness" },
-    { value: "photography", label: "Photography" },
-    { value: "art", label: "Art" },
-    { value: "urban", label: "Urban" },
-    { value: "nightlife", label: "Nightlife" },
-    { value: "science", label: "Science" },
-    { value: "adventure", label: "Adventure" },
-];
+// Theme is a free-form lowercase tag array on the backend; these are the tags actually used across seeded quests.
+const THEME_OPTIONS: FilterOption[] = [
+    "heritage",
+    "history",
+    "architecture",
+    "culture",
+    "food",
+    "nature",
+    "wellness",
+    "photography",
+    "art",
+    "urban",
+    "nightlife",
+    "science",
+    "adventure",
+].map((t) => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }));
 
-const DIFFICULTY_BADGE: Record<string, string> = {
-    easy: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    moderate: "bg-amber-50 text-amber-700 border-amber-200",
-    hard: "bg-orange-50 text-orange-700 border-orange-200",
-    expert: "bg-red-50 text-red-700 border-red-200",
-};
+type Tab = "all" | "review-queue";
+
+type ActionTarget = { action: QuestActionType; questId: string; questTitle: string };
+
+function priceText(q: QuestListEntry): string {
+    return q.price > 0 ? `₹${q.price.toLocaleString("en-IN")}` : "Free";
+}
 
 // ---- Main Component ----
 export function QuestsPage() {
     const { user: currentUser } = useAuthStore();
+    const hasAccess = !!currentUser && currentUser.role?.some((r) => ALLOWED_ROLES.includes(r));
+    if (!hasAccess) {
+        return <AccessDenied message="Only admins and moderators can manage quests." />;
+    }
+    return <QuestsList canDelete={!!currentUser?.role?.some((r) => CAN_DELETE_ROLES.includes(r))} />;
+}
+
+function QuestsList({ canDelete }: { canDelete: boolean }) {
     const queryClient = useQueryClient();
-    const hasAccess = !!currentUser && currentUser.role?.some(r => ALLOWED_ROLES.includes(r));
-    const canDelete = !!currentUser && currentUser.role?.some(r => CAN_DELETE_ROLES.includes(r));
 
-    // ---- State ----
-    const [searchInput, setSearchInput] = useState("");
-    const [debouncedQuery, setDebouncedQuery] = useState("");
-    const [statusFilter, setStatusFilter] = useState("");
-    const [difficultyFilter, setDifficultyFilter] = useState("");
-    const [themeFilter, setThemeFilter] = useState("");
-    const [regionFilter, setRegionFilter] = useState(""); // selected region id
-    const [page, setPage] = useState(1);
-    const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+    // Filters, search, tab and page live in the address (?tab=review-queue comes from Today).
+    const { state, set, reset } = useUrlState({ tab: "all", q: "", status: "", difficulty: "", theme: "", region: "", page: 1 });
+    const tab: Tab = state.tab === "review-queue" ? "review-queue" : "all";
+    const statusFilter = STATUS_OPTIONS.some((o) => o.value === state.status) ? state.status : "";
+    const difficultyFilter = DIFFICULTY_OPTIONS.some((o) => o.value === state.difficulty) ? state.difficulty : "";
+    const themeFilter = THEME_OPTIONS.some((o) => o.value === state.theme) ? state.theme : "";
+    const regionFilter = state.region;
+    const page = Math.max(1, state.page);
+    const [searchInput, setSearchInput] = useDebouncedUrlInput(state.q, (q) => set({ q }, { replace: true }));
+
+    const [viewingQuest, setViewingQuest] = useState<QuestListEntry | null>(null);
+    const [deleteTarget, setDeleteTarget] = useState<{ questId: string; title: string } | null>(null);
     const [hardDelete, setHardDelete] = useState(false);
+    const [actionModal, setActionModal] = useState<ActionTarget | null>(null);
 
-    // ?tab=review-queue opens the review queue (links from Today).
-    const [searchParams] = useSearchParams();
-    const [activeTab, setActiveTab] = useState<"all" | "review-queue">(searchParams.get("tab") === "review-queue" ? "review-queue" : "all");
-    const [actionModal, setActionModal] = useState<{
-        action: QuestActionType;
-        questId: string;
-        questTitle: string;
-    } | null>(null);
-
-    // Review queue query — only enabled when on that tab
-    const { data: reviewQueueData, isLoading: reviewQueueLoading } = useQuery({
-        queryKey: ["admin-review-queue", page],
-        queryFn: () => questsService.getReviewQueue({ page, per_page: PER_PAGE }),
-        enabled: activeTab === "review-queue",
+    // ---- Review queue (only fetched on that tab; its total shows on the tab) ----
+    const reviewQueue = useQuery({
+        queryKey: ["admin-review-queue", tab === "review-queue" ? page : 1],
+        queryFn: () => questsService.getReviewQueue({ page: tab === "review-queue" ? page : 1, per_page: PER_PAGE }),
         staleTime: 15_000,
+        placeholderData: (prev) => prev,
     });
 
-    // Modal state
-    const [viewingQuest, setViewingQuest] = useState<QuestListEntry | null>(null);
+    // ---- All quests ----
+    const queryParams = useMemo(
+        () => ({
+            q: state.q || undefined,
+            // A chosen status filters to it; otherwise restrict to admin-relevant statuses.
+            status: statusFilter || undefined,
+            statuses: statusFilter ? undefined : ADMIN_STATUSES,
+            difficulty: difficultyFilter || undefined,
+            theme: themeFilter || undefined,
+            region: regionFilter || undefined,
+            page,
+            per_page: PER_PAGE,
+        }),
+        [state.q, statusFilter, difficultyFilter, themeFilter, regionFilter, page]
+    );
 
-    // ---- Debounced search ----
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setDebouncedQuery(searchInput.trim());
-            setPage(1);
-        }, SEARCH_DEBOUNCE_MS);
-        return () => clearTimeout(timer);
-    }, [searchInput]);
-
-    // Reset hard delete toggle when modal closes
-    useEffect(() => { if (!confirmAction) setHardDelete(false); }, [confirmAction]);
-
-    // Admin-relevant statuses — exclude Draft (creator-only) and Approved (not used in admin flow)
-    const ADMIN_STATUSES = "Under Review,Changes Requested,Published,Paused,Rejected,Archived";
-
-    // ---- Fetch Quests ----
-    const queryParams = useMemo(() => ({
-        q: debouncedQuery || undefined,
-        // When a specific status is selected use single status param; otherwise restrict to admin-relevant statuses
-        status: statusFilter || undefined,
-        statuses: statusFilter ? undefined : ADMIN_STATUSES,
-        difficulty: difficultyFilter || undefined,
-        theme: themeFilter || undefined,
-        region: regionFilter || undefined,
-        page,
-        per_page: PER_PAGE,
-    }), [debouncedQuery, statusFilter, difficultyFilter, themeFilter, regionFilter, page]);
-
-    const { data, isLoading, error } = useQuery({
+    const allQuests = useQuery({
         queryKey: ["admin-quests", queryParams],
         queryFn: () => questsService.listQuests(queryParams),
         staleTime: 30_000,
+        enabled: tab === "all",
+        placeholderData: (prev) => prev,
     });
-
-    const quests = useMemo(() => data?.quests ?? [], [data]);
-    const pagination = data?.pagination;
-
-    // ---- Regions (for id → name resolution + filter dropdown) ----
-    const { data: allRegions } = useQuery({
-        queryKey: ["admin-regions-lookup"],
-        queryFn: () => regionsService.listAll(),
-        staleTime: 5 * 60_000,
-    });
-
-    const REGION_OPTIONS = useMemo<DropdownOption[]>(() => [
-        { value: "", label: "All Regions" },
-        ...(allRegions ?? []).map((r) => ({ value: r.id, label: r.name })),
-    ], [allRegions]);
-
-    // ---- Client-side instant filter ----
-    const filteredQuests = useMemo(() => {
-        let result = quests;
-        // Client-side instant title filter for responsiveness while debounce is pending
-        if (searchInput.trim() && searchInput.trim() !== debouncedQuery) {
-            const q = searchInput.trim().toLowerCase();
-            result = result.filter((quest) =>
-                (quest.title ?? "").toLowerCase().includes(q)
-            );
-        }
-        return result;
-    }, [quests, searchInput, debouncedQuery]);
 
     // ---- Mutations ----
+    const invalidate = () => {
+        queryClient.invalidateQueries({ queryKey: ["admin-review-queue"] });
+        queryClient.invalidateQueries({ queryKey: ["admin-quests"] });
+    };
+
     const deleteMutation = useMutation({
-        mutationFn: ({ questId, hard }: { questId: string; hard: boolean }) =>
-            questsService.deleteQuest(questId, hard),
+        mutationFn: ({ questId, hard }: { questId: string; hard: boolean }) => questsService.deleteQuest(questId, hard),
         onSuccess: () => {
-            toast.success("Quest deleted successfully");
-            queryClient.invalidateQueries({ queryKey: ["admin-quests"] });
-            setConfirmAction(null);
+            toast.success("Quest deleted");
+            invalidate();
+            setDeleteTarget(null);
         },
-        onError: (err: Error) => { toast.error(err.message); setConfirmAction(null); },
+        onError: (err: Error) => {
+            toast.error(err.message);
+            setDeleteTarget(null);
+        },
     });
 
     const approveMutation = useMutation({
         mutationFn: (questId: string) => questsService.approve(questId),
         onSuccess: () => {
             toast.success("Quest approved and published");
-            queryClient.invalidateQueries({ queryKey: ["admin-review-queue"] });
-            queryClient.invalidateQueries({ queryKey: ["admin-quests"] });
+            invalidate();
             setActionModal(null);
         },
-        onError: (err: Error) => { toast.error(err.message); setActionModal(null); },
+        onError: (err: Error) => {
+            toast.error(err.message);
+            setActionModal(null);
+        },
     });
 
     const requestChangesMutation = useMutation({
-        mutationFn: ({ questId, comment }: { questId: string; comment: string }) =>
-            questsService.requestChanges(questId, comment),
+        mutationFn: ({ questId, comment }: { questId: string; comment: string }) => questsService.requestChanges(questId, comment),
         onSuccess: () => {
             toast.success("Changes requested");
-            queryClient.invalidateQueries({ queryKey: ["admin-review-queue"] });
-            queryClient.invalidateQueries({ queryKey: ["admin-quests"] });
+            invalidate();
             setActionModal(null);
         },
-        onError: (err: Error) => { toast.error(err.message); setActionModal(null); },
+        onError: (err: Error) => {
+            toast.error(err.message);
+            setActionModal(null);
+        },
     });
 
     const rejectMutation = useMutation({
-        mutationFn: ({ questId, reason }: { questId: string; reason: string }) =>
-            questsService.reject(questId, reason),
+        mutationFn: ({ questId, reason }: { questId: string; reason: string }) => questsService.reject(questId, reason),
         onSuccess: () => {
             toast.success("Quest rejected");
-            queryClient.invalidateQueries({ queryKey: ["admin-review-queue"] });
-            queryClient.invalidateQueries({ queryKey: ["admin-quests"] });
+            invalidate();
             setActionModal(null);
         },
-        onError: (err: Error) => { toast.error(err.message); setActionModal(null); },
+        onError: (err: Error) => {
+            toast.error(err.message);
+            setActionModal(null);
+        },
     });
 
-    // ---- Handlers ----
-    const clearFilters = useCallback(() => {
-        setSearchInput("");
-        setDebouncedQuery("");
-        setStatusFilter("");
-        setDifficultyFilter("");
-        setThemeFilter("");
-        setRegionFilter("");
-        setPage(1);
-    }, []);
-
-    const handleActionConfirm = useCallback((text: string) => {
+    const handleActionConfirm = (text: string) => {
         if (!actionModal) return;
         const { action, questId } = actionModal;
         if (action === "approve") approveMutation.mutate(questId);
         else if (action === "requestChanges") requestChangesMutation.mutate({ questId, comment: text });
         else if (action === "reject") rejectMutation.mutate({ questId, reason: text });
-    }, [actionModal, approveMutation, requestChangesMutation, rejectMutation]);
+    };
 
-    const isBusy = deleteMutation.isPending || approveMutation.isPending || requestChangesMutation.isPending || rejectMutation.isPending;
-    const hasActiveFilters = searchInput || statusFilter || difficultyFilter || themeFilter || regionFilter;
+    const active = tab === "review-queue" ? reviewQueue : allQuests;
+    const rows = active.data?.quests ?? [];
+    const pagination = active.data?.pagination;
+    const reviewTotal = reviewQueue.data?.pagination.total;
 
-    // Tab-aware display data
-    const displayQuests = activeTab === "review-queue" ? (reviewQueueData?.quests ?? []) : filteredQuests;
-    const displayLoading = activeTab === "review-queue" ? reviewQueueLoading : isLoading;
-    const displayPagination = activeTab === "review-queue" ? reviewQueueData?.pagination : pagination;
+    const openDelete = (q: QuestListEntry) => {
+        setHardDelete(false);
+        setDeleteTarget({ questId: q.id, title: q.title || "Untitled" });
+    };
+    const openAction = (action: QuestActionType, q: QuestListEntry) => setActionModal({ action, questId: q.id, questTitle: q.title || "Quest" });
 
-    // ---- Confirm handler ----
-    const executeConfirmedAction = useCallback(() => {
-        if (!confirmAction) return;
-        if (confirmAction.type === "delete") {
-            deleteMutation.mutate({ questId: confirmAction.payload.questId, hard: hardDelete });
-        }
-    }, [confirmAction, deleteMutation, hardDelete]);
+    const columns: DataColumn<QuestListEntry>[] = [
+        {
+            id: "title",
+            header: "Quest",
+            hideable: false,
+            sortValue: (q) => q.title ?? "",
+            csv: (q) => q.title ?? "",
+            cell: (q) => (
+                <div className="min-w-0">
+                    <Link to={`/quests/${q.id}`} className="font-medium text-ink hover:text-accent-700 hover:underline">
+                        {q.title || "Untitled quest"}
+                    </Link>
+                    {(q.theme?.length ?? 0) > 0 && <div className="mt-0.5 truncate text-xs capitalize text-ink-muted">{q.theme.join(", ")}</div>}
+                </div>
+            ),
+        },
+        {
+            id: "region",
+            header: "Region",
+            sortValue: (q) => q.region_name ?? "",
+            csv: (q) => q.region_name ?? q.region_id ?? "",
+            cell: (q) =>
+                q.region_id ? (
+                    <Link to={`/regions/${q.region_id}`} className="text-accent-700 hover:underline">
+                        {q.region_name || "Region"}
+                    </Link>
+                ) : (
+                    <span className="text-ink-faint">No region</span>
+                ),
+        },
+        { id: "status", header: "Status", sortValue: (q) => q.status, cell: (q) => <QuestStatusPill status={q.status} /> },
+        {
+            id: "difficulty",
+            header: "Difficulty",
+            sortValue: (q) => q.difficulty ?? "",
+            cell: (q) => (q.difficulty ? <Tag className="capitalize">{q.difficulty}</Tag> : <span className="text-ink-faint">—</span>),
+        },
+        {
+            id: "price",
+            header: "Price",
+            align: "right",
+            sortValue: (q) => q.price,
+            csv: (q) => q.price,
+            cell: (q) => <span className={q.price > 0 ? "whitespace-nowrap tabular-nums text-ink" : "font-medium text-good"}>{priceText(q)}</span>,
+        },
+        {
+            id: "duration",
+            header: "Duration",
+            sortValue: (q) => q.duration_minutes ?? 0,
+            csv: (q) => q.duration_minutes ?? "",
+            cell: (q) => <span className="whitespace-nowrap text-ink-muted">{formatDuration(q.duration_minutes)}</span>,
+        },
+        { id: "places", header: "Places", align: "right", defaultHidden: true, sortValue: (q) => q.total_markers, cell: (q) => <span className="tabular-nums text-ink-muted">{q.total_markers}</span> },
+        {
+            id: "created",
+            header: "Created",
+            sortValue: (q) => q.created_at ?? "",
+            csv: (q) => formatDate(q.created_at),
+            cell: (q) => <span className="whitespace-nowrap text-ink-muted">{formatDate(q.created_at)}</span>,
+        },
+    ];
 
-    // ---- Pagination ----
+    const rowActions = (q: QuestListEntry) => {
+        const title = q.title || "quest";
+        return (
+            <>
+                {tab === "review-queue" && (
+                    <span className="hidden items-center gap-0.5 md:flex">
+                        <IconButton icon={CheckCircle} size="sm" label={`Approve ${title}`} className="hover:bg-good-soft hover:text-good" onClick={() => openAction("approve", q)} />
+                        <IconButton icon={AlertCircle} size="sm" label={`Request changes on ${title}`} className="hover:bg-warn-soft hover:text-warn" onClick={() => openAction("requestChanges", q)} />
+                        <IconButton icon={XCircle} size="sm" label={`Reject ${title}`} className="hover:bg-bad-soft hover:text-bad" onClick={() => openAction("reject", q)} />
+                    </span>
+                )}
+                <span className="hidden items-center gap-0.5 md:flex">
+                    <IconButton icon={Eye} size="sm" label={`Quick view of ${title}`} onClick={() => setViewingQuest(q)} />
+                    {canDelete && <IconButton icon={Trash2} size="sm" label={`Delete ${title}`} className="hover:bg-bad-soft hover:text-bad" onClick={() => openDelete(q)} />}
+                </span>
+                <span className="md:hidden">
+                    <Menu
+                        label={`Actions for ${title}`}
+                        triggerVariant="ghost"
+                        size="sm"
+                        items={[
+                            { label: "Approve", icon: CheckCircle, onSelect: () => openAction("approve", q), hidden: tab !== "review-queue" },
+                            { label: "Request changes", icon: AlertCircle, onSelect: () => openAction("requestChanges", q), hidden: tab !== "review-queue" },
+                            { label: "Reject", icon: XCircle, danger: true, onSelect: () => openAction("reject", q), hidden: tab !== "review-queue" },
+                            { label: "Quick view", icon: Eye, onSelect: () => setViewingQuest(q) },
+                            { label: "Delete quest", icon: Trash2, danger: true, onSelect: () => openDelete(q), hidden: !canDelete },
+                        ]}
+                    />
+                </span>
+            </>
+        );
+    };
 
-
-    // ---- Render ----
-    if (!hasAccess) {
-        return <AccessDenied message="Only admins and moderators can manage quests." />;
+    const chips: FilterChip[] = [];
+    if (statusFilter) chips.push({ key: "status", label: chipLabel("Status", statusFilter, STATUS_OPTIONS), onRemove: () => set({ status: "" }) });
+    if (difficultyFilter) chips.push({ key: "difficulty", label: chipLabel("Difficulty", difficultyFilter, DIFFICULTY_OPTIONS), onRemove: () => set({ difficulty: "" }) });
+    if (themeFilter) chips.push({ key: "theme", label: chipLabel("Theme", themeFilter, THEME_OPTIONS), onRemove: () => set({ theme: "" }) });
+    if (regionFilter) {
+        const name = rows.find((q) => q.region_id === regionFilter)?.region_name;
+        chips.push({ key: "region", label: `Region: ${name ?? "selected"}`, onRemove: () => set({ region: "" }) });
     }
+    const filtered = chips.length > 0 || !!state.q;
 
     return (
-        <div className="space-y-5 animate-fade-in">
-            {/* Header */}
-            <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center shadow-sm">
-                        <Compass className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold text-neutral-900">Manage Quests</h1>
-                        <p className="text-sm text-neutral-500">
-                            {pagination ? `${pagination.total} total quests` : "Loading..."}
-                        </p>
-                    </div>
-                </div>
-            </div>
+        <div className="space-y-5">
+            <PageHeader
+                icon={Compass}
+                title="Quests"
+                description={
+                    <>
+                        Review and manage quests
+                        {allQuests.data && tab === "all" && <span className="text-ink-faint"> · {allQuests.data.pagination.total.toLocaleString("en-IN")} match</span>}
+                    </>
+                }
+            />
 
-            {/* Tab bar */}
-            <div className="flex gap-1 bg-neutral-100 rounded-xl p-1 w-fit">
-                <button
-                    onClick={() => { setActiveTab("all"); setPage(1); }}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                        activeTab === "all"
-                            ? "bg-white shadow-sm text-neutral-900"
-                            : "text-neutral-500 hover:text-neutral-700"
-                    }`}
+            <Tabs<Tab>
+                label="Quest views"
+                tabs={[
+                    { value: "all", label: "All quests" },
+                    { value: "review-queue", label: "Review queue", count: reviewTotal },
+                ]}
+                value={tab}
+                onChange={(v) => set({ tab: v, page: 1 })}
+            />
+
+            {tab === "all" && (
+                <FilterBar
+                    search={{ value: searchInput, onChange: setSearchInput, placeholder: "Search by title…" }}
+                    chips={chips}
+                    onReset={() => {
+                        setSearchInput("");
+                        reset();
+                    }}
                 >
-                    All Quests
-                    {pagination && (
-                        <span className="ml-2 text-xs text-neutral-400">({pagination.total})</span>
-                    )}
-                </button>
-                <button
-                    onClick={() => { setActiveTab("review-queue"); setPage(1); }}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                        activeTab === "review-queue"
-                            ? "bg-white shadow-sm text-neutral-900"
-                            : "text-neutral-500 hover:text-neutral-700"
-                    }`}
-                >
-                    Review Queue
-                    {reviewQueueData && reviewQueueData.pagination.total > 0 && (
-                        <span className="ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500 text-white">
-                            {reviewQueueData.pagination.total}
-                        </span>
-                    )}
-                </button>
-            </div>
+                    <EntityPicker type="region" variant="filter" label="Region" placeholder="Region…" value={regionFilter} onChange={(id) => set({ region: id })} />
+                    <FilterSelect label="Status" value={statusFilter} onChange={(v) => set({ status: v })} options={STATUS_OPTIONS} allLabel="All statuses" />
+                    <FilterSelect label="Difficulty" value={difficultyFilter} onChange={(v) => set({ difficulty: v })} options={DIFFICULTY_OPTIONS} allLabel="All difficulties" />
+                    <FilterSelect label="Theme" value={themeFilter} onChange={(v) => set({ theme: v })} options={THEME_OPTIONS} allLabel="All themes" />
+                </FilterBar>
+            )}
 
-            {/* Toolbar */}
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 space-y-3">
-                {/* Search + Filters */}
-                <div className="flex flex-wrap items-center gap-3">
-                    <div className="relative flex-1 min-w-[260px]">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                        <input
-                            type="text"
-                            placeholder="Search by title..."
-                            value={searchInput}
-                            onChange={(e) => setSearchInput(e.target.value)}
-                            className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
-                        />
-                        {searchInput && (
-                            <button
-                                onClick={() => { setSearchInput(""); setDebouncedQuery(""); setPage(1); }}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
-                            >
-                                <X className="w-4 h-4" />
-                            </button>
-                        )}
-                    </div>
+            <DataTable
+                label={tab === "review-queue" ? "Quests waiting for review" : "Quests"}
+                rows={rows}
+                columns={columns}
+                rowKey={(q) => q.id}
+                isLoading={active.isLoading && !active.data}
+                isFetching={active.isFetching && !!active.data}
+                error={active.error}
+                onRetry={() => active.refetch()}
+                empty={
+                    tab === "review-queue"
+                        ? { icon: CheckCircle, title: "No quests waiting for review.", description: "You're up to date." }
+                        : { icon: Compass, title: "No quests found.", description: filtered ? "Try adjusting or clearing the filters." : undefined }
+                }
+                onRowClick={(q) => setViewingQuest(q)}
+                rowActions={rowActions}
+                storageKey="quests"
+                exportName={tab === "review-queue" ? "quest-review-queue" : "quests"}
+                summary={pagination ? `${rows.length} of ${pagination.total.toLocaleString("en-IN")}` : undefined}
+                card={{
+                    title: (q) => q.title || "Untitled quest",
+                    subtitle: (q) => q.region_name ?? undefined,
+                    fields: ["status", "price", "duration", "created"],
+                }}
+                footer={
+                    pagination && (
+                        <Pagination page={pagination.page} totalPages={pagination.total_pages} total={pagination.total} pageSize={PER_PAGE} onPageChange={(p) => set({ page: p })} />
+                    )
+                }
+            />
 
-                    {/* Region filter (server-side by region_id) */}
-                    <FilterDropdown
-                        options={REGION_OPTIONS}
-                        value={regionFilter}
-                        onChange={(v) => { setRegionFilter(v); setPage(1); }}
-                        icon={<MapPin className="w-3.5 h-3.5" />}
-                        placeholder="Region"
-                    />
-
-                    <FilterDropdown
-                        options={STATUS_OPTIONS}
-                        value={statusFilter}
-                        onChange={(v) => { setStatusFilter(v); setPage(1); }}
-                        icon={<Filter className="w-3.5 h-3.5" />}
-                        placeholder="Status"
-                    />
-
-                    <FilterDropdown
-                        options={DIFFICULTY_OPTIONS}
-                        value={difficultyFilter}
-                        onChange={(v) => { setDifficultyFilter(v); setPage(1); }}
-                        icon={<Filter className="w-3.5 h-3.5" />}
-                        placeholder="Difficulty"
-                    />
-
-                    <FilterDropdown
-                        options={THEME_OPTIONS}
-                        value={themeFilter}
-                        onChange={(v) => { setThemeFilter(v); setPage(1); }}
-                        icon={<Filter className="w-3.5 h-3.5" />}
-                        placeholder="Theme"
-                    />
-
-                    {hasActiveFilters && (
-                        <button
-                            onClick={clearFilters}
-                            className="px-3 py-2.5 rounded-xl text-sm text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
-                        >
-                            Reset
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            {/* Table */}
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-                {displayLoading ? (
-                    <LoadingFallback />
-                ) : error || displayQuests.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-neutral-400 gap-2">
-                        <Compass className="w-8 h-8" />
-                        <p className="text-sm font-medium text-neutral-500">No quests found</p>
-                        {hasActiveFilters && (
-                            <p className="text-xs text-neutral-400">No quests matched your current filter criteria. Try adjusting or resetting filters.</p>
-                        )}
-                    </div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-neutral-100 bg-neutral-50/60">
-                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Quest</th>
-                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Status</th>
-                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Price</th>
-                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Duration</th>
-                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Created</th>
-                                    <th className="text-right px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-neutral-50">
-                                {displayQuests.map((quest) => {
-                                    const sc = questStatusConfig[quest.status] || { label: quest.status, dot: "bg-neutral-400", bg: "bg-neutral-50 text-neutral-600 border-neutral-200" };
-                                    return (
-                                        <tr
-                                            key={quest.id}
-                                            className="transition-colors group hover:bg-neutral-50/80 cursor-pointer"
-                                            onClick={() => setViewingQuest(quest)}
-                                        >
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-medium text-neutral-900">
-                                                        {quest.title || "Untitled Quest"}
-                                                    </span>
-                                                    {quest.difficulty && (
-                                                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border capitalize ${DIFFICULTY_BADGE[quest.difficulty] ?? "bg-neutral-50 text-neutral-600 border-neutral-200"}`}>
-                                                            {quest.difficulty}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="text-[11px] text-neutral-400 mt-0.5">
-                                                    {quest.region_name || "No region"}
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${sc.bg}`}>
-                                                    <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
-                                                    {sc.label}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-neutral-700 whitespace-nowrap">
-                                                {quest.price > 0 ? `₹${quest.price.toLocaleString("en-IN")}` : (
-                                                    <span className="text-emerald-600 font-medium">Free</span>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">
-                                                {formatDuration(quest.duration_minutes)}
-                                            </td>
-                                            <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">
-                                                {quest.created_at ? new Date(quest.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
-                                            </td>
-                                            <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                                                <div className="flex items-center justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                                                    {activeTab === "review-queue" && (
-                                                        <>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setActionModal({ action: "approve", questId: quest.id, questTitle: quest.title || "Quest" });
-                                                                }}
-                                                                title="Approve"
-                                                                className="p-1.5 rounded-lg text-neutral-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
-                                                            >
-                                                                <CheckCircle className="w-4 h-4" />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setActionModal({ action: "requestChanges", questId: quest.id, questTitle: quest.title || "Quest" });
-                                                                }}
-                                                                title="Request Changes"
-                                                                className="p-1.5 rounded-lg text-neutral-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
-                                                            >
-                                                                <AlertCircle className="w-4 h-4" />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setActionModal({ action: "reject", questId: quest.id, questTitle: quest.title || "Quest" });
-                                                                }}
-                                                                title="Reject"
-                                                                className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                                            >
-                                                                <XCircle className="w-4 h-4" />
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                    <button
-                                                        onClick={() => setViewingQuest(quest)}
-                                                        title="View details"
-                                                        className="p-1.5 rounded-lg text-neutral-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"
-                                                    >
-                                                        <Eye className="w-4 h-4" />
-                                                    </button>
-                                                    {canDelete && (
-                                                        <button
-                                                            onClick={() => setConfirmAction({ type: "delete", payload: { questId: quest.id, title: quest.title || "Untitled" } })}
-                                                            title="Delete quest"
-                                                            className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-
-                {/* Pagination */}
-                {displayPagination && (
-                    <Pagination
-                        page={displayPagination.page}
-                        totalPages={displayPagination.total_pages}
-                        total={displayPagination.total}
-                        onPageChange={setPage}
-                        theme="violet"
-                    />
-                )}
-            </div>
-
-            {/* Quest Detail Modal (read-only quick view) */}
+            {/* Quick view */}
             <QuestDetailModal
                 open={!!viewingQuest}
                 questId={viewingQuest?.id ?? null}
                 questTitle={viewingQuest?.title ?? ""}
                 questStatus={viewingQuest?.status ?? "Draft"}
                 onClose={() => setViewingQuest(null)}
-                onStatusChange={(_questId, _status) => {
-                    setViewingQuest(null);
-                }}
                 canDelete={canDelete}
                 onDelete={(questId) => {
                     setViewingQuest(null);
-                    setConfirmAction({ type: "delete", payload: { questId, title: viewingQuest?.title || "Quest" } });
+                    setHardDelete(false);
+                    setDeleteTarget({ questId, title: viewingQuest?.title || "Quest" });
                 }}
             />
 
-            {/* Delete Confirmation */}
-            <ConfirmModal
-                open={confirmAction?.type === "delete"}
-                title="Delete Quest"
-                message={
-                    `This will ${hardDelete ? "PERMANENTLY" : "soft"}-delete "${confirmAction?.type === "delete" ? confirmAction.payload.title : ""}". ${hardDelete ? "All data will be permanently removed." : "The quest will be archived."}`
+            {/* Delete — soft delete archives; a permanent delete asks for the title */}
+            <ConfirmDialog
+                open={!!deleteTarget}
+                title={hardDelete ? "Permanently delete quest?" : "Delete quest?"}
+                description={
+                    hardDelete
+                        ? `All data of "${deleteTarget?.title ?? ""}" is removed for good.`
+                        : `"${deleteTarget?.title ?? ""}" is archived and disappears from the app.`
                 }
-                confirmLabel={hardDelete ? "Hard Delete" : "Delete"}
-                confirmStyle="bg-red-600 hover:bg-red-700"
-                onConfirm={executeConfirmedAction}
-                onCancel={() => setConfirmAction(null)}
+                confirmLabel={hardDelete ? "Delete permanently" : "Delete"}
+                tone="danger"
+                level={hardDelete ? "type" : "simple"}
+                typeToConfirm={hardDelete ? deleteTarget?.title.trim() || "DELETE" : undefined}
                 isPending={deleteMutation.isPending}
+                onConfirm={() => deleteTarget && deleteMutation.mutate({ questId: deleteTarget.questId, hard: hardDelete })}
+                onCancel={() => setDeleteTarget(null)}
             >
-                <label className="flex items-center gap-2 mt-3 mb-1 px-1 cursor-pointer select-none">
-                    <input
-                        type="checkbox"
-                        checked={hardDelete}
-                        onChange={(e) => setHardDelete(e.target.checked)}
-                        className="w-4 h-4 rounded border-red-300 text-red-600 focus:ring-red-500 accent-red-600"
-                    />
-                    <span className="text-xs text-red-600 font-medium">Hard delete (permanent, irreversible)</span>
-                </label>
-            </ConfirmModal>
+                <Checkbox checked={hardDelete} onChange={setHardDelete} label="Delete permanently" hint="Removes all data. This can't be undone." />
+            </ConfirmDialog>
 
-            {/* Review action modal */}
+            {/* Review decisions */}
             <QuestActionModal
                 open={!!actionModal}
                 action={actionModal?.action ?? null}
@@ -587,14 +432,6 @@ export function QuestsPage() {
                 onConfirm={handleActionConfirm}
                 onCancel={() => setActionModal(null)}
             />
-
-            {/* Loading overlay for mutations */}
-            {isBusy && !confirmAction && (
-                <div className="fixed inset-0 z-40 bg-white/60 flex items-center justify-center">
-                    <RefreshCw className="w-6 h-6 text-violet-600 animate-spin" />
-                </div>
-            )}
         </div>
     );
 }
-

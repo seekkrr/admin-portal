@@ -10,6 +10,8 @@
  *   formatDate      → 23 Oct 2026
  *   formatDateTime  → 23 Oct 2026, 02:15 pm
  *   formatTime      → 02:15 pm
+ *   formatDayMonth  → 23 Oct      (chart axes, compact lists)
+ *   formatMonth     → Oct 2026    (chart axes)
  *   formatRelative  → just now · 5 min ago · 3 hours ago · yesterday · 4 days ago · 23 Oct 2026
  */
 
@@ -53,6 +55,20 @@ export function formatTime(value: DateInput): string {
     const d = toDate(value);
     if (!d) return "—";
     return d.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
+}
+
+/** Short day + month for chart axes ("23 Oct"). */
+export function formatDayMonth(value: DateInput): string {
+    const d = toDate(value);
+    if (!d) return "—";
+    return d.toLocaleDateString(LOCALE, { month: "short", day: "numeric" });
+}
+
+/** Month + year for chart axes ("Oct 2026"). */
+export function formatMonth(value: DateInput): string {
+    const d = toDate(value);
+    if (!d) return "—";
+    return d.toLocaleDateString(LOCALE, { month: "short", year: "numeric" });
 }
 
 const RTF = typeof Intl !== "undefined" && "RelativeTimeFormat" in Intl

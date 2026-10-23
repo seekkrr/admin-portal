@@ -1,318 +1,183 @@
-import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { toast } from "sonner";
-import {
-    Receipt,
-    Search,
-    Eye,
-    Plus,
-    ShieldAlert,
-} from "lucide-react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link, useNavigate } from "react-router-dom";
+import { CheckCircle, Eye, Plus, RotateCcw } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
-import { LoadingFallback } from "@components/LoadingFallback";
-import { FilterDropdown } from "@/components/FilterDropdown";
+import { AccessDenied } from "@components/AccessDenied";
+import { Button, IconButton } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { FilterBar, FilterSelect, type FilterChip, type FilterOption } from "@/components/ui/FilterBar";
+import { chipLabel } from "@/components/ui/filters";
+import { DataTable, type DataColumn } from "@/components/ui/DataTable";
 import { Pagination } from "@/components/ui/Pagination";
-import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { EntityPicker } from "@/components/ui/EntityPicker";
+import { IdLink } from "@/components/ui/IdLink";
+import { useUrlState } from "@/hooks/useUrlState";
 import { refundsService } from "../services/refunds.service";
 import { RefundStatusBadge } from "../components/TransactionStatusBadge";
-import { formatCurrency, formatDateTime, shortId, orDash } from "@/utils/format";
-import type { RefundStatus, InitiateRefundPayload } from "@/types";
+import { InitiateRefundModal } from "../components/InitiateRefundModal";
+import { RefundApprovalModal } from "../components/RefundApprovalModal";
+import { FINANCE_VIEW_ROLES, hasAnyRole } from "../components/paymentEvents";
+import { formatCurrency, shortId } from "@/utils/format";
+import { formatDateTime } from "@/utils/date";
+import type { Refund, RefundStatus } from "@/types";
 
-const CAN_FINANCE = ["admin", "super_admin", "finance"];
-const CAN_INITIATE_REFUND = ["admin", "super_admin", "finance"];
+const PER_PAGE = 20;
 
-const STATUS_OPTIONS: { value: string; label: string; dot?: string }[] = [
-    { value: "", label: "All statuses" },
-    { value: "initiated", label: "Initiated", dot: "bg-amber-400" },
-    { value: "processing", label: "Processing", dot: "bg-blue-400" },
-    { value: "completed", label: "Completed", dot: "bg-emerald-500" },
-    { value: "failed", label: "Failed", dot: "bg-red-400" },
+const STATUS_OPTIONS: FilterOption[] = [
+    { value: "initiated", label: "Waiting for approval" },
+    { value: "processing", label: "Processing" },
+    { value: "completed", label: "Completed" },
+    { value: "failed", label: "Failed" },
 ];
 
 export function RefundsPage() {
     const roles = useAuthStore((s) => s.user?.role);
     const navigate = useNavigate();
-    const queryClient = useQueryClient();
-    const canView = roles?.some((r) => CAN_FINANCE.includes(r));
-    const canInitiate = roles?.some((r) => CAN_INITIATE_REFUND.includes(r));
+    const canView = hasAnyRole(roles, FINANCE_VIEW_ROLES);
+    const canInitiate = canView;
+    const canApprove = canView;
 
-    const [page, setPage] = useState(1);
-    const [perPage] = useState(20);
     // ?status=initiated opens the refunds awaiting approval (links from Today).
-    const [searchParams] = useSearchParams();
-    const [status, setStatus] = useState<"" | RefundStatus>(() => {
-        const s = searchParams.get("status");
-        return s === "initiated" || s === "processing" || s === "completed" || s === "failed" ? s : "";
-    });
-    const [userId, setUserId] = useState("");
-    const [debouncedUserId, setDebouncedUserId] = useState("");
+    const { state, set, reset } = useUrlState({ user: "", status: "", page: 1 });
+    const status = (STATUS_OPTIONS.some((o) => o.value === state.status) ? state.status : "") as "" | RefundStatus;
+    const userId = state.user.trim();
+    const page = Math.max(1, state.page);
 
     const [showInitiate, setShowInitiate] = useState(false);
-    const [txnId, setTxnId] = useState("");
-    const [amount, setAmount] = useState("");
-    const [reason, setReason] = useState("");
+    const [approveTarget, setApproveTarget] = useState<Refund | null>(null);
 
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setDebouncedUserId(userId.trim());
-            setPage(1);
-        }, 400);
-        return () => clearTimeout(timer);
-    }, [userId]);
-
-    const { data, isLoading, error } = useQuery({
-        queryKey: ["admin-refunds", { status, user_id: debouncedUserId, page }],
+    const { data, isLoading, isFetching, error, refetch } = useQuery({
+        queryKey: ["admin-refunds", { status, user_id: userId, page }],
         queryFn: () =>
             refundsService.list({
                 status: status || undefined,
-                user_id: debouncedUserId || undefined,
+                user_id: userId || undefined,
                 page,
-                page_size: perPage,
+                page_size: PER_PAGE,
             }),
-        enabled: !!canView,
+        enabled: canView,
         staleTime: 5 * 60 * 1000,
+        placeholderData: (prev) => prev,
     });
 
-    const initiateMutation = useMutation({
-        mutationFn: (payload: InitiateRefundPayload) => refundsService.initiate(payload),
-        onSuccess: (refund) => {
-            queryClient.invalidateQueries({ queryKey: ["admin-refunds"] });
-            queryClient.invalidateQueries({ queryKey: ["admin-transactions"] });
-            queryClient.invalidateQueries({ queryKey: ["payment-events"] });
-            toast.success("Refund initiated");
-            setShowInitiate(false);
-            setTxnId("");
-            setAmount("");
-            setReason("");
-            navigate(`/refunds/${refund._id}`);
-        },
-        onError: (err: unknown) => {
-            const m = (err as { message?: string })?.message;
-            toast.error(m?.trim() ? m : "Failed to initiate refund");
-        },
-    });
-
-    if (!canView) {
-        return (
-            <div className="animate-fade-in max-w-md mx-auto mt-16 bg-white rounded-2xl border border-neutral-200 shadow-sm p-8 text-center">
-                <ShieldAlert className="w-12 h-12 text-neutral-300 mx-auto mb-4" />
-                <h2 className="text-lg font-bold text-neutral-900">Access denied</h2>
-                <p className="text-sm text-neutral-500 mt-1">
-                    You need a finance, admin, or super-admin role to view refunds.
-                </p>
-            </div>
-        );
-    }
-
-    if (isLoading) return <LoadingFallback message="Loading refunds..." />;
-    if (error) return <div className="p-6 text-center text-red-500">Failed to load refunds.</div>;
+    if (!canView) return <AccessDenied message="You need a finance, admin, or super-admin role to view refunds." />;
 
     const refunds = data?.refunds ?? [];
 
-    const handleInitiate = () => {
-        const r = reason.trim();
-        if (!txnId.trim()) {
-            toast.error("Transaction ID is required");
-            return;
-        }
-        if (r.length < 3) {
-            toast.error("Reason must be at least 3 characters");
-            return;
-        }
-        const payload: InitiateRefundPayload = { transaction_id: txnId.trim(), reason: r };
-        const a = amount.trim();
-        if (a !== "") {
-            const n = Number(a);
-            if (Number.isNaN(n) || n <= 0) {
-                toast.error("Amount must be a positive number");
-                return;
-            }
-            payload.amount = n;
-        }
-        initiateMutation.mutate(payload);
-    };
+    const columns: DataColumn<Refund>[] = [
+        {
+            id: "refund",
+            header: "Refund",
+            hideable: false,
+            sortValue: (r) => r._id,
+            cell: (r) => (
+                <Link to={`/refunds/${r._id}`} className="font-mono text-xs font-medium text-ink hover:text-accent-700 hover:underline" title={r._id}>
+                    {shortId(r._id, 8, 6)}
+                </Link>
+            ),
+        },
+        { id: "transaction", header: "Transaction", csv: (r) => r.transaction_id, cell: (r) => <IdLink kind="transaction" id={r.transaction_id} /> },
+        {
+            id: "amount",
+            header: "Amount",
+            align: "right",
+            sortValue: (r) => r.amount,
+            csv: (r) => r.amount,
+            cell: (r) => <span className="whitespace-nowrap font-medium tabular-nums">{formatCurrency(r.amount, r.currency)}</span>,
+        },
+        { id: "status", header: "Status", sortValue: (r) => r.status, cell: (r) => <RefundStatusBadge status={r.status} /> },
+        { id: "user", header: "User", csv: (r) => r.user_id, cell: (r) => <IdLink kind="user" id={r.user_id} /> },
+        {
+            id: "type",
+            header: "Type",
+            sortValue: (r) => r.refund_type ?? "",
+            cell: (r) => <span className="capitalize text-ink-muted">{r.refund_type || "—"}</span>,
+        },
+        {
+            id: "reason",
+            header: "Reason",
+            defaultHidden: true,
+            sortValue: (r) => r.reason,
+            className: "max-w-[280px]",
+            cell: (r) => <span className="line-clamp-2 text-ink-muted">{r.reason || "—"}</span>,
+        },
+        {
+            id: "created",
+            header: "Created",
+            sortValue: (r) => r.created_at,
+            csv: (r) => formatDateTime(r.created_at),
+            cell: (r) => <span className="whitespace-nowrap text-ink-muted">{formatDateTime(r.created_at)}</span>,
+        },
+    ];
+
+    const chips: FilterChip[] = [];
+    if (userId) chips.push({ key: "user", label: "User selected", onRemove: () => set({ user: "" }) });
+    if (status) chips.push({ key: "status", label: chipLabel("Status", status, STATUS_OPTIONS), onRemove: () => set({ status: "" }) });
 
     return (
-        <div className="animate-fade-in space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-sm">
-                        <Receipt className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold text-neutral-900">Refunds</h1>
-                        <p className="text-sm text-neutral-500">
-                            Refund requests and approvals
-                            {data && <span className="ml-2 text-neutral-400">· {data.total} total</span>}
-                        </p>
-                    </div>
-                </div>
-                {canInitiate && (
-                    <button
-                        onClick={() => setShowInitiate(true)}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition-colors self-start"
-                    >
-                        <Plus className="w-4 h-4" />
-                        Initiate Refund
-                    </button>
+        <div className="space-y-5">
+            <PageHeader
+                icon={RotateCcw}
+                title="Refunds"
+                description={
+                    <>
+                        Refund requests and approvals
+                        {data && <span className="text-ink-faint"> · {data.total.toLocaleString("en-IN")} total</span>}
+                    </>
+                }
+                primaryAction={
+                    canInitiate && (
+                        <Button variant="primary" icon={Plus} onClick={() => setShowInitiate(true)}>
+                            Initiate refund
+                        </Button>
+                    )
+                }
+            />
+
+            <FilterBar chips={chips} onReset={reset}>
+                <EntityPicker type="user" variant="filter" label="User" placeholder="Filter by user…" value={userId} onChange={(id) => set({ user: id })} />
+                <FilterSelect label="Status" value={status} onChange={(v) => set({ status: v })} options={STATUS_OPTIONS} allLabel="All statuses" />
+            </FilterBar>
+
+            <DataTable
+                label="Refunds"
+                rows={refunds}
+                columns={columns}
+                rowKey={(r) => r._id}
+                isLoading={isLoading && !data}
+                isFetching={isFetching && !!data}
+                error={error}
+                onRetry={() => refetch()}
+                empty={{
+                    icon: RotateCcw,
+                    title: status === "initiated" && !userId ? "No refunds waiting for approval." : "No refunds match these filters.",
+                    description: chips.length ? "Try clearing a filter." : undefined,
+                }}
+                onRowClick={(r) => navigate(`/refunds/${r._id}`)}
+                rowActions={(r) => (
+                    <>
+                        {canApprove && r.status === "initiated" && (
+                            <IconButton icon={CheckCircle} size="sm" label="Approve refund" onClick={() => setApproveTarget(r)} />
+                        )}
+                        <IconButton icon={Eye} size="sm" label="View details" onClick={() => navigate(`/refunds/${r._id}`)} />
+                    </>
                 )}
-            </div>
+                storageKey="refunds"
+                exportName="refunds"
+                summary={data ? `${refunds.length} of ${data.total.toLocaleString("en-IN")}` : undefined}
+                card={{
+                    title: (r) => formatCurrency(r.amount, r.currency),
+                    subtitle: (r) => `${shortId(r._id, 8, 6)} · ${formatDateTime(r.created_at)}`,
+                    fields: ["status", "type", "transaction", "user"],
+                }}
+                footer={
+                    data && <Pagination page={data.page} totalPages={data.total_pages} total={data.total} pageSize={PER_PAGE} onPageChange={(p) => set({ page: p })} />
+                }
+            />
 
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4">
-                <div className="flex flex-wrap items-center gap-3">
-                    <div className="relative flex-1 min-w-[240px]">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                        <input
-                            type="text"
-                            placeholder="Filter by user ID..."
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-neutral-200 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                            value={userId}
-                            onChange={(e) => setUserId(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Enter") setPage(1); }}
-                        />
-                    </div>
-                    <FilterDropdown
-                        value={status}
-                        onChange={(val) => { setStatus(val as "" | RefundStatus); setPage(1); }}
-                        options={STATUS_OPTIONS}
-                        theme="emerald"
-                        placeholder="All statuses"
-                    />
-                </div>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-neutral-200 text-sm">
-                        <thead className="border-b border-neutral-200/60 bg-neutral-50/80">
-                            <tr className="text-[11px] font-bold text-neutral-600 uppercase tracking-widest">
-                                <th className="px-4 py-4 text-left">Refund ID</th>
-                                <th className="px-4 py-4 text-left">Transaction</th>
-                                <th className="px-4 py-4 text-right">Amount</th>
-                                <th className="px-4 py-4 text-left">Status</th>
-                                <th className="px-4 py-4 text-left">Type</th>
-                                <th className="px-4 py-4 text-left">Created</th>
-                                <th className="px-4 py-4 text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-neutral-200">
-                            {refunds.map((r) => (
-                                <tr key={r._id} className="group hover:bg-neutral-50/80 transition-colors">
-                                    <td className="px-4 py-4">
-                                        <Link
-                                            to={`/refunds/${r._id}`}
-                                            className="font-mono text-xs font-medium text-neutral-900 hover:text-emerald-600"
-                                            title={r._id}
-                                        >
-                                            {shortId(r._id, 8, 6)}
-                                        </Link>
-                                    </td>
-                                    <td className="px-4 py-4">
-                                        {r.transaction_id ? (
-                                            <Link
-                                                to={`/transactions/${r.transaction_id}`}
-                                                className="font-mono text-xs text-emerald-600 hover:underline"
-                                                title={r.transaction_id}
-                                            >
-                                                {shortId(r.transaction_id, 8, 6)}
-                                            </Link>
-                                        ) : (
-                                            <span className="text-neutral-400">—</span>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-4 text-right font-medium text-neutral-900 whitespace-nowrap">
-                                        {formatCurrency(r.amount, r.currency)}
-                                    </td>
-                                    <td className="px-4 py-4">
-                                        <RefundStatusBadge status={r.status} />
-                                    </td>
-                                    <td className="px-4 py-4 text-neutral-600 capitalize">{orDash(r.refund_type)}</td>
-                                    <td className="px-4 py-4 whitespace-nowrap text-neutral-500">
-                                        {formatDateTime(r.created_at)}
-                                    </td>
-                                    <td className="px-4 py-4 text-right">
-                                        <button
-                                            onClick={() => navigate(`/refunds/${r._id}`)}
-                                            title="View details"
-                                            className="p-1.5 rounded-lg text-neutral-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all active:scale-95"
-                                        >
-                                            <Eye className="w-4 h-4" />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                            {refunds.length === 0 && (
-                                <tr>
-                                    <td colSpan={7} className="px-4 py-12 text-center text-neutral-500">
-                                        <div className="flex flex-col items-center justify-center">
-                                            <Receipt className="w-12 h-12 text-neutral-300 mb-4" />
-                                            <p>No refunds found matching your criteria.</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-                {data && (
-                    <Pagination
-                        page={data.page}
-                        totalPages={data.total_pages}
-                        total={data.total}
-                        onPageChange={setPage}
-                    />
-                )}
-            </div>
-
-            {/* Initiate Refund modal (type-CONFIRM, money movement) */}
-            <ConfirmModal
-                open={showInitiate}
-                theme="warning"
-                title="Initiate Refund"
-                message="Create a refund request against a captured transaction. Leave the amount blank for a full refund."
-                confirmLabel="Initiate Refund"
-                confirmStyle="bg-emerald-600 hover:bg-emerald-700"
-                onConfirm={handleInitiate}
-                onCancel={() => setShowInitiate(false)}
-                isPending={initiateMutation.isPending}
-                disabledConfirm={!txnId.trim() || reason.trim().length < 3}
-            >
-                <div className="space-y-3 mb-1">
-                    <div>
-                        <label className="block text-xs font-medium text-neutral-600 mb-1.5">Transaction ID</label>
-                        <input
-                            type="text"
-                            placeholder="ObjectId of a captured transaction"
-                            value={txnId}
-                            onChange={(e) => setTxnId(e.target.value)}
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-transparent"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-medium text-neutral-600 mb-1.5">
-                            Amount — optional, blank = full
-                        </label>
-                        <input
-                            type="number"
-                            inputMode="decimal"
-                            placeholder="Full amount"
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-transparent"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-medium text-neutral-600 mb-1.5">Reason (min 3 chars)</label>
-                        <textarea
-                            rows={2}
-                            value={reason}
-                            onChange={(e) => setReason(e.target.value)}
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-transparent"
-                        />
-                    </div>
-                </div>
-            </ConfirmModal>
+            <InitiateRefundModal open={showInitiate} onClose={() => setShowInitiate(false)} />
+            <RefundApprovalModal open={!!approveTarget} refund={approveTarget} onClose={() => setApproveTarget(null)} />
         </div>
     );
 }

@@ -120,19 +120,19 @@ export function BusinessFormFields({
             </div>
             <Field label="Region">
                 {disabled ? (
-                    <div className={`${inputClass} bg-neutral-50 text-neutral-600`}>
+                    <div className={`${inputClass} bg-surface-muted text-ink-muted`}>
                         <RegionName id={draft.region_id || null} />
                     </div>
                 ) : (
-                    <RegionPicker value={draft.region_id} onChange={(id) => set("region_id", id)} ringClass="focus:ring-teal-500" />
+                    <RegionPicker value={draft.region_id} onChange={(id) => set("region_id", id)} ringClass="focus:ring-accent-500" />
                 )}
             </Field>
             <Field label="Places (markers)" hint="SeekKrr markers this business operates. Collabs are posted per place.">
                 <MarkerIdsInput value={draft.marker_ids} onChange={(ids) => set("marker_ids", ids)} disabled={disabled} />
             </Field>
 
-            <div className="pt-2 border-t border-neutral-100 space-y-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Website listing</p>
+            <div className="pt-2 border-t border-line space-y-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">Website listing</p>
                 <Field
                     label="Public slug"
                     htmlFor={`${idPrefix}-slug`}
@@ -145,7 +145,7 @@ export function BusinessFormFields({
                         value={draft.public_slug}
                         disabled={disabled}
                         onChange={(e) => set("public_slug", e.target.value)}
-                        className={`${inputClass} font-mono ${slugMsg ? "ring-2 ring-red-300" : ""}`}
+                        className={`${inputClass} font-mono ${slugMsg ? "ring-2 ring-bad/40" : ""}`}
                         placeholder={mode === "create" ? "Auto-generated from name" : ""}
                     />
                 </Field>
@@ -168,8 +168,8 @@ export function BusinessFormFields({
             </div>
 
             {mode === "edit" && (
-                <div className="pt-2 border-t border-neutral-100 space-y-4">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Status</p>
+                <div className="pt-2 border-t border-line space-y-4">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">Status</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
                         <Field label="Status" htmlFor={`${idPrefix}-status`} hint="Active requires an owner.">
                             <select

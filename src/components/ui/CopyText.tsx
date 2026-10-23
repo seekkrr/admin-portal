@@ -23,7 +23,7 @@ export function CopyText({
     title?: string;
 }) {
     const [copied, setCopied] = useState(false);
-    if (!value) return <span className="text-neutral-400">—</span>;
+    if (!value) return <span className="text-ink-faint">—</span>;
 
     const copy = async (e: MouseEvent) => {
         e.stopPropagation();
@@ -42,11 +42,11 @@ export function CopyText({
             type="button"
             onClick={copy}
             title={title ?? `Copy ${value}`}
-            className={`group/copy inline-flex max-w-full items-center gap-1 rounded px-1 -mx-1 text-left hover:bg-indigo-50 hover:text-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${mono ? "font-mono" : ""} ${className}`}
+            className={`group/copy inline-flex max-w-full items-center gap-1 rounded px-1 -mx-1 text-left hover:bg-brand-50 hover:text-accent-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 ${mono ? "font-mono" : ""} ${className}`}
         >
             <span className={truncate ? "truncate" : "whitespace-nowrap"}>{display ?? value}</span>
             {copied ? (
-                <Check className="h-3 w-3 shrink-0 text-emerald-600" aria-label="Copied" />
+                <Check className="h-3 w-3 shrink-0 text-good" aria-label="Copied" />
             ) : (
                 <Copy className="h-3 w-3 shrink-0 opacity-40 group-hover/copy:opacity-100" aria-hidden />
             )}

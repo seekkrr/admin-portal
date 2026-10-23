@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Users, Trash2, Ban, Shield, RefreshCw, Coins, Star, TrendingUp, X, Search, type LucideIcon } from "lucide-react";
+import { Users, Trash2, Ban, Shield, Coins, Star, TrendingUp, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@store/auth.store";
 import { AccessDenied } from "@components/AccessDenied";
@@ -19,7 +19,7 @@ import { Modal } from "@/components/ui/Modal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { StatusPill, Tag } from "@/components/ui/StatusPill";
 import { Checkbox, Field, Switch, TextInput } from "@/components/ui/Field";
-import { Panel } from "@/components/ui/Panel";
+import { StatGrid, StatTile } from "@/components/ui/Stat";
 import { useDebouncedUrlInput, useUrlState } from "@/hooks/useUrlState";
 import { formatDate } from "@/utils/date";
 import { cx } from "@/utils/cx";
@@ -227,22 +227,18 @@ function PointsModal({ userId, userName, currentPoints, onClose }: PointsModalPr
     );
 }
 
-function StatCard({ icon: Icon, label, value, extra }: { icon: LucideIcon; label: string; value: string; extra?: string }) {
-    return (
-        <div className="rounded-card border border-line bg-surface p-4 shadow-card">
-            <div className="mb-1 flex items-center gap-2">
-                <Icon className="h-4 w-4 text-accent-600" aria-hidden />
-                <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{label}</span>
-            </div>
-            <div className="text-2xl font-semibold tabular-nums text-ink">{value}</div>
-            {extra && <div className="mt-1 text-xs font-medium text-warn">{extra}</div>}
-        </div>
-    );
+// ---- Main Component ----
+/** `/users?focus=<id>` (older search links) opens the user's page. */
+export function UsersPage() {
+    const [searchParams] = useSearchParams();
+    const focusId = searchParams.get("focus");
+    if (focusId) return <Navigate to={`/users/${encodeURIComponent(focusId)}`} replace />;
+    return <UsersList />;
 }
 
-// ---- Main Component ----
-export function UsersPage() {
+function UsersList() {
     const { user: currentUser } = useAuthStore();
+    const navigate = useNavigate();
     const queryClient = useQueryClient();
     const isAdmin = !!currentUser && currentUser.role?.some((r) => ADMIN_ROLES.includes(r));
 
@@ -254,10 +250,6 @@ export function UsersPage() {
     const roleFilter = ROLE_OPTIONS.some((o) => o.value === state.role) ? state.role : "";
     const creatorFilter = state.creator === "true" || state.creator === "false" ? state.creator : "";
     const page = Math.max(1, state.page);
-
-    // ?focus=<id> comes from the header search (users have no detail page yet).
-    const [searchParams, setSearchParams] = useSearchParams();
-    const focusId = searchParams.get("focus");
 
     const [selectedIds, setSelectedIds] = useState<Set<string>>(() => loadSessionSelections());
     const [promotingUser, setPromotingUser] = useState<User | null>(null);
@@ -301,13 +293,6 @@ export function UsersPage() {
         queryFn: () => usersService.listUsers(queryParams),
         placeholderData: (prev) => prev,
         enabled: isAdmin,
-    });
-
-    const focused = useQuery({
-        queryKey: ["admin-users", "focus", focusId],
-        queryFn: () => usersService.getUser(focusId ?? ""),
-        enabled: isAdmin && !!focusId,
-        retry: false,
     });
 
     const users = useMemo(() => data?.users ?? [], [data]);
@@ -432,7 +417,9 @@ export function UsersPage() {
                 csv: (u) => fullName(u),
                 cell: (u) => (
                     <div className="min-w-0">
-                        <div className="font-medium text-ink">{fullName(u) || "—"}</div>
+                        <Link to={`/users/${u._id}`} className="font-medium text-ink hover:text-accent-700 hover:underline">
+                            {fullName(u) || u.email || "—"}
+                        </Link>
                         <div className="mt-0.5 text-[11px] text-ink-faint">
                             <CopyText value={u._id} mono truncate={false} title="Copy user ID" />
                         </div>
@@ -490,6 +477,7 @@ export function UsersPage() {
     const rowActions = (u: User) => (
         <>
             <div className="hidden items-center gap-0.5 md:flex">
+                <IconButton icon={Eye} size="sm" label={`Open ${fullName(u) || "user"}`} onClick={() => navigate(`/users/${u._id}`)} />
                 <IconButton icon={Coins} size="sm" label={`Manage points for ${fullName(u)}`} onClick={() => setPointsUser(u)} />
                 <IconButton icon={Shield} size="sm" label={`Change role for ${fullName(u)}`} onClick={() => setPromotingUser(u)} />
                 <IconButton
@@ -506,6 +494,7 @@ export function UsersPage() {
                     triggerVariant="ghost"
                     size="sm"
                     items={[
+                        { label: "Open user", icon: Eye, to: `/users/${u._id}` },
                         { label: "Manage points", icon: Coins, onSelect: () => setPointsUser(u) },
                         { label: "Change role", icon: Shield, onSelect: () => setPromotingUser(u) },
                         {
@@ -536,13 +525,6 @@ export function UsersPage() {
     if (roleFilter) chips.push({ key: "role", label: chipLabel("Role", roleFilter, ROLE_OPTIONS), onRemove: () => set({ role: "" }) });
     if (creatorFilter) chips.push({ key: "creator", label: chipLabel("Creator", creatorFilter, CREATOR_OPTIONS), onRemove: () => set({ creator: "" }) });
 
-    const clearFocus = () =>
-        setSearchParams((prev) => {
-            const next = new URLSearchParams(prev);
-            next.delete("focus");
-            return next;
-        });
-
     const singleDelete = confirmAction?.type === "single-delete" ? confirmAction.payload : null;
     const typeName = singleDelete?.name.trim() || "DELETE";
 
@@ -556,47 +538,18 @@ export function UsersPage() {
 
             {/* Stats Panel */}
             {statsData && (
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                    <StatCard icon={Users} label="Total" value={statsData.total?.toLocaleString("en-IN") ?? "—"} />
-                    <StatCard icon={TrendingUp} label="Active" value={(statsData.by_status?.active ?? 0).toLocaleString("en-IN")} />
-                    <StatCard
+                <StatGrid>
+                    <StatTile icon={Users} label="Total" value={statsData.total?.toLocaleString("en-IN") ?? "—"} />
+                    <StatTile icon={TrendingUp} label="Active" value={(statsData.by_status?.active ?? 0).toLocaleString("en-IN")} />
+                    <StatTile
                         icon={Star}
                         label="Creators"
                         value={statsData.creators?.toLocaleString("en-IN") ?? "—"}
-                        extra={(statsData.creators_by_status?.suspended ?? 0) > 0 ? `${statsData.creators_by_status?.suspended} suspended` : undefined}
+                        hint={(statsData.creators_by_status?.suspended ?? 0) > 0 ? `${statsData.creators_by_status?.suspended} suspended` : undefined}
+                        hintTone="warn"
                     />
-                    <StatCard icon={TrendingUp} label="New (7d)" value={(statsData.new_last_7_days ?? 0).toLocaleString("en-IN")} />
-                </div>
-            )}
-
-            {/* From the header search */}
-            {focusId && (
-                <Panel
-                    title="From search"
-                    icon={Search}
-                    actions={
-                        <Button size="sm" variant="ghost" icon={X} onClick={clearFocus}>
-                            Clear
-                        </Button>
-                    }
-                    bodyClassName="p-0"
-                >
-                    <DataTable
-                        label="Found user"
-                        rows={focused.data ? [focused.data] : []}
-                        columns={columns}
-                        rowKey={(u) => u._id}
-                        isLoading={focused.isLoading}
-                        error={focused.error}
-                        onRetry={() => focused.refetch()}
-                        empty={{ title: "That user wasn't found." }}
-                        rowActions={rowActions}
-                        storageKey="users"
-                        card={card}
-                        toolbar={false}
-                        frame="bare"
-                    />
-                </Panel>
+                    <StatTile icon={TrendingUp} label="New (7d)" value={(statsData.new_last_7_days ?? 0).toLocaleString("en-IN")} />
+                </StatGrid>
             )}
 
             <FilterBar
@@ -622,7 +575,7 @@ export function UsersPage() {
                 error={error}
                 onRetry={() => refetch()}
                 empty={{ icon: Users, title: "No users found", description: chips.length || debouncedQuery ? "Try clearing a filter." : undefined }}
-                rowClassName={(u) => (u._id === focusId ? "bg-highlight-soft" : undefined)}
+                onRowClick={(u) => navigate(`/users/${u._id}`)}
                 selectedIds={selectedIds}
                 onSelectionChange={setSelectedIds}
                 bulkActions={[
@@ -783,12 +736,6 @@ export function UsersPage() {
                     );
                 })()}
 
-            {/* Loading overlay for mutations started outside a dialog */}
-            {isBusy && !confirmAction && (
-                <div className="fixed inset-0 z-40 flex items-center justify-center bg-surface/60" role="status" aria-label="Saving">
-                    <RefreshCw className="h-6 w-6 animate-spin text-accent-600" aria-hidden />
-                </div>
-            )}
         </div>
     );
 }

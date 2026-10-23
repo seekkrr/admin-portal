@@ -247,12 +247,12 @@ export const GeoMap = memo(function GeoMap({
         <div className="relative">
             <div
                 ref={containerRef}
-                className={`rounded-xl overflow-hidden shadow-sm border border-neutral-200 ${className}`}
+                className={`rounded-card overflow-hidden shadow-sm border border-line ${className}`}
                 style={{ height }}
                 aria-label="Map"
             />
             {onPick && (
-                <div className="absolute top-3 left-3 z-10 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-sm border border-neutral-200/60 text-[11px] font-medium text-neutral-600">
+                <div className="absolute top-3 left-3 z-10 bg-surface/90 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-sm border border-line text-[11px] font-medium text-ink-muted">
                     Click the map to set coordinates
                 </div>
             )}

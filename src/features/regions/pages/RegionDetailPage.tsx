@@ -1,25 +1,24 @@
 import { useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-    Globe,
-    MapPin,
-    ArrowLeft,
-    Scale,
-    Edit2,
-    Link2,
-} from "lucide-react";
+import { Edit2, Globe, Info, MapPin, Scale, X } from "lucide-react";
 import { toast } from "sonner";
 import { regionsService } from "../services/regions.service";
-import { LoadingFallback } from "@components/LoadingFallback";
 import { GeoMap, type GeoMapPoint } from "@components/maps/GeoMap";
 import { BboxDrawMap } from "@components/maps/BboxDrawMap";
 import { nearbyReferenceBoxes } from "../utils/nearbyBoxes";
 import { useAuthStore } from "@store/auth.store";
+import { Button, ButtonLink } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { DetailList, DetailRow, Panel } from "@/components/ui/Panel";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Field, Switch, TextArea, TextInput } from "@/components/ui/Field";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/States";
+import { StatusPill, Tag } from "@/components/ui/StatusPill";
+import { IdLink } from "@/components/ui/IdLink";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { formatDateTime } from "@/utils/date";
 import type { Region, UpdateRegionPayload, GeoPolygon } from "@/types";
-import { shortId } from "@/utils/format";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
-import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 import { CrowdMeterSection } from "../components/CrowdMeterSection";
 import { TravelTimeMatrix } from "../components/TravelTimeMatrix";
@@ -53,21 +52,23 @@ export function RegionDetailPage() {
     const queryClient = useQueryClient();
     const { user } = useAuthStore();
 
-    const CAN_EDIT = !!user?.role?.some((r) => EDIT_ROLES.includes(r));
-    const CAN_APPROVE = CAN_EDIT;
-    const IS_SUPER = !!user?.role?.includes("super_admin");
+    const canEdit = !!user?.role?.some((r) => EDIT_ROLES.includes(r));
+    const canApprove = canEdit;
+    const isSuper = !!user?.role?.includes("super_admin");
 
     const [form, setForm] = useState<UpdateRegionPayload | null>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [weightInput, setWeightInput] = useState("");
     const [confirmWeight, setConfirmWeight] = useState(false);
 
-    const { data: region, isLoading, error } = useQuery<Region>({
+    const { data: region, isLoading, error, refetch } = useQuery<Region>({
         queryKey: ["region-detail", regionId],
         queryFn: () => regionsService.getById(regionId),
         enabled: !!regionId,
         staleTime: 60 * 1000,
     });
+
+    usePageTitle(region?.name);
 
     const hotspotsQuery = useQuery<{ hotspots: Region[]; total: number }>({
         queryKey: ["region-hotspots", regionId],
@@ -94,6 +95,21 @@ export function RegionDetailPage() {
         onError: (e: Error) => toast.error(e.message || "Failed to update region"),
     });
 
+    const weightMutation = useMutation({
+        mutationFn: (weight: number) => regionsService.setAdminWeight(regionId, weight),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["region-detail", regionId] });
+            queryClient.invalidateQueries({ queryKey: ["admin-regions"] });
+            toast.success("Admin weight updated");
+            setWeightInput("");
+            setConfirmWeight(false);
+        },
+        onError: (e: Error) => {
+            toast.error(e.message || "Failed to update admin weight");
+            setConfirmWeight(false);
+        },
+    });
+
     // Neighbouring regions for the bbox editor's overlap-guard layer. Only fetched while editing.
     const allRegionsQuery = useQuery<Region[]>({
         queryKey: ["admin-regions-all-ref"],
@@ -112,27 +128,27 @@ export function RegionDetailPage() {
                 type: region?.type,
                 excludeId: region?.id,
             }),
-        [allRegionsQuery.data, region],
+        [allRegionsQuery.data, region]
     );
 
-    if (isLoading) return <LoadingFallback message="Loading region..." />;
+    if (isLoading) return <LoadingState label="Loading region…" />;
 
     if (error || !region) {
         return (
-            <div className="p-6 text-center">
-                <p className="text-red-500 mb-4">Failed to load region or it does not exist.</p>
-                <Link to="/regions" className="text-cyan-600 hover:underline">
-                    Back to Regions
-                </Link>
-            </div>
+            <Panel>
+                <ErrorState title="Couldn't load this region" error={error ?? new Error("It may have been deleted.")} onRetry={error ? () => refetch() : undefined} />
+                <div className="flex justify-center pb-6">
+                    <ButtonLink to="/regions" variant="secondary">
+                        Back to regions
+                    </ButtonLink>
+                </div>
+            </Panel>
         );
     }
 
     const center = regionCenter(region);
     const polygon = regionPolygon(region);
-    const points: GeoMapPoint[] = center
-        ? [{ coordinates: center, label: region.name, color: "#0891b2" }]
-        : [];
+    const points: GeoMapPoint[] = center ? [{ coordinates: center, label: region.name, color: "#00a49e" }] : [];
 
     const editValues: UpdateRegionPayload = form ?? {
         name: region.name,
@@ -141,308 +157,187 @@ export function RegionDetailPage() {
         mapbox_place_id: region.mapbox_place_id ?? "",
     };
 
+    const cancelEdit = () => {
+        setForm(null);
+        setIsEditing(false);
+    };
+
+    const applyWeight = () => {
+        const w = Number(weightInput);
+        if (!Number.isFinite(w) || w <= 0) {
+            toast.error("Weight must be greater than 0");
+            return;
+        }
+        setConfirmWeight(true);
+    };
+
+    const hotspots = hotspotsQuery.data?.hotspots ?? [];
 
     return (
-        <div className="animate-fade-in max-w-5xl mx-auto space-y-4">
-            {/* Header & Back */}
-            <div className="flex items-center justify-between">
-                <Link
-                    to="/regions"
-                    className="flex items-center gap-2 text-sm font-medium text-neutral-600 hover:text-neutral-900 transition-colors bg-white border border-neutral-200 py-2 px-3 rounded-xl shadow-sm hover:bg-neutral-50"
-                >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back
-                </Link>
-                {CAN_EDIT && (
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={() => setIsEditing(!isEditing)}
-                            className="py-2.5 px-4 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors text-neutral-700 bg-neutral-100 hover:bg-neutral-200"
-                        >
-                            <Edit2 className="w-4 h-4" />
-                            {isEditing ? "Cancel Edit" : "Edit Region"}
-                        </button>
-                    </div>
-                )}
-            </div>
+        <div className="space-y-5">
+            <PageHeader
+                icon={Globe}
+                title={region.name}
+                badge={
+                    <>
+                        <Tag tone={region.type === "city" ? "brand" : "warn"} className="capitalize">
+                            {region.type}
+                        </Tag>
+                        <StatusPill status={region.is_active ? "active" : "inactive"} label={region.is_active ? "Active" : "Inactive"} tone={region.is_active ? "good" : "neutral"} />
+                    </>
+                }
+                description={
+                    <>
+                        <span className="font-mono text-xs">{region.slug}</span> · {region.marker_count.toLocaleString("en-IN")} places
+                    </>
+                }
+                primaryAction={
+                    canEdit &&
+                    (isEditing ? (
+                        <Button variant="secondary" icon={X} onClick={cancelEdit}>
+                            Cancel editing
+                        </Button>
+                    ) : (
+                        <Button variant="primary" icon={Edit2} onClick={() => setIsEditing(true)}>
+                            Edit region
+                        </Button>
+                    ))
+                }
+            />
 
-            <Card padding="md">
-                <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                        <div className="bg-cyan-100 text-cyan-600 rounded-xl w-10 h-10 flex items-center justify-center flex-shrink-0">
-                            <Globe className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <h1 className="text-xl font-bold text-neutral-900">
-                                {region.name}
-                            </h1>
-                            <div className="mt-1 flex items-center gap-2 text-sm text-neutral-500">
-                                <span className="capitalize px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-700 font-medium text-xs">
-                                    {region.type}
-                                </span>
-                                <span className="font-mono text-xs">{region.slug}</span>
-                                <span className="text-xs">{region.marker_count} markers</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </Card>
-
-            {/* Read-only map — hidden while editing, since the Edit Region card below renders its
-                own interactive bbox map (showing both would be redundant). */}
+            {/* Read-only map — hidden while editing (the edit panel has its own bbox map). */}
             {!isEditing && (points.length > 0 || polygon) && (
-                <Card padding="none" className="overflow-hidden">
-                    <GeoMap
-                        points={points}
-                        polygon={polygon}
-                        center={center}
-                        height="360px"
-                        zoom={10}
-                    />
-                </Card>
+                <Panel bodyClassName="p-0">
+                    <GeoMap points={points} polygon={polygon} center={center} height="360px" zoom={10} />
+                </Panel>
             )}
 
-            {/* Details (Read Only) */}
             {!isEditing && (
-                <Card padding="none" className="overflow-hidden">
-                    <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
-                        <h3 className="text-base font-semibold">Details</h3>
-                    </div>
-                    <div className="p-6 space-y-4 text-sm">
-                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                            <span className="w-40 shrink-0 font-medium text-neutral-500">Name</span>
-                            <span className="text-neutral-800">{region.name}</span>
-                        </div>
-                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                            <span className="w-40 shrink-0 font-medium text-neutral-500">Mapbox Place ID</span>
-                            <span className="text-neutral-800 font-mono">{region.mapbox_place_id || "—"}</span>
-                        </div>
-                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                            <span className="w-40 shrink-0 font-medium text-neutral-500">Description</span>
-                            <span className="text-neutral-800 whitespace-pre-wrap">{region.description || "—"}</span>
-                        </div>
-                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                            <span className="w-40 shrink-0 font-medium text-neutral-500">Status</span>
-                            <span className="text-neutral-800">
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${region.is_active ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-neutral-50 text-neutral-600 border-neutral-200"}`}>
-                                    {region.is_active ? "Active" : "Inactive"}
-                                </span>
-                            </span>
-                        </div>
+                <Panel title="Details" icon={Info}>
+                    <DetailList>
+                        <DetailRow label="Name" value={region.name} />
+                        <DetailRow label="Mapbox place ID" value={<span className="font-mono text-xs">{region.mapbox_place_id || "—"}</span>} />
+                        <DetailRow label="Description" value={<span className="whitespace-pre-wrap">{region.description || "—"}</span>} />
                         {region.type === "hotspot" && region.parent_id && (
-                            <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                                <span className="w-40 shrink-0 font-medium text-neutral-500 flex items-center gap-1">
-                                    <Link2 className="w-3.5 h-3.5" />
-                                    Parent region
-                                </span>
-                                <Link
-                                    to={`/regions/${region.parent_id}`}
-                                    className="text-cyan-700 hover:text-cyan-900 hover:underline font-medium"
-                                >
-                                    {parentQuery.data?.name ?? shortId(region.parent_id)}
-                                </Link>
-                            </div>
+                            <DetailRow label="Parent city" value={<IdLink kind="region" id={region.parent_id} label={parentQuery.data?.name} />} />
                         )}
-                    </div>
-                </Card>
+                        <DetailRow label="Created" value={formatDateTime(region.created_at)} />
+                        <DetailRow label="Last updated" value={formatDateTime(region.updated_at)} />
+                    </DetailList>
+                </Panel>
             )}
 
-            {/* Edit Region */}
-            {CAN_EDIT && isEditing && (
-                <Card padding="none" className="overflow-hidden">
-                    <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
-                        <h3 className="text-base font-semibold">Edit Region</h3>
-                    </div>
-                    <div className="p-6 space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-neutral-700 mb-1">Name</label>
-                                <input
+            {canEdit && isEditing && (
+                <Panel title="Edit region" icon={Edit2}>
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <Field label="Name">
+                                <TextInput type="text" value={editValues.name ?? ""} onChange={(e) => setForm({ ...editValues, name: e.target.value })} />
+                            </Field>
+                            <Field label="Mapbox place ID">
+                                <TextInput
                                     type="text"
-                                    value={editValues.name ?? ""}
-                                    onChange={(e) => setForm({ ...editValues, name: e.target.value })}
-                                    className="w-full rounded-xl py-2.5 px-4 border border-neutral-200 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-neutral-700 mb-1">Mapbox Place ID</label>
-                                <input
-                                    type="text"
+                                    className="font-mono"
                                     value={editValues.mapbox_place_id ?? ""}
                                     onChange={(e) => setForm({ ...editValues, mapbox_place_id: e.target.value })}
-                                    className="w-full rounded-xl py-2.5 px-4 border border-neutral-200 text-sm font-mono focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all"
+                                />
+                            </Field>
+                        </div>
+                        <Field label="Description">
+                            <TextArea rows={3} value={editValues.description ?? ""} onChange={(e) => setForm({ ...editValues, description: e.target.value })} />
+                        </Field>
+                        <Field
+                            label="Boundary"
+                            hint="Drag the corner handles to adjust the boundary, or redraw it. Saving updates the box and its center."
+                            htmlFor="region-bbox"
+                        >
+                            <div id="region-bbox" className="overflow-hidden rounded-control border border-line">
+                                <BboxDrawMap
+                                    value={(editValues.bbox as GeoPolygon | undefined) ?? polygon}
+                                    center={center}
+                                    referenceBoxes={referenceBoxes}
+                                    onChange={(poly, c) => setForm({ ...editValues, bbox: poly, center_point: c })}
+                                    height="320px"
                                 />
                             </div>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-neutral-700 mb-1">Description</label>
-                            <textarea
-                                rows={3}
-                                value={editValues.description ?? ""}
-                                onChange={(e) => setForm({ ...editValues, description: e.target.value })}
-                                className="w-full rounded-xl py-2.5 px-4 border border-neutral-200 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-neutral-700 mb-1">Bounding box</label>
-                            <p className="text-xs text-neutral-500 mb-2">
-                                Drag the corner handles to adjust the region boundary, or redraw it. Saving updates the
-                                bbox and its center point.
-                            </p>
-                            <BboxDrawMap
-                                value={(editValues.bbox as GeoPolygon | undefined) ?? polygon}
-                                center={center}
-                                referenceBoxes={referenceBoxes}
-                                onChange={(poly, c) =>
-                                    setForm({ ...editValues, bbox: poly, center_point: c })
-                                }
-                                height="320px"
-                            />
-                        </div>
-                        <div>
-                            <label className="flex items-center justify-between w-full max-w-sm cursor-pointer p-3 rounded-xl border border-neutral-200 hover:bg-neutral-50 transition-colors">
-                                <span className="text-sm font-medium text-neutral-700">Region Active</span>
-                                <div className="relative">
-                                    <input
-                                        type="checkbox"
-                                        checked={editValues.is_active ?? false}
-                                        onChange={(e) => setForm({ ...editValues, is_active: e.target.checked })}
-                                        className="sr-only peer"
-                                    />
-                                    <div className="w-11 h-6 bg-neutral-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-cyan-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
-                                </div>
-                            </label>
-                        </div>
-                        <div className="flex justify-end gap-3 pt-2">
-                            <button
-                                onClick={() => { setForm(null); setIsEditing(false); }}
-                                className="py-2.5 px-4 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors text-neutral-700 bg-neutral-100 hover:bg-neutral-200"
-                            >
+                        </Field>
+                        <Switch
+                            checked={editValues.is_active ?? false}
+                            onChange={(v) => setForm({ ...editValues, is_active: v })}
+                            label="Region active"
+                            description="Inactive regions are hidden from the app."
+                        />
+                        <div className="flex flex-col-reverse gap-2 border-t border-line pt-4 sm:flex-row sm:justify-end">
+                            <Button variant="secondary" onClick={cancelEdit} disabled={updateMutation.isPending}>
                                 Cancel
-                            </button>
-                            <button
-                                onClick={() => updateMutation.mutate(editValues)}
-                                disabled={updateMutation.isPending || !form}
-                                className="py-2.5 px-4 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors text-white bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50"
-                            >
-                                Save Changes
-                            </button>
+                            </Button>
+                            <Button variant="primary" onClick={() => updateMutation.mutate(editValues)} loading={updateMutation.isPending} disabled={!form}>
+                                Save changes
+                            </Button>
                         </div>
                     </div>
-                </Card>
+                </Panel>
             )}
 
-            <CrowdMeterSection regionId={regionId} canApprove={CAN_APPROVE} />
+            <CrowdMeterSection regionId={regionId} canApprove={canApprove} />
 
-            {/* Admin Ranking Weight */}
-            {CAN_APPROVE && (
-                <Card padding="md">
-                    <CardHeader className="border-b border-neutral-100 pb-4 mb-4">
-                        <div className="flex items-center gap-2">
-                            <Scale className="w-5 h-5 text-cyan-600" />
-                            <CardTitle>Admin Ranking Weight</CardTitle>
+            {canApprove && (
+                <Panel title="Ranking weight" icon={Scale} description="Affects where this region ranks in discovery.">
+                    <div className="flex flex-wrap items-end gap-3">
+                        <div className="text-sm text-ink-muted">
+                            Current weight <span className="ml-1 text-lg font-semibold tabular-nums text-ink">{region.admin_weight}</span>
                         </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div>
-                            <p className="text-sm text-neutral-600 mb-1">
-                                Current weight: <span className="font-semibold text-neutral-900">{region.admin_weight}</span>
-                            </p>
-                            <p className="text-xs font-medium text-amber-600 mb-4">Affects discovery ranking</p>
-                        </div>
-                        <div className="flex flex-wrap items-end gap-3">
-                            <div>
-                                <label className="block text-xs font-medium text-neutral-500 mb-1">New weight ({">"} 0)</label>
-                                <input
-                                    type="number"
-                                    min={0}
-                                    step="0.1"
-                                    value={weightInput}
-                                    onChange={(e) => setWeightInput(e.target.value)}
-                                    className="w-36 rounded-xl py-2.5 px-4 border border-neutral-200 text-sm focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all"
-                                />
-                            </div>
-                            <button
-                                onClick={() => {
-                                    const w = Number(weightInput);
-                                    if (!Number.isFinite(w) || w <= 0) {
-                                        toast.error("Weight must be greater than 0");
-                                        return;
-                                    }
-                                    setConfirmWeight(true);
-                                }}
-                                disabled={weightInput === ""}
-                                className="py-2.5 px-4 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors text-white bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50"
-                            >
-                                Apply Weight
-                            </button>
-                        </div>
-                    </CardContent>
-                </Card>
+                        <Field label="New weight" hint="Greater than 0." className="w-36">
+                            <TextInput type="number" min={0} step="0.1" value={weightInput} onChange={(e) => setWeightInput(e.target.value)} />
+                        </Field>
+                        <Button variant="primary" onClick={applyWeight} disabled={weightInput === ""} className="mb-5">
+                            Apply weight
+                        </Button>
+                    </div>
+                </Panel>
             )}
 
-            <TravelTimeMatrix regionId={regionId} canApprove={CAN_APPROVE} />
-            
-            <LinkedQuests regionId={regionId} questIds={region.quest_ids} canEdit={CAN_EDIT} />
+            <TravelTimeMatrix regionId={regionId} canApprove={canApprove} />
 
-            {/* Hotspots (cities only) */}
+            <LinkedQuests regionId={regionId} questIds={region.quest_ids} canEdit={canEdit} />
+
             {region.type === "city" && (
-                <Card padding="md">
-                    <CardHeader className="border-b border-neutral-100 pb-4 mb-4">
-                        <div className="flex items-center gap-2">
-                            <MapPin className="w-5 h-5 text-cyan-600" />
-                            <CardTitle>Hotspots</CardTitle>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        {hotspotsQuery.isLoading ? (
-                            <p className="text-sm text-neutral-500">Loading hotspots...</p>
-                        ) : (hotspotsQuery.data?.hotspots.length ?? 0) === 0 ? (
-                            <p className="text-sm text-neutral-500">No hotspots in this city yet.</p>
-                        ) : (
-                            <ul className="divide-y divide-neutral-100">
-                                {hotspotsQuery.data?.hotspots.map((h) => (
-                                    <li key={h.id} className="py-3 flex items-center justify-between">
-                                        <Link to={`/regions/${h.id}`} className="text-sm font-medium text-cyan-700 hover:text-cyan-900">
-                                            {h.name}
-                                        </Link>
-                                        <span className="text-xs text-neutral-500">{h.marker_count} markers</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </CardContent>
-                </Card>
+                <Panel title="Hotspots" icon={MapPin} description={hotspotsQuery.data ? `${hotspotsQuery.data.total ?? hotspots.length} in this city` : undefined}>
+                    {hotspotsQuery.isLoading ? (
+                        <LoadingState label="Loading hotspots…" className="min-h-[120px]" />
+                    ) : hotspotsQuery.error ? (
+                        <ErrorState error={hotspotsQuery.error} onRetry={() => hotspotsQuery.refetch()} compact />
+                    ) : hotspots.length === 0 ? (
+                        <EmptyState compact icon={MapPin} title="No hotspots in this city yet." />
+                    ) : (
+                        <ul className="divide-y divide-line">
+                            {hotspots.map((h) => (
+                                <li key={h.id} className="flex items-center justify-between gap-3 py-2.5">
+                                    <Link to={`/regions/${h.id}`} className="min-w-0 truncate text-sm font-medium text-accent-700 hover:underline">
+                                        {h.name}
+                                    </Link>
+                                    <span className="shrink-0 text-xs tabular-nums text-ink-muted">{h.marker_count} places</span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </Panel>
             )}
 
-            <DangerZone regionId={regionId} regionName={region.name} canEdit={CAN_EDIT} isSuper={IS_SUPER} />
+            <DangerZone regionId={regionId} regionName={region.name} canEdit={canEdit} isSuper={isSuper} />
 
-            {/* Confirm weight modal */}
-            <ConfirmModal
+            <ConfirmDialog
                 open={confirmWeight}
-                title="Apply Ranking Weight"
-                message={
+                title="Apply ranking weight?"
+                description={
                     <>
-                        Set admin weight to <strong>{weightInput}</strong>? This <strong>affects discovery ranking</strong>.
+                        Set the admin weight to <strong className="text-ink">{weightInput}</strong>. This changes where the region ranks in discovery.
                     </>
                 }
                 confirmLabel="Apply"
-                confirmStyle="bg-cyan-600 hover:bg-cyan-700"
-                onConfirm={async () => {
-                    const weightMutation = regionsService.setAdminWeight(regionId, Number(weightInput));
-                    try {
-                        await weightMutation;
-                        queryClient.invalidateQueries({ queryKey: ["region-detail", regionId] });
-                        queryClient.invalidateQueries({ queryKey: ["admin-regions"] });
-                        toast.success("Admin weight updated");
-                        setWeightInput("");
-                        setConfirmWeight(false);
-                    } catch (e) {
-                        toast.error(e instanceof Error ? e.message : "Failed to update admin weight");
-                        setConfirmWeight(false);
-                    }
-                }}
+                onConfirm={() => weightMutation.mutate(Number(weightInput))}
                 onCancel={() => setConfirmWeight(false)}
+                isPending={weightMutation.isPending}
             />
         </div>
     );

@@ -3,16 +3,23 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { SlidersHorizontal, Play, Save, RotateCcw, FlaskConical, BarChart3, Scale, Sparkles } from "lucide-react";
 import { AccessDenied } from "@components/AccessDenied";
-import { LoadingFallback } from "@components/LoadingFallback";
-import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { Button } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Panel } from "@/components/ui/Panel";
+import { DataTable, type DataColumn } from "@/components/ui/DataTable";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Checkbox, Field, SelectInput, TextInput } from "@/components/ui/Field";
+import { LoadingState, PanelState } from "@/components/ui/States";
+import { Tag } from "@/components/ui/StatusPill";
+import { IdLink } from "@/components/ui/IdLink";
+import { cx } from "@/utils/cx";
 import { collabsAdminService } from "../services/collabs-admin.service";
 import { useCollabAccess } from "../roles";
-import {
-    Checkbox, Chip, Field, LoadingButtonIcon, PageHeader, PanelState, SectionCard, btnPrimary, btnSecondary, inputClass, thClass,
-} from "../components/CollabsUi";
+import { Notice } from "../components/AdminBits";
 import { formatPercent } from "../utils";
 import {
-    MATCH_WEIGHT_KEYS, type MatchConfig, type MatchRerank, type MatchVariantPayload, type MatchWeightKey, type MatchWeights,
+    MATCH_WEIGHT_KEYS, type MatchConfig, type MatchEvaluationRow, type MatchPreviewResult, type MatchRerank, type MatchVariantPayload,
+    type MatchWeightKey, type MatchWeights,
 } from "../types";
 
 const WEIGHT_META: Record<MatchWeightKey, { label: string; help: string }> = {
@@ -52,10 +59,10 @@ function Slider({
     return (
         <div>
             <div className="flex items-baseline justify-between gap-3">
-                <label className="text-sm font-medium text-neutral-800">
+                <span className="text-sm font-medium text-ink">
                     {label}
-                    {changed && <span className="ml-1.5 text-[10px] font-semibold text-amber-600">changed</span>}
-                </label>
+                    {changed && <span className="ml-1.5 text-[11px] font-semibold text-warn">changed</span>}
+                </span>
                 <input
                     type="number"
                     min={0}
@@ -66,7 +73,7 @@ function Slider({
                         const n = Number(e.target.value);
                         if (Number.isFinite(n)) onChange(Math.min(max, Math.max(0, n)));
                     }}
-                    className="w-20 px-2 py-1 rounded-lg border border-neutral-200 text-sm text-right font-mono focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    className="h-8 w-20 rounded-control border border-line-strong bg-surface px-2 text-right font-mono text-sm text-ink focus:border-transparent focus:outline-none focus:ring-2 focus:ring-accent-500"
                     aria-label={`${label} value`}
                 />
             </div>
@@ -77,10 +84,10 @@ function Slider({
                 step={0.01}
                 value={value}
                 onChange={(e) => onChange(Number(e.target.value))}
-                className="w-full accent-teal-600 mt-1"
+                className="mt-1 w-full accent-accent-600"
                 aria-label={label}
             />
-            {help && <p className="text-[11px] text-neutral-400">{help}</p>}
+            {help && <p className="text-xs text-ink-faint">{help}</p>}
         </div>
     );
 }
@@ -99,14 +106,14 @@ function WeightsEditor({ value, onChange, baseline }: { value: MatchWeights; onC
                     onChange={(v) => onChange({ ...value, [k]: round(v, 3) })}
                 />
             ))}
-            <div className="flex items-center justify-between gap-3 pt-2 border-t border-neutral-100">
-                <span className={`text-xs ${Math.abs(total - 1) > 0.01 ? "text-amber-700" : "text-neutral-500"}`}>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-2">
+                <span className={cx("text-xs", Math.abs(total - 1) > 0.01 ? "text-warn" : "text-ink-muted")}>
                     Sum: <span className="font-mono font-semibold">{round(total, 3)}</span>
                     {Math.abs(total - 1) > 0.01 && " — scores are a weighted blend; normalizing keeps them comparable."}
                 </span>
-                <button type="button" onClick={() => onChange(normalize(value))} className="inline-flex items-center gap-1 text-xs font-medium text-teal-700 hover:underline">
-                    <Scale className="w-3.5 h-3.5" /> Normalize to 1
-                </button>
+                <Button size="sm" variant="ghost" icon={Scale} onClick={() => onChange(normalize(value))}>
+                    Normalize to 1
+                </Button>
             </div>
         </div>
     );
@@ -180,32 +187,90 @@ function MatchTuningEditor({
     const collabs = collabsQuery.data?.collabs ?? [];
     const results = preview.data ?? [];
 
+    const previewColumns: DataColumn<MatchPreviewResult & { rank: number }>[] = [
+        { id: "rank", header: "#", sortValue: (r) => r.rank, cell: (r) => <span className="font-mono text-ink-faint">{r.rank}</span> },
+        {
+            id: "creator",
+            header: "Creator",
+            hideable: false,
+            sortValue: (r) => r.display_name,
+            csv: (r) => `${r.display_name} ${r.creator_user_id}`,
+            cell: (r) => (
+                <div className="min-w-0">
+                    <div className="flex items-center gap-2 font-medium text-ink">
+                        {r.display_name}
+                        {r.is_new && <Tag tone="info">New</Tag>}
+                    </div>
+                    <IdLink kind="user" id={r.creator_user_id} />
+                </div>
+            ),
+        },
+        { id: "score", header: "Score", align: "right", sortValue: (r) => r.score, cell: (r) => <span className="text-lg font-semibold tabular-nums text-ink">{r.score}</span> },
+        {
+            id: "reasons",
+            header: "Reasons",
+            csv: (r) => r.reasons.join("; "),
+            cell: (r) => (
+                <div className="flex flex-wrap gap-1">
+                    {r.reasons.map((reason) => (
+                        <Tag key={reason} tone="brand">
+                            {reason}
+                        </Tag>
+                    ))}
+                </div>
+            ),
+        },
+        {
+            id: "breakdown",
+            header: "Breakdown",
+            className: "min-w-[240px]",
+            csv: (r) => MATCH_WEIGHT_KEYS.map((k) => `${k}=${(r.breakdown?.[k] ?? 0).toFixed(2)}`).join(" "),
+            cell: (r) => (
+                <div className="grid grid-cols-[80px_1fr_36px] items-center gap-x-2 gap-y-1">
+                    {MATCH_WEIGHT_KEYS.map((k) => {
+                        const v = r.breakdown?.[k] ?? 0;
+                        return (
+                            <div key={k} className="contents">
+                                <span className="text-xs text-ink-muted">{WEIGHT_META[k].label.split(" ")[0]}</span>
+                                <span className="h-1.5 overflow-hidden rounded-full bg-brand-50">
+                                    <span className="block h-full bg-accent-500" style={{ width: `${Math.round(v * 100)}%` }} />
+                                </span>
+                                <span className="text-right font-mono text-xs text-ink-muted">{v.toFixed(2)}</span>
+                            </div>
+                        );
+                    })}
+                </div>
+            ),
+        },
+    ];
+
     return (
         <>
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
-                <SectionCard
+            <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
+                <Panel
                     title="Scoring weights"
                     icon={SlidersHorizontal}
                     actions={
-                        <div className="flex items-center gap-2">
-                            <Chip tone="teal">Live: {config.version}</Chip>
-                            <button
-                                type="button"
+                        <>
+                            <Tag tone="brand">Live: {config.version}</Tag>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                icon={RotateCcw}
                                 onClick={() => {
                                     setWeights(config.weights);
                                     setRerank(config.rerank);
                                     setVariantOn(!!savedVariant);
                                 }}
-                                className="inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-800"
                             >
-                                <RotateCcw className="w-3.5 h-3.5" /> Reset
-                            </button>
-                        </div>
+                                Reset
+                            </Button>
+                        </>
                     }
                 >
                     <WeightsEditor value={weights} onChange={setWeights} baseline={config.weights} />
-                    <div className="mt-6 pt-4 border-t border-neutral-100 space-y-4">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Re-rank (MMR diversity)</p>
+                    <div className="mt-6 space-y-4 border-t border-line pt-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Re-rank (MMR diversity)</p>
                         <Slider
                             label="Lambda (relevance vs diversity)"
                             help="1 = pure relevance; lower = more diverse result list."
@@ -222,10 +287,10 @@ function MatchTuningEditor({
                             onChange={(v) => setRerank({ ...rerank, explore_ratio: round(v, 3) })}
                         />
                     </div>
-                </SectionCard>
+                </Panel>
 
                 <div className="space-y-4">
-                    <SectionCard title="A/B variant" icon={FlaskConical}>
+                    <Panel title="A/B variant" icon={FlaskConical}>
                         <div className="space-y-4">
                             <Checkbox
                                 checked={variantOn}
@@ -233,51 +298,35 @@ function MatchTuningEditor({
                                 label="Run a variant on a share of businesses"
                                 hint="Businesses are bucketed by hash(business_id) % 100."
                             />
-                            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                            <Notice tone="warn">
                                 {savedVariant
                                     ? `Variant “${savedVariant.version}” (${savedVariant.traffic_percent}%) was saved in this session. `
                                     : "The API doesn't report the currently running variant. "}
                                 Saving with this unchecked removes any existing variant.
-                            </p>
+                            </Notice>
                             {variantOn && (
                                 <>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <Field label="Variant version label" htmlFor="variant-version" required>
-                                            <input
-                                                id="variant-version"
-                                                type="text"
-                                                value={variantVersion}
-                                                onChange={(e) => setVariantVersion(e.target.value)}
-                                                className={`${inputClass} font-mono`}
-                                            />
+                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                        <Field label="Variant version label" required>
+                                            <TextInput type="text" value={variantVersion} onChange={(e) => setVariantVersion(e.target.value)} className="font-mono" />
                                         </Field>
-                                        <Field label="Traffic %" htmlFor="variant-traffic" required hint="1–100">
-                                            <input
-                                                id="variant-traffic"
-                                                type="number"
-                                                min={1}
-                                                max={100}
-                                                value={variantTraffic}
-                                                onChange={(e) => setVariantTraffic(Number(e.target.value))}
-                                                className={inputClass}
-                                            />
+                                        <Field label="Traffic %" required hint="1–100">
+                                            <TextInput type="number" min={1} max={100} value={variantTraffic} onChange={(e) => setVariantTraffic(Number(e.target.value))} />
                                         </Field>
                                     </div>
                                     <WeightsEditor value={variantWeights} onChange={setVariantWeights} baseline={weights} />
-                                    <p className="text-[11px] text-neutral-400">The variant uses the same re-rank settings as the main config.</p>
+                                    <p className="text-xs text-ink-faint">The variant uses the same re-rank settings as the main config.</p>
                                 </>
                             )}
                         </div>
-                    </SectionCard>
+                    </Panel>
 
-                    <SectionCard title="Preview against a collab" icon={Play}>
+                    <Panel title="Preview against a collab" icon={Play}>
                         <div className="space-y-4">
-                            <Field label="Collab" htmlFor="preview-collab" hint="Pick an active collab or paste any collab id.">
-                                <select
-                                    id="preview-collab"
+                            <Field label="Collab" hint="Pick an active collab or paste any collab id below.">
+                                <SelectInput
                                     value={collabs.some((c) => c.id === collabId) ? collabId : ""}
                                     onChange={(e) => setCollabId(e.target.value)}
-                                    className={inputClass}
                                     disabled={collabsQuery.isLoading}
                                 >
                                     <option value="">{collabsQuery.isLoading ? "Loading active collabs…" : "— Select an active collab —"}</option>
@@ -286,126 +335,73 @@ function MatchTuningEditor({
                                             {c.offer} — wants {c.want || "…"} ({c.id.slice(-6)})
                                         </option>
                                     ))}
-                                </select>
-                                <input
-                                    type="text"
-                                    value={collabId}
-                                    onChange={(e) => setCollabId(e.target.value)}
-                                    placeholder="Collab id"
-                                    className={`${inputClass} font-mono mt-2`}
-                                    aria-label="Collab id"
-                                />
+                                </SelectInput>
                             </Field>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <Field label="Results" htmlFor="preview-limit">
-                                    <input
-                                        id="preview-limit"
+                            <Field label="Collab id" hideLabel>
+                                <TextInput type="text" value={collabId} onChange={(e) => setCollabId(e.target.value)} placeholder="Collab id" className="font-mono" />
+                            </Field>
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <Field label="Results">
+                                    <TextInput
                                         type="number"
                                         min={1}
                                         max={50}
                                         value={limit}
                                         onChange={(e) => setLimit(Math.min(50, Math.max(1, Number(e.target.value) || 10)))}
-                                        className={inputClass}
                                     />
                                 </Field>
-                                <Field label="Score with" htmlFor="preview-with">
-                                    <select id="preview-with" value={previewWith} onChange={(e) => setPreviewWith(e.target.value as typeof previewWith)} className={inputClass}>
+                                <Field label="Score with">
+                                    <SelectInput value={previewWith} onChange={(e) => setPreviewWith(e.target.value as typeof previewWith)}>
                                         <option value="main">Edited main weights</option>
                                         {variantOn && <option value="variant">Variant weights</option>}
                                         <option value="saved">Saved live config</option>
-                                    </select>
+                                    </SelectInput>
                                 </Field>
                             </div>
-                            <button type="button" onClick={() => preview.mutate()} disabled={!collabId.trim() || preview.isPending} className={`${btnSecondary} w-full`}>
-                                <LoadingButtonIcon loading={preview.isPending} icon={Play} /> Run preview
-                            </button>
+                            <Button variant="secondary" icon={Play} block onClick={() => preview.mutate()} disabled={!collabId.trim()} loading={preview.isPending}>
+                                Run preview
+                            </Button>
                         </div>
-                    </SectionCard>
+                    </Panel>
                 </div>
             </div>
 
             {(preview.data || preview.isPending) && (
-                <SectionCard title="Preview ranking" icon={Sparkles} bodyClassName="p-0">
+                <Panel title="Preview ranking" icon={Sparkles} bodyClassName="p-0">
                     {preview.isPending ? (
-                        <LoadingFallback message="Scoring creators..." />
-                    ) : results.length === 0 ? (
-                        <p className="p-8 text-center text-sm text-neutral-400">No eligible creators for this collab (hard filters remove opted-out, blocked or under-tier creators).</p>
+                        <LoadingState label="Scoring creators…" />
                     ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b border-neutral-100 bg-neutral-50/60">
-                                        <th className={thClass}>#</th>
-                                        <th className={thClass}>Creator</th>
-                                        <th className={`${thClass} text-right`}>Score</th>
-                                        <th className={thClass}>Reasons</th>
-                                        <th className={thClass}>Breakdown</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-neutral-50">
-                                    {results.map((r, i) => (
-                                        <tr key={r.creator_user_id} className="align-top">
-                                            <td className="px-4 py-3 text-neutral-400 font-mono">{i + 1}</td>
-                                            <td className="px-4 py-3">
-                                                <div className="font-medium text-neutral-900 flex items-center gap-2">
-                                                    {r.display_name}
-                                                    {r.is_new && <Chip tone="violet">New</Chip>}
-                                                </div>
-                                                <div className="font-mono text-[11px] text-neutral-400">{r.creator_user_id}</div>
-                                            </td>
-                                            <td className="px-4 py-3 text-right">
-                                                <span className="text-lg font-bold text-neutral-900">{r.score}</span>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex flex-wrap gap-1">
-                                                    {r.reasons.map((reason) => (
-                                                        <Chip key={reason} tone="teal">
-                                                            {reason}
-                                                        </Chip>
-                                                    ))}
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3 min-w-[240px]">
-                                                <div className="grid grid-cols-[80px_1fr_36px] gap-x-2 gap-y-1 items-center">
-                                                    {MATCH_WEIGHT_KEYS.map((k) => {
-                                                        const v = r.breakdown?.[k] ?? 0;
-                                                        return (
-                                                            <div key={k} className="contents">
-                                                                <span className="text-[11px] text-neutral-500">{WEIGHT_META[k].label.split(" ")[0]}</span>
-                                                                <span className="h-1.5 rounded-full bg-neutral-100 overflow-hidden">
-                                                                    <span className="block h-full bg-teal-500" style={{ width: `${Math.round(v * 100)}%` }} />
-                                                                </span>
-                                                                <span className="text-[11px] font-mono text-neutral-500 text-right">{v.toFixed(2)}</span>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                        <DataTable
+                            label="Preview ranking"
+                            rows={results.map((r, i) => ({ ...r, rank: i + 1 }))}
+                            columns={previewColumns}
+                            rowKey={(r) => r.creator_user_id}
+                            empty={{
+                                icon: Sparkles,
+                                title: "No eligible creators for this collab",
+                                description: "Hard filters remove opted-out, blocked or under-tier creators.",
+                            }}
+                            exportName="match-preview"
+                            frame="bare"
+                            card={{ title: (r) => `${r.rank}. ${r.display_name}`, subtitle: (r) => `Score ${r.score}`, fields: ["reasons", "breakdown"] }}
+                        />
                     )}
-                </SectionCard>
+                </Panel>
             )}
 
-            <div className="sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom))] md:bottom-0 z-10 bg-white/90 backdrop-blur border border-neutral-200 rounded-2xl shadow-lg p-4 flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm text-neutral-600">
-                    {dirty ? "Unsaved changes — preview them first, then save to go live." : "Showing the live configuration."}
-                </p>
-                <button type="button" onClick={() => setConfirmSave(true)} disabled={!dirty || variantInvalid || save.isPending} className={btnPrimary}>
-                    <LoadingButtonIcon loading={save.isPending} icon={Save} /> Save config
-                </button>
+            <div className="sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-10 flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-surface/95 p-4 shadow-pop backdrop-blur md:bottom-4">
+                <p className="text-sm text-ink-muted">{dirty ? "Unsaved changes — preview them first, then save to go live." : "Showing the live configuration."}</p>
+                <Button variant="primary" icon={Save} onClick={() => setConfirmSave(true)} disabled={!dirty || variantInvalid} loading={save.isPending}>
+                    Save config
+                </Button>
             </div>
 
-            <ConfirmModal
+            <ConfirmDialog
                 open={confirmSave}
-                theme="warning"
-                title="Save match config"
-                message="New weights apply to every business's SeekKrr Match ranking and clear the match cache. The previous config is kept in history."
+                tone="warning"
+                title="Save match config?"
+                description="New weights apply to every business's SeekKrr Match ranking and clear the match cache. The previous config is kept in history."
                 confirmLabel="Save"
-                confirmStyle="bg-teal-600 hover:bg-teal-700"
                 onConfirm={() => save.mutate()}
                 onCancel={() => setConfirmSave(false)}
                 isPending={save.isPending}
@@ -414,48 +410,56 @@ function MatchTuningEditor({
     );
 }
 
+const pct = (v: number | null) => formatPercent(v, 1);
+
+const EVAL_COLUMNS: DataColumn<MatchEvaluationRow>[] = [
+    { id: "version", header: "Version", hideable: false, sortValue: (r) => r.config_version, cell: (r) => <span className="font-mono font-medium">{r.config_version}</span> },
+    { id: "impression", header: "Impressions", align: "right", sortValue: (r) => r.impression, cell: (r) => <span className="tabular-nums">{r.impression}</span> },
+    { id: "reveal", header: "Reveals", align: "right", sortValue: (r) => r.reveal, cell: (r) => <span className="tabular-nums">{r.reveal}</span> },
+    { id: "invite", header: "Invites", align: "right", sortValue: (r) => r.invite, cell: (r) => <span className="tabular-nums">{r.invite}</span> },
+    { id: "accept", header: "Accepted", align: "right", sortValue: (r) => r.accept, cell: (r) => <span className="tabular-nums">{r.accept}</span> },
+    { id: "complete", header: "Completed", align: "right", sortValue: (r) => r.complete, cell: (r) => <span className="tabular-nums">{r.complete}</span> },
+    {
+        id: "invite_acceptance",
+        header: "Invite acceptance",
+        align: "right",
+        sortValue: (r) => r.invite_acceptance,
+        csv: (r) => pct(r.invite_acceptance),
+        cell: (r) => <span className="font-semibold">{pct(r.invite_acceptance)}</span>,
+    },
+    {
+        id: "completion_after_accept",
+        header: "Completion after accept",
+        align: "right",
+        sortValue: (r) => r.completion_after_accept,
+        csv: (r) => pct(r.completion_after_accept),
+        cell: (r) => <span className="font-semibold">{pct(r.completion_after_accept)}</span>,
+    },
+];
+
 function EvaluationTable() {
     const { data, isLoading, error, refetch } = useQuery({
         queryKey: ["collabs-match-evaluation"],
         queryFn: collabsAdminService.matchEvaluation,
         staleTime: 60 * 1000,
     });
-    const rows = data ?? [];
     return (
-        <SectionCard title="Evaluation by config version" icon={BarChart3} bodyClassName="p-0">
-            <PanelState isLoading={isLoading} error={error} isEmpty={rows.length === 0} emptyIcon={BarChart3} emptyText="No match events recorded yet" onRetry={() => refetch()}>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="border-b border-neutral-100 bg-neutral-50/60">
-                                <th className={thClass}>Version</th>
-                                <th className={`${thClass} text-right`}>Impressions</th>
-                                <th className={`${thClass} text-right`}>Reveals</th>
-                                <th className={`${thClass} text-right`}>Invites</th>
-                                <th className={`${thClass} text-right`}>Accepted</th>
-                                <th className={`${thClass} text-right`}>Completed</th>
-                                <th className={`${thClass} text-right`}>Invite acceptance</th>
-                                <th className={`${thClass} text-right`}>Completion after accept</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-neutral-50">
-                            {rows.map((r) => (
-                                <tr key={r.config_version}>
-                                    <td className="px-4 py-2.5 font-mono font-medium">{r.config_version}</td>
-                                    <td className="px-4 py-2.5 text-right">{r.impression}</td>
-                                    <td className="px-4 py-2.5 text-right">{r.reveal}</td>
-                                    <td className="px-4 py-2.5 text-right">{r.invite}</td>
-                                    <td className="px-4 py-2.5 text-right">{r.accept}</td>
-                                    <td className="px-4 py-2.5 text-right">{r.complete}</td>
-                                    <td className="px-4 py-2.5 text-right font-semibold">{formatPercent(r.invite_acceptance, 1)}</td>
-                                    <td className="px-4 py-2.5 text-right font-semibold">{formatPercent(r.completion_after_accept, 1)}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </PanelState>
-        </SectionCard>
+        <Panel title="Evaluation by config version" icon={BarChart3} bodyClassName="p-0">
+            <DataTable
+                label="Evaluation by config version"
+                rows={data ?? []}
+                columns={EVAL_COLUMNS}
+                rowKey={(r) => r.config_version}
+                isLoading={isLoading}
+                error={error}
+                onRetry={() => refetch()}
+                empty={{ icon: BarChart3, title: "No match events recorded yet" }}
+                storageKey="match-evaluation"
+                exportName="match-evaluation"
+                frame="bare"
+                card={{ title: (r) => r.config_version, fields: ["invite_acceptance", "completion_after_accept", "impression", "invite"] }}
+            />
+        </Panel>
     );
 }
 
@@ -471,12 +475,11 @@ export function MatchTuningPage() {
     if (!isAdmin) return <AccessDenied message="Only admins can tune SeekKrr Match." />;
 
     return (
-        <div className="space-y-5 animate-fade-in">
+        <div className="space-y-5">
             <PageHeader
                 icon={SlidersHorizontal}
-                title="Match Tuning"
-                gradient="from-indigo-500 to-indigo-600"
-                subtitle="SeekKrr Match: explainable weighted scorers + MMR re-rank. Preview changes before they go live."
+                title="Match tuning"
+                description="SeekKrr Match: explainable weighted scorers + MMR re-rank. Preview changes before they go live."
             />
             <PanelState isLoading={isLoading} error={error} isEmpty={!config} emptyIcon={SlidersHorizontal} emptyText="No match config" onRetry={() => refetch()}>
                 {config && <MatchTuningEditor key={config.version} config={config} savedVariant={savedVariant} onSaved={setSavedVariant} />}

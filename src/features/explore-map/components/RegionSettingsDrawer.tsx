@@ -1,31 +1,29 @@
-import { useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { useRef, useState, type ChangeEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Check, ImagePlus, Loader2, Save, Trash2 } from "lucide-react";
 import { mediaService } from "@/services/media.service";
 import { categoryService } from "@/services/category.service";
-import { Drawer, LoadingButtonIcon, btnPrimary, btnSecondary, btnSmNeutral, inputClass } from "@/features/collabs/components/CollabsUi";
+import { Drawer } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Field, TextArea, TextInput } from "@/components/ui/Field";
+import { cx } from "@/utils/cx";
 import { exploreMapService, replaceRegionInCache } from "../services/explore-map.service";
 import { RegionPreviewCard } from "./RegionPreviewCard";
 import { BADGE_PRESETS, EXPLORE_LIMITS, SPECIAL_FILTERS, type ExploreRegion, type ExploreRegionSettingsPayload } from "../types";
 
 const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
 
-function LabelRow({ htmlFor, label, count, max, hint, children }: { htmlFor?: string; label: string; count?: number; max?: number; hint?: ReactNode; children: ReactNode }) {
-    const near = count !== undefined && max !== undefined && count >= max * 0.9;
+/** Field label with a live "12/120" counter on the right. */
+function CountedLabel({ label, count, max }: { label: string; count: number; max: number }) {
+    const near = count >= max * 0.9;
     return (
-        <div>
-            <div className="flex items-baseline justify-between gap-2 mb-1">
-                <label htmlFor={htmlFor} className="block text-sm font-medium text-neutral-700">{label}</label>
-                {count !== undefined && max !== undefined && (
-                    <span className={`text-xs tabular-nums ${near ? "text-amber-600 font-medium" : "text-neutral-400"}`} aria-live="polite">
-                        {count}/{max}
-                    </span>
-                )}
-            </div>
-            {children}
-            {hint && <p className="mt-1 text-xs text-neutral-500">{hint}</p>}
-        </div>
+        <span className="flex items-baseline justify-between gap-2">
+            {label}
+            <span className={cx("text-xs font-normal tabular-nums", near ? "font-medium text-warn" : "text-ink-faint")} aria-live="polite">
+                {count}/{max}
+            </span>
+        </span>
     );
 }
 
@@ -37,11 +35,12 @@ function FilterPill({ label, selected, disabled, onToggle, title }: { label: str
             title={title}
             disabled={disabled && !selected}
             onClick={onToggle}
-            className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                selected ? "bg-teal-600 border-teal-600 text-white" : "bg-white border-neutral-200 text-neutral-700 hover:border-teal-300 hover:bg-teal-50"
-            }`}
+            className={cx(
+                "inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 disabled:cursor-not-allowed disabled:opacity-40",
+                selected ? "border-brand-900 bg-brand-900 text-white" : "border-line-strong bg-surface text-ink hover:border-accent-300 hover:bg-accent-50"
+            )}
         >
-            {selected && <Check className="w-3 h-3" />}
+            {selected && <Check className="h-3 w-3" aria-hidden />}
             {label}
         </button>
     );
@@ -121,42 +120,50 @@ export function RegionSettingsDrawer({ region, onClose }: { region: ExploreRegio
     return (
         <Drawer
             open
-            onClose={busy ? () => undefined : onClose}
+            onClose={onClose}
+            dismissible={!busy}
             title={`Edit ${region.name}`}
-            subtitle={<>{region.slug && <span className="font-mono">{region.slug}</span>}{region.slug && " · "}The app picks up changes within about a minute.</>}
+            subtitle={
+                <>
+                    {region.slug && <span className="font-mono">{region.slug}</span>}
+                    {region.slug && " · "}The app picks up changes within about a minute.
+                </>
+            }
             footer={
-                <div className="flex justify-end gap-3">
-                    <button type="button" onClick={onClose} disabled={busy} className={btnSecondary}>Cancel</button>
-                    <button type="button" onClick={() => save.mutate()} disabled={!dirty || coverInvalid || busy} className={btnPrimary}>
-                        <LoadingButtonIcon loading={save.isPending} icon={Save} /> Save changes
-                    </button>
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <Button variant="secondary" onClick={onClose} disabled={busy}>
+                        Cancel
+                    </Button>
+                    <Button variant="primary" icon={Save} onClick={() => save.mutate()} loading={save.isPending} disabled={!dirty || coverInvalid || uploading}>
+                        Save changes
+                    </Button>
                 </div>
             }
         >
-            <section className="rounded-2xl bg-neutral-50 border border-neutral-100 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-3">App preview · region picker</p>
+            <section className="rounded-card border border-line bg-surface-muted p-4">
+                <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">App preview · region picker</p>
                 <RegionPreviewCard name={region.name} coverImage={cover} tagline={tagline} badge={badge} banner={banner} counts={region.counts} />
             </section>
 
-            <LabelRow
-                htmlFor="explore-cover-url"
+            <Field
                 label="Cover image"
-                hint={coverInvalid ? <span className="text-red-600">The cover image must be an https:// URL.</span> : "Upload a photo or paste an https:// image URL. Landscape works best."}
+                htmlFor="explore-cover-url"
+                error={coverInvalid ? "The cover image must be an https:// URL." : undefined}
+                hint="Upload a photo or paste an https:// image URL. Landscape works best."
             >
                 <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
-                        <button type="button" onClick={() => fileRef.current?.click()} disabled={busy} className={btnSmNeutral}>
-                            {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImagePlus className="w-3.5 h-3.5" />}
+                        <Button size="sm" variant="secondary" icon={ImagePlus} loading={uploading} onClick={() => fileRef.current?.click()} disabled={busy}>
                             {uploading ? `Uploading ${uploadPct}%` : "Upload image"}
-                        </button>
+                        </Button>
                         {cover && (
-                            <button type="button" onClick={() => setCoverImage("")} disabled={busy} className={btnSmNeutral}>
-                                <Trash2 className="w-3.5 h-3.5" /> Remove
-                            </button>
+                            <Button size="sm" variant="ghost" icon={Trash2} onClick={() => setCoverImage("")} disabled={busy}>
+                                Remove
+                            </Button>
                         )}
-                        <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleFile} />
+                        <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" tabIndex={-1} aria-hidden onChange={handleFile} />
                     </div>
-                    <input
+                    <TextInput
                         id="explore-cover-url"
                         type="url"
                         inputMode="url"
@@ -164,86 +171,81 @@ export function RegionSettingsDrawer({ region, onClose }: { region: ExploreRegio
                         value={coverImage}
                         onChange={(e) => setCoverImage(e.target.value)}
                         disabled={uploading}
+                        invalid={coverInvalid}
                         placeholder="https://img.seekkrr.com/…"
-                        className={`${inputClass} ${coverInvalid ? "border-red-300 focus:ring-red-400" : ""}`}
                     />
                 </div>
-            </LabelRow>
+            </Field>
 
-            <LabelRow htmlFor="explore-tagline" label="Tagline" count={tagline.length} max={EXPLORE_LIMITS.tagline} hint="One line under the region name in the picker.">
-                <input
-                    id="explore-tagline"
+            <Field label={<CountedLabel label="Tagline" count={tagline.length} max={EXPLORE_LIMITS.tagline} />} hint="One line under the region name in the picker.">
+                <TextInput
                     type="text"
                     maxLength={EXPLORE_LIMITS.tagline}
                     value={tagline}
                     onChange={(e) => setTagline(e.target.value)}
                     placeholder="e.g. Hills, tea gardens and the Hornbill Festival"
-                    className={inputClass}
                 />
-            </LabelRow>
+            </Field>
 
-            <LabelRow htmlFor="explore-badge" label="Badge" count={badge.length} max={EXPLORE_LIMITS.badge} hint="Short label on the cover. Leave empty for none.">
+            <Field label={<CountedLabel label="Badge" count={badge.length} max={EXPLORE_LIMITS.badge} />} hint="Short label on the cover. Leave empty for none." htmlFor="explore-badge">
                 <div className="space-y-2">
-                    <input
-                        id="explore-badge"
-                        type="text"
-                        maxLength={EXPLORE_LIMITS.badge}
-                        value={badge}
-                        onChange={(e) => setBadge(e.target.value)}
-                        placeholder="e.g. Festival live"
-                        className={inputClass}
-                    />
+                    <TextInput id="explore-badge" type="text" maxLength={EXPLORE_LIMITS.badge} value={badge} onChange={(e) => setBadge(e.target.value)} placeholder="e.g. Festival live" />
                     <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs text-neutral-500">Quick picks:</span>
+                        <span className="text-xs text-ink-muted">Quick picks:</span>
                         {BADGE_PRESETS.map((preset) => (
                             <FilterPill key={preset} label={preset} selected={badge.trim() === preset} onToggle={() => setBadge(badge.trim() === preset ? "" : preset)} />
                         ))}
                     </div>
                 </div>
-            </LabelRow>
+            </Field>
 
-            <LabelRow htmlFor="explore-banner" label="Banner message" count={banner.length} max={EXPLORE_LIMITS.banner} hint="Shown on the map when this region is open, e.g. an event notice. Leave empty for none.">
-                <textarea
-                    id="explore-banner"
+            <Field
+                label={<CountedLabel label="Banner message" count={banner.length} max={EXPLORE_LIMITS.banner} />}
+                hint="Shown on the map when this region is open, e.g. an event notice. Leave empty for none."
+            >
+                <TextArea
                     rows={3}
                     maxLength={EXPLORE_LIMITS.banner}
                     value={banner}
                     onChange={(e) => setBanner(e.target.value)}
                     placeholder="e.g. Hornbill Festival is on, 1–10 Dec. Tap Collabs to see festival offers."
-                    className={`${inputClass} resize-none`}
+                    className="resize-none"
                 />
-            </LabelRow>
+            </Field>
 
-            <LabelRow
-                label="Default filters"
-                count={filters.length}
-                max={EXPLORE_LIMITS.filters}
+            <Field
+                label={<CountedLabel label="Default filters" count={filters.length} max={EXPLORE_LIMITS.filters} />}
                 hint={atFilterLimit ? "Up to 10 filters. Remove one to add another." : "Filters already on when someone opens this region. None = show everything."}
+                htmlFor="explore-filters"
             >
-                <div className="space-y-3">
+                <div id="explore-filters" className="space-y-3">
                     <div className="flex flex-wrap gap-2">
                         {SPECIAL_FILTERS.map((name) => (
                             <FilterPill key={name} label={name} selected={filters.includes(name)} disabled={atFilterLimit} onToggle={() => toggleFilter(name)} />
                         ))}
                     </div>
                     <div>
-                        <p className="text-xs font-medium text-neutral-500 mb-2">Place categories</p>
+                        <p className="mb-2 text-xs font-medium text-ink-muted">Place categories</p>
                         {unresolvedSelected.length > 0 && (
-                            <div className="flex flex-wrap gap-2 mb-2">
+                            <div className="mb-2 flex flex-wrap gap-2">
                                 {unresolvedSelected.map((name) => (
                                     <FilterPill key={name} label={name} selected onToggle={() => toggleFilter(name)} />
                                 ))}
                             </div>
                         )}
                         {categoriesQuery.isLoading ? (
-                            <p className="text-xs text-neutral-400 inline-flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading categories…</p>
+                            <p className="inline-flex items-center gap-1.5 text-xs text-ink-faint">
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Loading categories…
+                            </p>
                         ) : categoriesQuery.error ? (
-                            <p className="text-xs text-red-600">
-                                Couldn't load categories.{" "}
-                                <button type="button" onClick={() => categoriesQuery.refetch()} className="text-teal-700 font-medium hover:underline">Retry</button>
+                            <p className="text-xs text-bad">
+                                Couldn&apos;t load categories.{" "}
+                                <button type="button" onClick={() => categoriesQuery.refetch()} className="font-medium text-accent-700 hover:underline">
+                                    Retry
+                                </button>
                             </p>
                         ) : categoryNames.length === 0 ? (
-                            <p className="text-xs text-neutral-400">No active categories.</p>
+                            <p className="text-xs text-ink-faint">No active categories.</p>
                         ) : (
                             <div className="flex flex-wrap gap-2">
                                 {categoryNames.map((name) => (
@@ -254,7 +256,7 @@ export function RegionSettingsDrawer({ region, onClose }: { region: ExploreRegio
                     </div>
                     {unknownSelected.length > 0 && (
                         <div>
-                            <p className="text-xs font-medium text-amber-700 mb-2">Saved filters that no longer match a category (tap to remove)</p>
+                            <p className="mb-2 text-xs font-medium text-warn">Saved filters that no longer match a category (tap to remove)</p>
                             <div className="flex flex-wrap gap-2">
                                 {unknownSelected.map((name) => (
                                     <FilterPill key={name} label={name} selected onToggle={() => toggleFilter(name)} title="Not a current category or app filter" />
@@ -263,7 +265,7 @@ export function RegionSettingsDrawer({ region, onClose }: { region: ExploreRegio
                         </div>
                     )}
                 </div>
-            </LabelRow>
+            </Field>
         </Drawer>
     );
 }

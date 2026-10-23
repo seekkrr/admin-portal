@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Globe, Handshake, Map as MapIcon, MapPin, Megaphone } from "lucide-react";
 import type { ExploreRegion } from "../types";
 
-const plural = (n: number, one: string) => `${n.toLocaleString()} ${n === 1 ? one : `${one}s`}`;
+const plural = (n: number, one: string) => `${n.toLocaleString("en-IN")} ${n === 1 ? one : `${one}s`}`;
 
 /**
  * Approximates a card in the app's region picker: cover photo with the badge
@@ -29,9 +29,9 @@ export function RegionPreviewCard({
     const showImage = !!coverImage && failedUrl !== coverImage;
 
     return (
-        <div className="w-full max-w-[300px] mx-auto space-y-2">
-            <div className="rounded-2xl overflow-hidden bg-white border border-neutral-200 shadow-md">
-                <div className="relative aspect-[16/10] bg-gradient-to-br from-teal-500 to-emerald-600">
+        <div className="mx-auto w-full max-w-[300px] space-y-2">
+            <div className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
+                <div className="relative aspect-[16/10] bg-brand-700">
                     {showImage ? (
                         <img
                             src={coverImage}
@@ -47,7 +47,7 @@ export function RegionPreviewCard({
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
                     {badge.trim() && (
-                        <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full bg-amber-400 text-amber-950 text-[11px] font-bold shadow-sm max-w-[85%] truncate">
+                        <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full bg-highlight text-highlight-ink text-[11px] font-bold shadow-sm max-w-[85%] truncate">
                             {badge.trim()}
                         </span>
                     )}
@@ -56,10 +56,10 @@ export function RegionPreviewCard({
                     </h4>
                 </div>
                 <div className="px-3 py-2.5 space-y-1.5">
-                    <p className={`text-xs leading-snug line-clamp-2 ${tagline.trim() ? "text-neutral-700" : "text-neutral-400 italic"}`}>
+                    <p className={`text-xs leading-snug line-clamp-2 ${tagline.trim() ? "text-ink" : "italic text-ink-faint"}`}>
                         {tagline.trim() || "No tagline"}
                     </p>
-                    <div className="flex items-center gap-3 text-[11px] text-neutral-500">
+                    <div className="flex items-center gap-3 text-[11px] text-ink-muted">
                         <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{plural(counts.places, "place")}</span>
                         <span className="inline-flex items-center gap-1"><MapIcon className="w-3 h-3" />{plural(counts.quests, "quest")}</span>
                         <span className="inline-flex items-center gap-1"><Handshake className="w-3 h-3" />{plural(counts.open_collabs, "collab")}</span>
@@ -67,7 +67,7 @@ export function RegionPreviewCard({
                 </div>
             </div>
             {banner.trim() && (
-                <div className="flex items-start gap-2 px-3 py-2 rounded-xl bg-teal-600 text-white text-xs shadow-sm">
+                <div className="flex items-start gap-2 px-3 py-2 rounded-control bg-brand-900 text-white text-xs shadow-sm">
                     <Megaphone className="w-3.5 h-3.5 mt-px shrink-0" />
                     <span className="leading-snug break-words min-w-0">{banner.trim()}</span>
                 </div>

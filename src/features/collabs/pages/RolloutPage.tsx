@@ -3,14 +3,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Rocket, Power, Globe, Save, FileText, ExternalLink, Upload, LayoutPanelLeft } from "lucide-react";
 import { AccessDenied } from "@components/AccessDenied";
-import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { PageHeader, SectionHeading } from "@/components/ui/PageHeader";
+import { Panel } from "@/components/ui/Panel";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Field, SelectInput, Switch, TextInput } from "@/components/ui/Field";
+import { PanelState } from "@/components/ui/States";
+import { formatDateTime } from "@/utils/date";
+import { cx } from "@/utils/cx";
 import { platformConfigService } from "../services/platform-config.service";
 import { collabsAdminService } from "../services/collabs-admin.service";
 import { useCollabAccess } from "../roles";
-import { Field, LoadingButtonIcon, PageHeader, PanelState, SectionCard, Switch, btnPrimary, inputClass } from "../components/CollabsUi";
 import { RegionMultiSelect } from "../components/CollabPickers";
-import { fmtDateTime } from "../utils";
 import type {
     FeatureFlag,
     PartnerPortalSection,
@@ -70,84 +74,70 @@ function FlagEditor({ flag }: { flag: FeatureFlag }) {
 
     return (
         <>
-            <Card padding="none" className={`overflow-hidden border-2 ${flag.enabled ? "border-emerald-200" : "border-red-200"}`}>
-                <div className="p-6 flex flex-wrap items-center justify-between gap-4">
+            <section className={cx("overflow-hidden rounded-card border-2 bg-surface shadow-card", flag.enabled ? "border-good-line" : "border-bad-line")}>
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 sm:p-6">
                     <div className="flex items-center gap-4">
-                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${flag.enabled ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-600"}`}>
-                            <Power className="w-7 h-7" />
+                        <div className={cx("flex h-12 w-12 shrink-0 items-center justify-center rounded-card sm:h-14 sm:w-14", flag.enabled ? "bg-good-soft text-good" : "bg-bad-soft text-bad")}>
+                            <Power className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden />
                         </div>
-                        <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Global kill switch</p>
-                            <h2 className="text-2xl font-bold text-neutral-900">Collabs are {flag.enabled ? "ON" : "OFF"}</h2>
-                            <p className="text-sm text-neutral-500">
+                        <div className="min-w-0">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Global kill switch</p>
+                            <h2 className="text-xl font-semibold text-ink sm:text-2xl">Collabs are {flag.enabled ? "ON" : "OFF"}</h2>
+                            <p className="text-sm text-ink-muted">
                                 {flag.enabled
                                     ? `Visible in ${flag.regions_enabled.length} enabled region${flag.regions_enabled.length === 1 ? "" : "s"}.`
                                     : "Hidden in every app and region — no release needed to turn back on."}
-                                {flag.updated_at ? ` Last changed ${fmtDateTime(flag.updated_at)}.` : ""}
+                                {flag.updated_at ? ` Last changed ${formatDateTime(flag.updated_at)}.` : ""}
                             </p>
                         </div>
                     </div>
-                    <button
-                        type="button"
-                        onClick={() => setConfirmToggle(true)}
-                        className={`inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold text-white shadow-sm transition-colors ${
-                            flag.enabled ? "bg-red-600 hover:bg-red-700" : "bg-emerald-600 hover:bg-emerald-700"
-                        }`}
-                    >
-                        <Power className="w-4 h-4" /> {flag.enabled ? "Turn off everywhere" : "Turn on"}
-                    </button>
+                    <Button variant={flag.enabled ? "danger" : "primary"} icon={Power} onClick={() => setConfirmToggle(true)}>
+                        {flag.enabled ? "Turn off everywhere" : "Turn on"}
+                    </Button>
                 </div>
-            </Card>
+            </section>
 
-            <SectionCard
-                title="Regions & minimum app version"
+            <Panel
+                title="Regions and minimum app version"
                 icon={Globe}
                 actions={
-                    <button
-                        type="button"
+                    <Button
+                        variant="primary"
+                        icon={Save}
                         onClick={() => update.mutate({ regions_enabled: regions, min_app_version: minVersion.trim() })}
                         disabled={!settingsDirty || versionInvalid || update.isPending}
-                        className={btnPrimary}
+                        loading={update.isPending && update.variables?.enabled === undefined}
                     >
-                        <LoadingButtonIcon loading={update.isPending && update.variables?.enabled === undefined} icon={Save} /> Save rollout
-                    </button>
+                        Save rollout
+                    </Button>
                 }
             >
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                     <div className="lg:col-span-2">
-                        <Field label="Enabled regions" hint="Collabs show only for markers whose region is listed here (exact region match — city or hotspot).">
-                            <RegionMultiSelect value={regions} onChange={setRegions} />
-                        </Field>
+                        <p className="mb-1.5 text-sm font-medium text-ink">Enabled regions</p>
+                        <RegionMultiSelect value={regions} onChange={setRegions} />
+                        <p className="mt-1 text-xs text-ink-faint">Collabs show only for places whose region is listed here (exact region match — city or hotspot).</p>
                     </div>
                     <Field
                         label="Minimum app version"
-                        htmlFor="flag-min-version"
-                        hint={versionInvalid ? "Use a version like 3.2.0." : "Older app builds hide collab UI. Leave empty for no minimum."}
+                        error={versionInvalid ? "Use a version like 3.2.0." : undefined}
+                        hint="Older app builds hide collab UI. Leave empty for no minimum."
                     >
-                        <input
-                            id="flag-min-version"
-                            type="text"
-                            maxLength={20}
-                            value={minVersion}
-                            onChange={(e) => setMinVersion(e.target.value)}
-                            className={`${inputClass} font-mono`}
-                            placeholder="e.g. 3.2.0"
-                        />
+                        <TextInput type="text" maxLength={20} value={minVersion} onChange={(e) => setMinVersion(e.target.value)} className="font-mono" placeholder="e.g. 3.2.0" />
                     </Field>
                 </div>
-            </SectionCard>
+            </Panel>
 
-            <ConfirmModal
+            <ConfirmDialog
                 open={confirmToggle}
-                theme={flag.enabled ? "danger" : "warning"}
+                tone={flag.enabled ? "danger" : "warning"}
                 title={flag.enabled ? "Turn collabs off everywhere?" : "Turn collabs on?"}
-                message={
+                description={
                     flag.enabled
                         ? "This immediately hides all collab UI for every creator and business in every region. Pending requests stay in place."
                         : `Collabs become visible in the ${regions.length} enabled region${regions.length === 1 ? "" : "s"}.`
                 }
                 confirmLabel={flag.enabled ? "Turn off" : "Turn on"}
-                confirmStyle={flag.enabled ? "bg-red-600 hover:bg-red-700" : "bg-emerald-600 hover:bg-emerald-700"}
                 onConfirm={() => update.mutate({ enabled: !flag.enabled })}
                 onCancel={() => setConfirmToggle(false)}
                 isPending={update.isPending}
@@ -191,70 +181,57 @@ function PartnerPortalEditor({ settings }: { settings: PartnerPortalSettings }) 
     });
 
     return (
-        <SectionCard
+        <Panel
             title="Partner Portal sections"
             icon={LayoutPanelLeft}
             actions={
-                <button type="button" onClick={() => save.mutate()} disabled={!dirty || save.isPending} className={btnPrimary}>
-                    <LoadingButtonIcon loading={save.isPending} icon={Save} /> Save
-                </button>
+                <Button variant="primary" icon={Save} onClick={() => save.mutate()} disabled={!dirty} loading={save.isPending}>
+                    Save
+                </Button>
             }
         >
-            <p className="text-sm text-neutral-500 mb-4">
+            <p className="mb-4 text-sm text-ink-muted">
                 Choose what businesses see in the Partner Portal and the app.
-                {settings.updated_at ? ` Last changed ${fmtDateTime(settings.updated_at)}.` : ""}
+                {settings.updated_at ? ` Last changed ${formatDateTime(settings.updated_at)}.` : ""}
             </p>
-            <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 {PARTNER_PORTAL_SECTIONS.map((s) => {
                     const on = sections[s.key];
                     return (
-                        <li key={s.key} className="flex items-start justify-between gap-4 p-3 rounded-xl border border-neutral-100 bg-neutral-50/60">
+                        <li key={s.key} className="flex items-start justify-between gap-4 rounded-control border border-line bg-surface-muted p-3">
                             <div className="min-w-0">
-                                <p className="text-sm font-medium text-neutral-900">
+                                <p className="text-sm font-medium text-ink">
                                     {s.label}
-                                    <span className={`ml-2 text-xs font-semibold ${on ? "text-teal-700" : "text-neutral-400"}`}>{on ? "Shown" : "Hidden"}</span>
+                                    <span className={cx("ml-2 text-xs font-semibold", on ? "text-accent-700" : "text-ink-faint")}>{on ? "Shown" : "Hidden"}</span>
                                 </p>
-                                <p className="text-xs text-neutral-500 mt-0.5">{s.hint}</p>
+                                <p className="mt-0.5 text-xs text-ink-muted">{s.hint}</p>
                             </div>
                             <Switch
-                                on={on}
+                                checked={on}
                                 label={s.label}
+                                hideLabel
                                 disabled={save.isPending}
-                                onToggle={() => setSections((prev) => ({ ...prev, [s.key]: !prev[s.key] }))}
+                                onChange={() => setSections((prev) => ({ ...prev, [s.key]: !prev[s.key] }))}
                             />
                         </li>
                     );
                 })}
             </ul>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-5">
-                <Field label="Plan for every business" htmlFor="pp-default-plan" hint="Used for every business without an override. Growth for now.">
-                    <select
-                        id="pp-default-plan"
-                        value={plan}
-                        onChange={(e) => setPlan(e.target.value)}
-                        className={inputClass}
-                        disabled={plansQuery.isLoading || save.isPending}
-                    >
+            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Plan for every business" hint="Used for every business without an override. Growth for now.">
+                    <SelectInput value={plan} onChange={(e) => setPlan(e.target.value)} disabled={plansQuery.isLoading || save.isPending}>
                         {planOptions.map((p) => (
                             <option key={p.code} value={p.code}>
                                 {p.name}
                             </option>
                         ))}
-                    </select>
+                    </SelectInput>
                 </Field>
-                <Field label="Reason" htmlFor="pp-reason" hint="Optional. Saved to the admin audit log.">
-                    <input
-                        id="pp-reason"
-                        type="text"
-                        maxLength={300}
-                        value={reason}
-                        onChange={(e) => setReason(e.target.value)}
-                        className={inputClass}
-                        placeholder="e.g. Hiding plans until billing launches"
-                    />
+                <Field label="Reason" hint="Optional. Saved to the change history.">
+                    <TextInput type="text" maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Hiding plans until billing launches" />
                 </Field>
             </div>
-        </SectionCard>
+        </Panel>
     );
 }
 
@@ -279,45 +256,42 @@ function TermsCard({ doc, label, who, current }: { doc: TermsDoc; label: string;
     const sameVersion = version.trim() !== "" && version.trim() === current?.version;
 
     return (
-        <SectionCard title={label} icon={FileText}>
+        <Panel title={label} icon={FileText}>
             <div className="space-y-4">
-                <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-neutral-50 border border-neutral-100">
+                <div className="flex items-center justify-between gap-3 rounded-control border border-line bg-surface-muted p-3">
                     <div>
-                        <p className="text-xs text-neutral-500">Current version</p>
-                        <p className="text-lg font-bold font-mono text-neutral-900">{current?.version ?? "—"}</p>
+                        <p className="text-xs text-ink-muted">Current version</p>
+                        <p className="font-mono text-lg font-semibold text-ink">{current?.version ?? "—"}</p>
                     </div>
                     {current?.url && (
-                        <a href={current.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-teal-700 hover:underline">
-                            <ExternalLink className="w-4 h-4" /> View
+                        <a href={current.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-accent-700 hover:underline">
+                            <ExternalLink className="h-4 w-4" aria-hidden /> View
                         </a>
                     )}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <Field label="New version" htmlFor={`terms-v-${doc}`} required hint={sameVersion ? "Already the current version." : undefined}>
-                        <input id={`terms-v-${doc}`} type="text" maxLength={40} value={version} onChange={(e) => setVersion(e.target.value)} className={`${inputClass} font-mono`} placeholder="2026-11" />
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <Field label="New version" required error={sameVersion ? "Already the current version." : undefined}>
+                        <TextInput type="text" maxLength={40} value={version} onChange={(e) => setVersion(e.target.value)} className="font-mono" placeholder="2026-11" />
                     </Field>
-                    <div className="sm:col-span-2">
-                        <Field label="Document URL" htmlFor={`terms-u-${doc}`} hint={urlInvalid ? "Must start with https://" : undefined}>
-                            <input id={`terms-u-${doc}`} type="url" maxLength={500} value={url} onChange={(e) => setUrl(e.target.value)} className={inputClass} placeholder="https://seekkrr.com/…" />
-                        </Field>
-                    </div>
+                    <Field label="Document URL" className="sm:col-span-2" error={urlInvalid ? "Must start with https://" : undefined}>
+                        <TextInput type="url" maxLength={500} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://seekkrr.com/…" />
+                    </Field>
                 </div>
-                <button type="button" onClick={() => setConfirm(true)} disabled={!version.trim() || sameVersion || urlInvalid || publish.isPending} className={btnPrimary}>
-                    <Upload className="w-4 h-4" /> Publish version
-                </button>
+                <Button variant="primary" icon={Upload} onClick={() => setConfirm(true)} disabled={!version.trim() || sameVersion || urlInvalid || publish.isPending}>
+                    Publish version
+                </Button>
             </div>
-            <ConfirmModal
+            <ConfirmDialog
                 open={confirm}
-                theme="warning"
-                title={`Publish ${label} v${version.trim()}`}
-                message={`All ${who} must accept the new version before their next collab action.`}
+                tone="warning"
+                title={`Publish ${label} v${version.trim()}?`}
+                description={`All ${who} must accept the new version before their next collab action.`}
                 confirmLabel="Publish"
-                confirmStyle="bg-teal-600 hover:bg-teal-700"
                 onConfirm={() => publish.mutate()}
                 onCancel={() => setConfirm(false)}
                 isPending={publish.isPending}
             />
-        </SectionCard>
+        </Panel>
     );
 }
 
@@ -334,8 +308,8 @@ export function RolloutPage() {
         (flagsQuery.data ? { key: FLAG_KEY, enabled: false, regions_enabled: [], min_app_version: null, updated_at: null } : undefined);
 
     return (
-        <div className="max-w-[1200px] space-y-5 animate-fade-in">
-            <PageHeader icon={Rocket} title="Rollout" gradient="from-amber-500 to-amber-600" subtitle="Feature flag, region rollout, Partner Portal sections and collab terms versions" />
+        <div className="max-w-[1200px] space-y-5">
+            <PageHeader icon={Rocket} title="Rollout" description="Feature flag, region rollout, Partner Portal sections and collab terms versions" />
 
             <PanelState isLoading={flagsQuery.isLoading} error={flagsQuery.error} isEmpty={!flag} emptyIcon={Rocket} emptyText="Feature flag unavailable" onRetry={() => flagsQuery.refetch()}>
                 {flag && <FlagEditor key={`${flag.key}-${flag.updated_at ?? ""}`} flag={flag} />}
@@ -357,11 +331,13 @@ export function RolloutPage() {
                 )}
             </PanelState>
 
-            <div>
-                <h2 className="text-lg font-bold text-neutral-900 mb-1">Terms versions</h2>
-                <p className="text-sm text-neutral-500 mb-3">Publishing a new version forces re-acceptance (recorded per user with version, time and platform).</p>
+            <div className="space-y-3">
+                <div>
+                    <SectionHeading>Terms versions</SectionHeading>
+                    <p className="mt-0.5 text-sm text-ink-muted">Publishing a new version forces re-acceptance (recorded per user with version, time and platform).</p>
+                </div>
                 <PanelState isLoading={termsQuery.isLoading} error={termsQuery.error} isEmpty={false} emptyIcon={FileText} emptyText="" onRetry={() => termsQuery.refetch()}>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                         {TERMS_DOCS.map((t) => (
                             <TermsCard key={`${t.doc}-${termsQuery.data?.[t.doc]?.version ?? ""}`} doc={t.doc} label={t.label} who={t.who} current={termsQuery.data?.[t.doc]} />
                         ))}

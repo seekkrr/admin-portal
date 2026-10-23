@@ -47,23 +47,23 @@ export function RegionMultiSelect({
     return (
         <div className="space-y-2">
             <div className="flex flex-wrap gap-2">
-                {value.length === 0 && <span className="text-xs text-neutral-400">No regions selected.</span>}
+                {value.length === 0 && <span className="text-xs text-ink-faint">No regions selected.</span>}
                 {value.map((id, i) => {
                     const region = chips[i]?.data;
                     return (
                         <span
                             key={id}
-                            className="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-lg bg-teal-50 border border-teal-200 text-xs font-medium text-teal-800"
+                            className="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-lg bg-accent-50 border border-accent-200 text-xs font-medium text-accent-700"
                             title={id}
                         >
                             {region?.type === "city" ? <Building2 className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
                             {chips[i]?.isLoading ? "Loading…" : region?.name ?? id}
-                            {region && <span className="text-[10px] uppercase text-teal-600/70">{region.type}</span>}
+                            {region && <span className="text-[10px] uppercase text-accent-600/70">{region.type}</span>}
                             {!disabled && (
                                 <button
                                     type="button"
                                     onClick={() => onChange(value.filter((v) => v !== id))}
-                                    className="p-0.5 rounded hover:bg-teal-100"
+                                    className="p-0.5 rounded hover:bg-accent-100"
                                     aria-label={`Remove ${region?.name ?? id}`}
                                 >
                                     <X className="w-3 h-3" />
@@ -76,24 +76,24 @@ export function RegionMultiSelect({
             {!disabled && (
                 <div>
                     <div className="relative">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
                         <input
                             type="text"
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full pl-10 pr-10 py-2.5 rounded-control border border-line text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
                             placeholder="Search a region to enable…"
                         />
                         {search.isFetching && (
-                            <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-teal-500 animate-spin" />
+                            <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-500 animate-spin" />
                         )}
                     </div>
-                    {search.isError && <p className="mt-2 text-xs text-red-500">Region search failed. Try again.</p>}
+                    {search.isError && <p className="mt-2 text-xs text-bad">Region search failed. Try again.</p>}
                     {!search.isError && q.length >= 2 && !search.isFetching && results.length === 0 && (
-                        <p className="mt-2 text-xs text-neutral-500">No more regions match “{q}”.</p>
+                        <p className="mt-2 text-xs text-ink-muted">No more regions match “{q}”.</p>
                     )}
                     {results.length > 0 && (
-                        <ul className="mt-2 border border-neutral-200 rounded-xl divide-y divide-neutral-100 overflow-hidden max-h-60 overflow-y-auto">
+                        <ul className="mt-2 border border-line rounded-control divide-y divide-line overflow-hidden max-h-60 overflow-y-auto">
                             {results.map((region) => (
                                 <li key={region.id}>
                                     <button
@@ -102,12 +102,12 @@ export function RegionMultiSelect({
                                             onChange([...value, region.id]);
                                             setInput("");
                                         }}
-                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-teal-50/60 transition-colors"
+                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-accent-50/60 transition-colors"
                                     >
-                                        <Plus className="w-4 h-4 text-teal-600 shrink-0" />
+                                        <Plus className="w-4 h-4 text-accent-600 shrink-0" />
                                         <span className="min-w-0">
-                                            <span className="block text-sm font-medium text-neutral-800 truncate">{region.name}</span>
-                                            <span className="text-[10px] uppercase tracking-wide text-neutral-400">
+                                            <span className="block text-sm font-medium text-ink truncate">{region.name}</span>
+                                            <span className="text-[10px] uppercase tracking-wide text-ink-faint">
                                                 {region.type} · {region.slug}
                                             </span>
                                         </span>
@@ -131,7 +131,7 @@ export function RegionName({ id }: { id: string | null | undefined }) {
         staleTime: 5 * 60 * 1000,
         retry: false,
     });
-    if (!id) return <span className="text-neutral-400">—</span>;
+    if (!id) return <span className="text-ink-faint">—</span>;
     return <span title={id}>{q.data?.name ?? (q.isLoading ? "…" : id)}</span>;
 }
 
@@ -144,7 +144,7 @@ export function MarkerLink({ id }: { id: string }) {
         retry: false,
     });
     return (
-        <Link to={`/markers/${id}`} className="inline-flex items-center gap-1 text-teal-700 hover:underline" title={id}>
+        <Link to={`/markers/${id}`} className="inline-flex items-center gap-1 text-accent-700 hover:underline" title={id}>
             <MapPin className="w-3.5 h-3.5" />
             {q.data?.title ?? (q.isLoading ? "Loading…" : id)}
         </Link>
@@ -186,13 +186,13 @@ export function MarkerIdsInput({
     return (
         <div className="space-y-2">
             <div className="flex flex-wrap gap-2">
-                {value.length === 0 && <span className="text-xs text-neutral-400">No places linked.</span>}
+                {value.length === 0 && <span className="text-xs text-ink-faint">No places linked.</span>}
                 {value.map((id, i) => {
                     const marker = chips[i]?.data;
                     return (
                         <span
                             key={id}
-                            className="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-lg bg-orange-50 border border-orange-200 text-xs font-medium text-orange-800"
+                            className="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-lg bg-brand-50 border border-brand-200 text-xs font-medium text-brand-700"
                             title={id}
                         >
                             <MapPin className="w-3 h-3" />
@@ -201,7 +201,7 @@ export function MarkerIdsInput({
                                 <button
                                     type="button"
                                     onClick={() => onChange(value.filter((v) => v !== id))}
-                                    className="p-0.5 rounded hover:bg-orange-100"
+                                    className="p-0.5 rounded hover:bg-brand-100"
                                     aria-label={`Remove ${marker?.title ?? id}`}
                                 >
                                     <X className="w-3 h-3" />
@@ -214,16 +214,16 @@ export function MarkerIdsInput({
             {!disabled && (
                 <div>
                     <div className="relative">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
                         <input
                             type="text"
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full pl-10 pr-10 py-2.5 rounded-control border border-line text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
                             placeholder="Search places by name, or paste a marker id…"
                         />
                         {search.isFetching && (
-                            <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-teal-500 animate-spin" />
+                            <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-500 animate-spin" />
                         )}
                     </div>
                     {looksLikeId && (
@@ -233,13 +233,13 @@ export function MarkerIdsInput({
                                 onChange([...value, input.trim()]);
                                 setInput("");
                             }}
-                            className="mt-2 text-xs text-teal-700 hover:underline"
+                            className="mt-2 text-xs text-accent-700 hover:underline"
                         >
                             Add marker id {input.trim()}
                         </button>
                     )}
                     {results.length > 0 && (
-                        <ul className="mt-2 border border-neutral-200 rounded-xl divide-y divide-neutral-100 overflow-hidden max-h-60 overflow-y-auto">
+                        <ul className="mt-2 border border-line rounded-control divide-y divide-line overflow-hidden max-h-60 overflow-y-auto">
                             {results.map((m) => (
                                 <li key={m.id}>
                                     <button
@@ -248,12 +248,12 @@ export function MarkerIdsInput({
                                             onChange([...value, m.id]);
                                             setInput("");
                                         }}
-                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-teal-50/60 transition-colors"
+                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-accent-50/60 transition-colors"
                                     >
-                                        <Plus className="w-4 h-4 text-teal-600 shrink-0" />
+                                        <Plus className="w-4 h-4 text-accent-600 shrink-0" />
                                         <span className="min-w-0">
-                                            <span className="block text-sm font-medium text-neutral-800 truncate">{m.title}</span>
-                                            <span className="block text-xs text-neutral-500 truncate">
+                                            <span className="block text-sm font-medium text-ink truncate">{m.title}</span>
+                                            <span className="block text-xs text-ink-muted truncate">
                                                 {m.address || m.categories?.join(", ") || m.id}
                                             </span>
                                         </span>

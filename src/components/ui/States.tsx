@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { AlertTriangle, Inbox, RefreshCw, type LucideIcon } from "lucide-react";
+import { AlertTriangle, Clock, Inbox, RefreshCw, type LucideIcon } from "lucide-react";
 import { cx } from "@/utils/cx";
 import { errorMessage } from "@/utils/errors";
+import { isRouteMissing, NOT_AVAILABLE_TEXT } from "@/services/optional";
 import { Button } from "./Button";
 
 export function EmptyState({
@@ -31,6 +32,21 @@ export function EmptyState({
     );
 }
 
+/** The server doesn't have this endpoint yet (route returns 404 "Not Found"). */
+export function UnavailableState({
+    title = "Not available yet",
+    description = NOT_AVAILABLE_TEXT,
+    className,
+    compact,
+}: {
+    title?: ReactNode;
+    description?: ReactNode;
+    className?: string;
+    compact?: boolean;
+}) {
+    return <EmptyState icon={Clock} title={title} description={description} className={className} compact={compact} />;
+}
+
 export function ErrorState({
     error,
     title = "Couldn't load this",
@@ -44,6 +60,8 @@ export function ErrorState({
     className?: string;
     compact?: boolean;
 }) {
+    // A route the backend doesn't have yet is not an error the admin can retry.
+    if (isRouteMissing(error)) return <UnavailableState className={className} compact={compact} />;
     return (
         <div role="alert" className={cx("flex flex-col items-center justify-center text-center", compact ? "gap-1.5 px-4 py-8" : "gap-2 px-6 py-14", className)}>
             <span className="mb-1 flex h-11 w-11 items-center justify-center rounded-full bg-bad-soft text-bad">

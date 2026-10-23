@@ -1,40 +1,34 @@
-import { useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import {
-    BookOpen,
-    Search,
-    CheckCircle2,
-    Paperclip,
-    Activity,
-    Eye,
-    Trash2,
-    X,
-    AudioLines,
-    Play,
-    Plus,
-    ChevronRight,
-    Link2,
-} from "lucide-react";
-import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { LoadingFallback } from "@components/LoadingFallback";
+import { AudioLines, BookOpen, CheckCircle2, Eye, Link2, Play, Plus, Trash2 } from "lucide-react";
 import { useAuthStore } from "@store/auth.store";
-import { narrativesService } from "../services/narratives.service";
-import type { AdminNarrative, NarrativeStatus, NarrativeAttachType, VoicePersona } from "@/types";
+import { Button, IconButton } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { FilterBar, FilterSelect, type FilterChip, type FilterOption } from "@/components/ui/FilterBar";
+import { chipLabel } from "@/components/ui/filters";
+import { DataTable, type DataColumn } from "@/components/ui/DataTable";
 import { Pagination } from "@/components/ui/Pagination";
-import { FilterDropdown } from "@/components/FilterDropdown";
-import { Badge } from "@/components/ui/Badge";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Tabs } from "@/components/ui/Tabs";
+import { Tag } from "@/components/ui/StatusPill";
+import { IdLink } from "@/components/ui/IdLink";
+import { useDebouncedUrlInput, useUrlState } from "@/hooks/useUrlState";
+import { runBulk } from "@/hooks/useBulkSelection";
+import { formatDate } from "@/utils/date";
+import type { EntityKind } from "@/utils/entity";
+import { narrativesService } from "../services/narratives.service";
+import type { AdminNarrative, NarrativeAttachType, NarrativeStatus, VoicePersona } from "@/types";
 import { playVoicePreview, PERSONAS } from "../components/voicePersonas";
 import { CreateNarrativeModal } from "../components/CreateNarrativeModal";
-import { useBulkSelection, runBulk } from "@/hooks/useBulkSelection";
+import { AudioStatusPill, NarrativeStatusPill } from "../components/NarrativePills";
+import { audioStatusLabel, narrativeStatusLabel } from "../components/narrativeStatus";
 
 const CAN_MODERATE_ROLES = ["admin", "super_admin", "moderator"];
 const PAGE_SIZE = 20;
-const SEARCH_DEBOUNCE_MS = 400;
 
-const STATUS_OPTIONS: { value: NarrativeStatus | ""; label: string }[] = [
-    { value: "", label: "All statuses" },
+const STATUS_OPTIONS: FilterOption[] = [
     { value: "draft", label: "Draft" },
     { value: "under_review", label: "Under review" },
     { value: "approved", label: "Approved" },
@@ -42,247 +36,20 @@ const STATUS_OPTIONS: { value: NarrativeStatus | ""; label: string }[] = [
     { value: "archived", label: "Archived" },
 ];
 
+const ATTACH_OPTIONS: FilterOption[] = [
+    { value: "marker", label: "Place" },
+    { value: "quest", label: "Quest" },
+    { value: "region", label: "Region" },
+];
 
+const ATTACH_KIND: Record<NarrativeAttachType, EntityKind> = { marker: "place", quest: "quest", region: "region" };
+const ATTACH_LABEL: Record<NarrativeAttachType, string> = { marker: "Place", quest: "Quest", region: "Region" };
 
 type TabKey = "queue" | "all";
+type BulkConfirm = null | "approve" | "delete";
 
-export function NarrativesPage() {
-    const { user } = useAuthStore();
-    const queryClient = useQueryClient();
-    const canModerate = user?.role?.some((r) => CAN_MODERATE_ROLES.includes(r as string));
-
-    const [tab, setTab] = useState<TabKey>("queue");
-    const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
-    const [createOpen, setCreateOpen] = useState(false);
-
-    const deleteMutation = useMutation({
-        mutationFn: (id: string) => narrativesService.remove(id),
-        onSuccess: () => {
-            toast.success("Narrative deleted");
-            queryClient.invalidateQueries({ queryKey: ["admin-narratives-queue"] });
-            queryClient.invalidateQueries({ queryKey: ["admin-narratives"] });
-            setConfirmDelete(null);
-        },
-        onError: (err: Error) => toast.error(err.message),
-    });
-
-    return (
-        <div className="max-w-[1400px] mx-auto animate-fade-in space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center shadow-sm text-white">
-                        <BookOpen className="h-5 w-5" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-3">
-                            Narratives
-                        </h1>
-                        <p className="mt-1 text-sm text-neutral-500">Review, moderate and publish quest narratives</p>
-                    </div>
-                </div>
-                {canModerate && (
-                    <button
-                        onClick={() => setCreateOpen(true)}
-                        className="inline-flex items-center gap-2 rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-orange-700 active:scale-95"
-                    >
-                        <Plus className="h-4 w-4" />
-                        New Narrative
-                    </button>
-                )}
-            </div>
-
-            <div className="flex gap-1 bg-neutral-100 rounded-xl p-1 w-fit">
-                <button
-                    onClick={() => setTab("queue")}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                        tab === "queue"
-                            ? "bg-white shadow-sm text-neutral-900"
-                            : "text-neutral-500 hover:text-neutral-700"
-                    }`}
-                >
-                    Review Queue
-                </button>
-                <button
-                    onClick={() => setTab("all")}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                        tab === "all"
-                            ? "bg-white shadow-sm text-neutral-900"
-                            : "text-neutral-500 hover:text-neutral-700"
-                    }`}
-                >
-                    All Narratives
-                </button>
-            </div>
-
-            {tab === "queue" ? (
-                <ReviewQueueTab
-                    canModerate={!!canModerate}
-                    queryClient={queryClient}
-                    onDelete={(id, name) => setConfirmDelete({ id, name })}
-                />
-            ) : (
-                <AllNarrativesTab
-                    canModerate={!!canModerate}
-                    onDelete={(id, name) => setConfirmDelete({ id, name })}
-                />
-            )}
-
-            <ConfirmModal
-                open={!!confirmDelete}
-                title="Delete Narrative"
-                message={`Are you sure you want to delete "${confirmDelete?.name}"? This action cannot be undone.`}
-                confirmLabel="Delete"
-                confirmStyle="bg-red-600 hover:bg-red-700"
-                onConfirm={() => confirmDelete && deleteMutation.mutate(confirmDelete.id)}
-                onCancel={() => setConfirmDelete(null)}
-                isPending={deleteMutation.isPending}
-            />
-
-            <CreateNarrativeModal open={createOpen} onClose={() => setCreateOpen(false)} />
-        </div>
-    );
-}
-
-function NarrativeRow({
-    n,
-    selectable,
-    checked,
-    onCheck,
-    canModerate,
-    onDelete,
-    indent,
-}: {
-    n: AdminNarrative;
-    selectable?: boolean;
-    checked?: boolean;
-    onCheck?: (id: string, checked: boolean) => void;
-    canModerate?: boolean;
-    onDelete?: (id: string, name: string) => void;
-    indent?: boolean;
-}) {
-    return (
-        <tr className={`group hover:bg-neutral-50/80 transition-colors duration-150 ${indent ? "bg-neutral-50/40" : ""}`}>
-            {selectable && (
-                <td className="whitespace-nowrap px-4 py-4">
-                    <input
-                        type="checkbox"
-                        className="rounded border-neutral-300 text-orange-600 focus:ring-orange-500"
-                        checked={checked}
-                        onChange={(e) => onCheck?.(n._id, e.target.checked)}
-                    />
-                </td>
-            )}
-            <td className="px-4 py-4">
-                <Link to={`/narratives/${n._id}`} className={`block ${indent ? "pl-8" : ""}`}>
-                    <div className="flex items-center gap-2 font-medium text-neutral-900">
-                        {indent && n.sequence_order !== null && (
-                            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-100 px-1.5 text-[10px] font-bold text-orange-700">
-                                {n.sequence_order}
-                            </span>
-                        )}
-                        {!indent && n.chain_id && (
-                            <span
-                                title="Part of a chain"
-                                className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700"
-                            >
-                                <Link2 className="h-3 w-3" />
-                                {n.sequence_order !== null ? `#${n.sequence_order}` : "chain"}
-                            </span>
-                        )}
-                        {n.title || "Untitled"}
-                    </div>
-                    {n.subtitle && <div className="mt-0.5 text-xs text-neutral-500">{n.subtitle}</div>}
-                </Link>
-            </td>
-            <td className="whitespace-nowrap px-4 py-4">
-                <span className="inline-flex rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-medium capitalize text-orange-700">
-                    {n.attach_type}
-                </span>
-            </td>
-            <td className="whitespace-nowrap px-4 py-4">
-                <Badge
-                    label={n.status.replace(/_/g, " ")}
-                    styles={
-                        n.status === "draft" ? "bg-neutral-50 text-neutral-700 border-neutral-200" :
-                        n.status === "under_review" ? "bg-amber-50 text-amber-700 border-amber-200" :
-                        n.status === "approved" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                        n.status === "rejected" ? "bg-rose-50 text-rose-700 border-rose-200" :
-                        "bg-neutral-100 text-neutral-600 border-neutral-300"
-                    }
-                />
-            </td>
-            <td className="whitespace-nowrap px-4 py-4 text-neutral-600">
-                {n.voice_persona ? (
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            playVoicePreview(n.voice_persona as VoicePersona);
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-700 hover:bg-orange-100 hover:text-orange-700 transition-colors group"
-                        title="Play voice sample"
-                    >
-                        <Play className="h-3 w-3 opacity-60 group-hover:opacity-100" />
-                        {PERSONAS.find(p => p.id === n.voice_persona)?.label || n.voice_persona.replace(/_/g, " ")}
-                    </button>
-                ) : (
-                    "—"
-                )}
-            </td>
-            <td className="whitespace-nowrap px-4 py-4">
-                <Badge
-                    label={n.audio_status.replace(/_/g, " ")}
-                    styles={
-                        n.audio_status === "pending" ? "bg-neutral-50 text-neutral-600 border-neutral-200" :
-                        n.audio_status === "generating" ? "bg-blue-50 text-blue-700 border-blue-200" :
-                        n.audio_status === "ready" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                        n.audio_status === "failed" ? "bg-rose-50 text-rose-700 border-rose-200" :
-                        "bg-amber-50 text-amber-700 border-amber-200"
-                    }
-                />
-            </td>
-            <td className="whitespace-nowrap px-4 py-4 text-neutral-600">{n.view_count}</td>
-            <td className="whitespace-nowrap px-4 py-4 text-neutral-500">
-                {n.created_at ? new Date(n.created_at).toLocaleDateString() : "N/A"}
-            </td>
-            {canModerate && (
-                <td className="whitespace-nowrap px-4 py-4 text-right">
-                    <div className="flex items-center justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                        <Link
-                            to={`/narratives/${n._id}`}
-                            title="View details"
-                            className="p-1.5 rounded-lg text-neutral-400 hover:text-orange-600 hover:bg-orange-50 transition-all active:scale-95 inline-flex"
-                        >
-                            <Eye className="w-4 h-4" />
-                        </Link>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onDelete?.(n._id, n.title || "this narrative");
-                            }}
-                            title="Delete narrative"
-                            className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-all active:scale-95"
-                        >
-                            <Trash2 className="w-4 h-4" />
-                        </button>
-                    </div>
-                </td>
-            )}
-        </tr>
-    );
-}
-
-
-// Groups a page of narratives into chains (chain_id set, >1 member) and
-// loose rows (standalone or a chain with a single member on this page).
-interface ChainGroup {
-    chain_id: string;
-    members: AdminNarrative[];
-}
-
-function groupByChain(narratives: AdminNarrative[]): {
-    chains: ChainGroup[];
-    loose: AdminNarrative[];
-} {
+/** Chains (chain_id with more than one member on this page) first, members in order; then the rest. */
+function orderByChain(narratives: AdminNarrative[]): { rows: AdminNarrative[]; chainSize: Map<string, number> } {
     const byChain = new Map<string, AdminNarrative[]>();
     const loose: AdminNarrative[] = [];
     for (const n of narratives) {
@@ -294,112 +61,93 @@ function groupByChain(narratives: AdminNarrative[]): {
             loose.push(n);
         }
     }
-    const chains: ChainGroup[] = [];
-    for (const [chain_id, members] of byChain.entries()) {
+    const rows: AdminNarrative[] = [];
+    const chainSize = new Map<string, number>();
+    for (const [chainId, members] of byChain.entries()) {
         if (members.length > 1) {
             members.sort((a, b) => (a.sequence_order ?? 0) - (b.sequence_order ?? 0));
-            chains.push({ chain_id, members });
+            chainSize.set(chainId, members.length);
+            rows.push(...members);
         } else {
-            // A lone chain member on this page renders as a normal row.
             loose.push(...members);
         }
     }
-    return { chains, loose };
+    return { rows: [...rows, ...loose], chainSize };
 }
 
-function ChainGroupRows({
-    group,
-    colSpan,
-    selectable,
-    selected,
-    onCheck,
-    canModerate,
-    onDelete,
-}: {
-    group: ChainGroup;
-    colSpan: number;
-    selectable?: boolean;
-    selected?: Set<string>;
-    onCheck?: (id: string, checked: boolean) => void;
-    canModerate?: boolean;
-    onDelete?: (id: string, name: string) => void;
-}) {
-    const [expanded, setExpanded] = useState(true);
-    const headTitle = group.members[0]?.title || "Untitled";
-    return (
-        <>
-            <tr className="bg-neutral-50/60 border-y border-neutral-100">
-                <td colSpan={colSpan} className="px-4 py-2.5">
-                    <button
-                        type="button"
-                        onClick={() => setExpanded((e) => !e)}
-                        className="inline-flex items-center gap-2.5 text-sm font-medium text-neutral-700 hover:text-neutral-900 transition-colors"
-                    >
-                        <ChevronRight
-                            className={`h-4 w-4 text-neutral-400 transition-transform duration-150 ${expanded ? "rotate-90" : ""}`}
-                        />
-                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white border border-neutral-200 text-xs font-semibold text-neutral-600 shadow-sm">
-                            <Link2 className="h-3.5 w-3.5 text-neutral-400" />
-                            Chain of {group.members.length}
-                        </div>
-                        <span className="font-normal text-neutral-500">— {headTitle}</span>
-                    </button>
-                </td>
-            </tr>
-            {expanded &&
-                group.members.map((m) => (
-                    <NarrativeRow
-                        key={m._id}
-                        n={m}
-                        indent
-                        selectable={selectable}
-                        checked={selected?.has(m._id)}
-                        onCheck={onCheck}
-                        canModerate={canModerate}
-                        onDelete={onDelete}
-                    />
-                ))}
-        </>
-    );
+function personaLabel(p: VoicePersona | null): string {
+    if (!p) return "";
+    return PERSONAS.find((x) => x.id === p)?.label || p.replace(/_/g, " ");
 }
 
-function ReviewQueueTab({
-    canModerate,
-    queryClient,
-    onDelete,
-}: {
-    canModerate: boolean;
-    queryClient: ReturnType<typeof useQueryClient>;
-    onDelete: (id: string, name: string) => void;
-}) {
-    const [page, setPage] = useState(1);
+export function NarrativesPage() {
+    const { user } = useAuthStore();
+    const queryClient = useQueryClient();
+    const navigate = useNavigate();
+    const canModerate = !!user?.role?.some((r) => CAN_MODERATE_ROLES.includes(r as string));
 
-    const { data, isLoading, error } = useQuery({
-        queryKey: ["admin-narratives-queue", { page }],
-        queryFn: () => narrativesService.reviewQueue(page, PAGE_SIZE),
+    const { state, set } = useUrlState({ tab: "queue", q: "", status: "", attach: "", page: 1 });
+    const tab: TabKey = state.tab === "all" ? "all" : "queue";
+    const status = (STATUS_OPTIONS.some((o) => o.value === state.status) ? state.status : "") as NarrativeStatus | "";
+    const attachType = (ATTACH_OPTIONS.some((o) => o.value === state.attach) ? state.attach : "") as NarrativeAttachType | "";
+    const page = Math.max(1, state.page);
+    const [searchInput, setSearchInput] = useDebouncedUrlInput(state.q, (q) => set({ q }, { replace: true }));
+
+    const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
+    const [createOpen, setCreateOpen] = useState(false);
+    const [selected, setSelected] = useState<Set<string>>(new Set());
+    const [confirmBulk, setConfirmBulk] = useState<BulkConfirm>(null);
+
+    // ---- Data ----
+    const queue = useQuery({
+        queryKey: ["admin-narratives-queue", { page: tab === "queue" ? page : 1 }],
+        queryFn: () => narrativesService.reviewQueue(tab === "queue" ? page : 1, PAGE_SIZE),
         staleTime: 60 * 1000,
+        placeholderData: (prev) => prev,
     });
 
-    const narratives = data?.narratives ?? [];
-    const totalPages = data?.total_pages ?? 1;
+    const all = useQuery({
+        queryKey: ["admin-narratives", { status, attachType, page, search: state.q }],
+        queryFn: () =>
+            narrativesService.list({
+                page,
+                page_size: PAGE_SIZE,
+                status: status || undefined,
+                attach_type: attachType || undefined,
+                search: state.q || undefined,
+            }),
+        staleTime: 60 * 1000,
+        enabled: tab === "all",
+        placeholderData: (prev) => prev,
+    });
 
-    const sel = useBulkSelection(narratives.map((n) => n._id));
-    const [confirmBulk, setConfirmBulk] = useState<null | "approve" | "delete">(null);
+    const active = tab === "queue" ? queue : all;
+    const narratives = useMemo(() => active.data?.narratives ?? [], [active.data]);
+    const { rows, chainSize } = useMemo(() => (tab === "all" ? orderByChain(narratives) : { rows: narratives, chainSize: new Map<string, number>() }), [narratives, tab]);
 
+    // ---- Mutations ----
     const invalidate = () => {
         queryClient.invalidateQueries({ queryKey: ["admin-narratives-queue"] });
         queryClient.invalidateQueries({ queryKey: ["admin-narratives"] });
     };
 
+    const deleteMutation = useMutation({
+        mutationFn: (id: string) => narrativesService.remove(id),
+        onSuccess: () => {
+            toast.success("Narrative deleted");
+            invalidate();
+            setConfirmDelete(null);
+        },
+        onError: (err: Error) => toast.error(err.message),
+    });
+
     const bulkApprove = useMutation({
         mutationFn: (ids: string[]) => narrativesService.bulkApprove(ids),
-        onSuccess: (res) => {
+        onSuccess: (res, ids) => {
             invalidate();
-            toast.success(`Approved ${res.approved ?? sel.count} narratives`);
-            if (res.failed && res.failed.length > 0) {
-                toast.error(`${res.failed.length} could not be approved`);
-            }
-            sel.clear();
+            toast.success(`Approved ${res.approved ?? ids.length} narratives`);
+            if (res.failed && res.failed.length > 0) toast.error(`${res.failed.length} could not be approved`);
+            setSelected(new Set());
             setConfirmBulk(null);
         },
         onError: () => {
@@ -414,7 +162,7 @@ function ReviewQueueTab({
             invalidate();
             toast.success(`Queued audio generation for ${ok} narrative${ok === 1 ? "" : "s"}`);
             if (failed > 0) toast.error(`${failed} could not be queued`);
-            sel.clear();
+            setSelected(new Set());
         },
         onError: () => toast.error("Bulk audio generation failed"),
     });
@@ -425,7 +173,7 @@ function ReviewQueueTab({
             invalidate();
             toast.success(`Deleted ${ok} narrative${ok === 1 ? "" : "s"}`);
             if (failed > 0) toast.error(`${failed} could not be deleted`);
-            sel.clear();
+            setSelected(new Set());
             setConfirmBulk(null);
         },
         onError: () => {
@@ -435,383 +183,229 @@ function ReviewQueueTab({
     });
 
     const busy = bulkApprove.isPending || bulkAudio.isPending || bulkDelete.isPending;
+    const count = selected.size;
+    const plural = count === 1 ? "narrative" : "narratives";
 
-    if (isLoading) return <LoadingFallback message="Loading review queue..." />;
-    if (error) return <div className="p-6 text-center text-red-500">Failed to load review queue.</div>;
-
-    return (
-        <div className="space-y-6">
-            {/* Toolbar */}
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                    <p className="text-sm text-neutral-600">
-                        <span className="inline-flex items-center gap-1.5">
-                            <span className="inline-block w-2 h-2 rounded-full bg-amber-500"></span>
-                            <strong>{data?.total ?? 0}</strong> narratives awaiting review
-                        </span>
-                    </p>
-                </div>
-                {/* Bulk Actions Bar */}
-                {sel.count > 0 && canModerate && (
-                    <div className="flex flex-wrap items-center gap-3 px-4 py-2.5 bg-orange-50 rounded-xl border border-orange-100 animate-slide-up">
-                        <span className="text-sm font-semibold text-orange-700">
-                            {sel.count} selected
-                        </span>
-                        <div className="h-4 w-px bg-orange-200" />
-                        <button onClick={() => setConfirmBulk("approve")} disabled={busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-700 text-sm font-medium hover:bg-emerald-200 transition-colors disabled:opacity-50"><CheckCircle2 className="w-3.5 h-3.5" /> Approve</button>
-                        <button onClick={() => bulkAudio.mutate(sel.ids)} disabled={busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700 text-sm font-medium hover:bg-blue-200 transition-colors disabled:opacity-50"><AudioLines className="w-3.5 h-3.5" /> Generate audio</button>
-                        <button onClick={() => setConfirmBulk("delete")} disabled={busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-100 text-red-700 text-sm font-medium hover:bg-red-200 transition-colors disabled:opacity-50"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
-                        <button onClick={sel.clear} className="ml-auto text-xs text-neutral-500 hover:text-neutral-700">Deselect all</button>
-                    </div>
-                )}
-            </div>
-
-            {/* Table */}
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-neutral-200 text-sm">
-                        <thead className="border-b border-neutral-200/60 bg-neutral-50/80 backdrop-blur-sm">
-                            <tr className="text-[11px] font-bold text-neutral-600 uppercase tracking-widest">
-                                {canModerate && (
-                                    <th className="px-4 py-4 text-left">
-                                        <input
-                                            type="checkbox"
-                                            className="rounded border-neutral-300 text-orange-600 focus:ring-orange-500"
-                                            checked={sel.allSelected}
-                                            ref={(el) => { if (el) el.indeterminate = sel.someSelected; }}
-                                            onChange={(e) => sel.toggleAll(e.target.checked)}
-                                        />
-                                    </th>
-                                )}
-                                <th className="px-4 py-4 text-left">Title</th>
-                                <th className="px-4 py-4 text-left">Attach</th>
-                                <th className="px-4 py-4 text-left">Status</th>
-                                <th className="px-4 py-4 text-left">Voice</th>
-                                <th className="px-4 py-4 text-left">Audio</th>
-                                <th className="px-4 py-4 text-left">Views</th>
-                                <th className="px-4 py-4 text-left">Created</th>
-                                {canModerate && (
-                                    <th className="px-4 py-4 text-right">Actions</th>
-                                )}
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-neutral-200">
-                            {narratives.map((n) => (
-                                <NarrativeRow
-                                    key={n._id}
-                                    n={n}
-                                    selectable={canModerate}
-                                    checked={sel.selected.has(n._id)}
-                                    onCheck={sel.toggle}
-                                    canModerate={canModerate}
-                                    onDelete={onDelete}
-                                />
-                            ))}
-                            {narratives.length === 0 && (
-                                <tr>
-                                    <td colSpan={canModerate ? 9 : 7} className="px-4 py-12 text-center text-neutral-500">
-                                        <div className="flex flex-col items-center">
-                                            <BookOpen className="mb-4 h-12 w-12 text-neutral-300" />
-                                            <p>The review queue is empty.</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-
-                {totalPages > 1 && (
-                    <Pagination
-                        page={page}
-                        totalPages={totalPages}
-                        total={data?.total ?? 0}
-                        onPageChange={setPage}
-                        theme="orange"
-                    />
-                )}
-            </div>
-
-            {/* Removed BulkActionBar */}
-
-            <ConfirmModal
-                open={confirmBulk === "approve"}
-                title="Bulk Approve Narratives"
-                message={`Approve ${sel.count} pending ${sel.count === 1 ? "narrative" : "narratives"}? Approved narratives become publicly visible immediately.`}
-                confirmLabel={`Approve ${sel.count}`}
-                confirmStyle="bg-emerald-600 hover:bg-emerald-700"
-                onConfirm={() => bulkApprove.mutate(sel.ids)}
-                onCancel={() => setConfirmBulk(null)}
-                isPending={bulkApprove.isPending}
-            />
-            <ConfirmModal
-                open={confirmBulk === "delete"}
-                title="Bulk Delete Narratives"
-                message={`Delete ${sel.count} ${sel.count === 1 ? "narrative" : "narratives"}? This cannot be undone.`}
-                confirmLabel={`Delete ${sel.count}`}
-                confirmStyle="bg-red-600 hover:bg-red-700"
-                onConfirm={() => bulkDelete.mutate(sel.ids)}
-                onCancel={() => setConfirmBulk(null)}
-                isPending={bulkDelete.isPending}
-            />
-        </div>
-    );
-}
-
-const ATTACH_OPTIONS: { value: NarrativeAttachType | ""; label: string }[] = [
-    { value: "", label: "All types" },
-    { value: "marker", label: "Marker" },
-    { value: "quest", label: "Quest" },
-    { value: "region", label: "Region" },
-];
-
-function AllNarrativesTab({
-    canModerate,
-    onDelete,
-}: {
-    canModerate: boolean;
-    onDelete: (id: string, name: string) => void;
-}) {
-    const queryClient = useQueryClient();
-    const [page, setPage] = useState(1);
-    const [status, setStatus] = useState<NarrativeStatus | "">("");
-    const [attachType, setAttachType] = useState<NarrativeAttachType | "">("");
-    const [searchInput, setSearchInput] = useState("");
-    const [debouncedSearch, setDebouncedSearch] = useState("");
-    const [confirmBulk, setConfirmBulk] = useState<null | "approve" | "delete">(null);
-
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setDebouncedSearch(searchInput.trim());
-            setPage(1);
-        }, SEARCH_DEBOUNCE_MS);
-        return () => clearTimeout(timer);
-    }, [searchInput]);
-
-    const { data, isLoading, error } = useQuery({
-        queryKey: ["admin-narratives", { status, attachType, page, search: debouncedSearch }],
-        queryFn: () =>
-            narrativesService.list({
-                page,
-                page_size: PAGE_SIZE,
-                status: status || undefined,
-                attach_type: attachType || undefined,
-                search: debouncedSearch || undefined,
-            }),
-        staleTime: 60 * 1000,
-    });
-
-    const narratives = data?.narratives ?? [];
-    const totalPages = data?.total_pages ?? 1;
-    const { chains, loose } = groupByChain(narratives);
-
-    const sel = useBulkSelection(narratives.map((n) => n._id));
-    const invalidate = () => {
-        queryClient.invalidateQueries({ queryKey: ["admin-narratives"] });
-        queryClient.invalidateQueries({ queryKey: ["admin-narratives-queue"] });
+    const changeTab = (next: TabKey) => {
+        setSelected(new Set());
+        set({ tab: next, page: 1 });
     };
-    const bulkApprove = useMutation({
-        mutationFn: (ids: string[]) => narrativesService.bulkApprove(ids),
-        onSuccess: (res) => {
-            invalidate();
-            toast.success(`Approved ${res.approved ?? sel.count} narratives`);
-            if (res.failed && res.failed.length > 0) toast.error(`${res.failed.length} could not be approved`);
-            sel.clear();
-            setConfirmBulk(null);
+
+    // ---- Columns ----
+    const columns: DataColumn<AdminNarrative>[] = [
+        {
+            id: "title",
+            header: "Title",
+            hideable: false,
+            sortValue: (n) => n.title,
+            csv: (n) => n.title,
+            cell: (n) => {
+                const size = n.chain_id ? chainSize.get(n.chain_id) : undefined;
+                return (
+                    <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            {n.chain_id && (
+                                <Tag tone="brand" title={size ? `Part of a chain of ${size}` : "Part of a chain"}>
+                                    <Link2 className="h-3 w-3" aria-hidden />
+                                    {n.sequence_order !== null ? `#${n.sequence_order}` : "Chain"}
+                                    {size ? ` of ${size}` : ""}
+                                </Tag>
+                            )}
+                            <Link to={`/narratives/${n._id}`} className="font-medium text-ink hover:text-accent-700 hover:underline">
+                                {n.title || "Untitled"}
+                            </Link>
+                        </div>
+                        {n.subtitle && <div className="mt-0.5 max-w-[320px] truncate text-xs text-ink-muted">{n.subtitle}</div>}
+                    </div>
+                );
+            },
         },
-        onError: () => { toast.error("Bulk approve failed"); setConfirmBulk(null); },
-    });
-    const bulkAudio = useMutation({
-        mutationFn: (ids: string[]) => runBulk(ids, (id) => narrativesService.generateAudio(id)),
-        onSuccess: ({ ok, failed }) => {
-            invalidate();
-            toast.success(`Queued audio generation for ${ok} narrative${ok === 1 ? "" : "s"}`);
-            if (failed > 0) toast.error(`${failed} could not be queued`);
-            sel.clear();
+        {
+            id: "attach",
+            header: "Attached to",
+            sortValue: (n) => n.attach_type,
+            csv: (n) => `${n.attach_type}:${n.attach_id}`,
+            cell: (n) => (
+                <span className="inline-flex items-center gap-1.5">
+                    <Tag>{ATTACH_LABEL[n.attach_type] ?? n.attach_type}</Tag>
+                    <IdLink kind={ATTACH_KIND[n.attach_type] ?? "place"} id={n.attach_id} />
+                </span>
+            ),
         },
-        onError: () => toast.error("Bulk audio generation failed"),
-    });
-    const bulkDelete = useMutation({
-        mutationFn: (ids: string[]) => runBulk(ids, (id) => narrativesService.remove(id)),
-        onSuccess: ({ ok, failed }) => {
-            invalidate();
-            toast.success(`Deleted ${ok} narrative${ok === 1 ? "" : "s"}`);
-            if (failed > 0) toast.error(`${failed} could not be deleted`);
-            sel.clear();
-            setConfirmBulk(null);
+        {
+            id: "status",
+            header: "Status",
+            sortValue: (n) => n.status,
+            csv: (n) => narrativeStatusLabel(n.status),
+            cell: (n) => <NarrativeStatusPill status={n.status} />,
         },
-        onError: () => { toast.error("Bulk delete failed"); setConfirmBulk(null); },
-    });
-    const busy = bulkApprove.isPending || bulkAudio.isPending || bulkDelete.isPending;
+        {
+            id: "voice",
+            header: "Voice",
+            sortValue: (n) => personaLabel(n.voice_persona),
+            csv: (n) => personaLabel(n.voice_persona),
+            cell: (n) =>
+                n.voice_persona ? (
+                    <Button size="sm" variant="ghost" icon={Play} onClick={() => playVoicePreview(n.voice_persona as VoicePersona)} title="Play voice sample" className="-ml-2">
+                        {personaLabel(n.voice_persona)}
+                    </Button>
+                ) : (
+                    <span className="text-ink-faint">—</span>
+                ),
+        },
+        {
+            id: "audio",
+            header: "Audio",
+            sortValue: (n) => n.audio_status,
+            csv: (n) => audioStatusLabel(n.audio_status),
+            cell: (n) => <AudioStatusPill status={n.audio_status} />,
+        },
+        { id: "views", header: "Views", align: "right", sortValue: (n) => n.view_count, cell: (n) => <span className="tabular-nums text-ink-muted">{n.view_count}</span> },
+        {
+            id: "created",
+            header: "Created",
+            sortValue: (n) => n.created_at ?? "",
+            csv: (n) => formatDate(n.created_at),
+            cell: (n) => <span className="whitespace-nowrap text-ink-muted">{formatDate(n.created_at)}</span>,
+        },
+    ];
+
+    const chips: FilterChip[] = [];
+    if (attachType) chips.push({ key: "attach", label: chipLabel("Attached to", attachType, ATTACH_OPTIONS), onRemove: () => set({ attach: "" }) });
+    if (status) chips.push({ key: "status", label: chipLabel("Status", status, STATUS_OPTIONS), onRemove: () => set({ status: "" }) });
+
+    const total = active.data?.total ?? 0;
+    const totalPages = active.data?.total_pages ?? 1;
 
     return (
-        <div className="space-y-6">
-            {/* Toolbar */}
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 space-y-3">
-                <div className="flex flex-wrap items-center gap-3">
-                    <div className="relative flex-1 min-w-[260px]">
-                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
-                        <input
-                            type="text"
-                            placeholder="Search narratives..."
-                            value={searchInput}
-                            onChange={(e) => setSearchInput(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                        />
-                        {searchInput && (
-                            <button
-                                onClick={() => { setSearchInput(""); setDebouncedSearch(""); setPage(1); }}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
-                            >
-                                <X className="w-4 h-4" />
-                            </button>
+        <div className="space-y-5">
+            <PageHeader
+                icon={BookOpen}
+                title="Narratives"
+                description="Review, moderate and publish the stories attached to places, quests and regions"
+                primaryAction={
+                    canModerate && (
+                        <Button variant="primary" icon={Plus} onClick={() => setCreateOpen(true)}>
+                            New narrative
+                        </Button>
+                    )
+                }
+            />
+
+            <Tabs<TabKey>
+                label="Narrative views"
+                tabs={[
+                    { value: "queue", label: "Review queue", count: queue.data?.total },
+                    { value: "all", label: "All narratives" },
+                ]}
+                value={tab}
+                onChange={changeTab}
+            />
+
+            {tab === "all" && (
+                <FilterBar
+                    search={{ value: searchInput, onChange: setSearchInput, placeholder: "Search narratives…" }}
+                    chips={chips}
+                    onReset={() => {
+                        setSearchInput("");
+                        set({ q: "", status: "", attach: "", page: 1 });
+                    }}
+                >
+                    <FilterSelect label="Attached to" value={attachType} onChange={(v) => set({ attach: v })} options={ATTACH_OPTIONS} allLabel="All types" />
+                    <FilterSelect label="Status" value={status} onChange={(v) => set({ status: v })} options={STATUS_OPTIONS} allLabel="All statuses" />
+                </FilterBar>
+            )}
+
+            <DataTable
+                label={tab === "queue" ? "Narratives waiting for review" : "Narratives"}
+                rows={rows}
+                columns={columns}
+                rowKey={(n) => n._id}
+                isLoading={active.isLoading && !active.data}
+                isFetching={active.isFetching && !!active.data}
+                error={active.error}
+                onRetry={() => active.refetch()}
+                empty={
+                    tab === "queue"
+                        ? { icon: CheckCircle2, title: "The review queue is empty.", description: "You're up to date." }
+                        : { icon: BookOpen, title: "No narratives found.", description: chips.length || state.q ? "Try clearing a filter." : undefined }
+                }
+                onRowClick={(n) => navigate(`/narratives/${n._id}`)}
+                selectedIds={canModerate ? selected : undefined}
+                onSelectionChange={canModerate ? setSelected : undefined}
+                bulkActions={[
+                    { label: "Approve", icon: CheckCircle2, onClick: () => setConfirmBulk("approve") },
+                    { label: "Generate audio", icon: AudioLines, onClick: (ids) => bulkAudio.mutate(ids) },
+                    { label: "Delete", icon: Trash2, tone: "danger", onClick: () => setConfirmBulk("delete") },
+                ]}
+                bulkBusy={busy}
+                rowActions={(n) => (
+                    <>
+                        <IconButton icon={Eye} size="sm" label={`Open ${n.title || "narrative"}`} onClick={() => navigate(`/narratives/${n._id}`)} />
+                        {canModerate && (
+                            <IconButton
+                                icon={Trash2}
+                                size="sm"
+                                label={`Delete ${n.title || "narrative"}`}
+                                className="hover:bg-bad-soft hover:text-bad"
+                                onClick={() => setConfirmDelete({ id: n._id, name: n.title || "this narrative" })}
+                            />
                         )}
-                    </div>
-                    <FilterDropdown
-                        options={ATTACH_OPTIONS}
-                        value={attachType}
-                        onChange={(val) => {
-                            setAttachType(val as NarrativeAttachType | "");
-                            setPage(1);
-                        }}
-                        theme="orange"
-                        placeholder="All types"
-                        icon={<Paperclip className="w-4 h-4 text-orange-500" />}
-                    />
-                    <FilterDropdown
-                        options={STATUS_OPTIONS}
-                        value={status}
-                        onChange={(val) => {
-                            setStatus(val as NarrativeStatus | "");
-                            setPage(1);
-                        }}
-                        theme="orange"
-                        placeholder="All statuses"
-                        icon={<Activity className="w-4 h-4 text-orange-500" />}
-                    />
-                </div>
-                {/* Bulk Actions Bar */}
-                {sel.count > 0 && canModerate && (
-                    <div className="flex flex-wrap items-center gap-3 px-4 py-2.5 bg-orange-50 rounded-xl border border-orange-100 animate-slide-up">
-                        <span className="text-sm font-semibold text-orange-700">
-                            {sel.count} selected
-                        </span>
-                        <div className="h-4 w-px bg-orange-200" />
-                        <button onClick={() => setConfirmBulk("approve")} disabled={busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-700 text-sm font-medium hover:bg-emerald-200 transition-colors disabled:opacity-50"><CheckCircle2 className="w-3.5 h-3.5" /> Approve</button>
-                        <button onClick={() => bulkAudio.mutate(sel.ids)} disabled={busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700 text-sm font-medium hover:bg-blue-200 transition-colors disabled:opacity-50"><AudioLines className="w-3.5 h-3.5" /> Generate audio</button>
-                        <button onClick={() => setConfirmBulk("delete")} disabled={busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-100 text-red-700 text-sm font-medium hover:bg-red-200 transition-colors disabled:opacity-50"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
-                        <button onClick={sel.clear} className="ml-auto text-xs text-neutral-500 hover:text-neutral-700">Deselect all</button>
-                    </div>
+                    </>
                 )}
-            </div>
+                storageKey="narratives"
+                exportName={tab === "queue" ? "narrative-review-queue" : "narratives"}
+                summary={
+                    active.data
+                        ? tab === "queue"
+                            ? `${total.toLocaleString("en-IN")} waiting for review`
+                            : `${rows.length} of ${total.toLocaleString("en-IN")}`
+                        : undefined
+                }
+                card={{
+                    title: (n) => n.title || "Untitled",
+                    subtitle: (n) => n.subtitle ?? undefined,
+                    fields: ["status", "attach", "audio", "created"],
+                }}
+                footer={<Pagination page={page} totalPages={totalPages} total={total} pageSize={PAGE_SIZE} onPageChange={(p) => set({ page: p })} />}
+            />
 
-            {/* Table */}
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-                {isLoading ? (
-                    <LoadingFallback message="Loading narratives..." />
-                ) : error ? (
-                    <div className="p-6 text-center text-red-500">Failed to load narratives.</div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-neutral-200 text-sm">
-                            <thead className="border-b border-neutral-200/60 bg-neutral-50/80 backdrop-blur-sm">
-                                <tr className="text-[11px] font-bold text-neutral-600 uppercase tracking-widest">
-                                    {canModerate && (
-                                        <th className="px-4 py-4 text-left">
-                                            <input
-                                                type="checkbox"
-                                                className="rounded border-neutral-300 text-orange-600 focus:ring-orange-500"
-                                                checked={sel.allSelected}
-                                                ref={(el) => { if (el) el.indeterminate = sel.someSelected; }}
-                                                onChange={(e) => sel.toggleAll(e.target.checked)}
-                                            />
-                                        </th>
-                                    )}
-                                    <th className="px-4 py-4 text-left">Title</th>
-                                    <th className="px-4 py-4 text-left">Attach</th>
-                                    <th className="px-4 py-4 text-left">Status</th>
-                                    <th className="px-4 py-4 text-left">Voice</th>
-                                    <th className="px-4 py-4 text-left">Audio</th>
-                                    <th className="px-4 py-4 text-left">Views</th>
-                                    <th className="px-4 py-4 text-left">Created</th>
-                                    {canModerate && (
-                                        <th className="px-4 py-4 text-right">Actions</th>
-                                    )}
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-neutral-200">
-                                {chains.map((group) => (
-                                    <ChainGroupRows
-                                        key={group.chain_id}
-                                        group={group}
-                                        colSpan={canModerate ? 9 : 7}
-                                        selectable={canModerate}
-                                        selected={sel.selected}
-                                        onCheck={sel.toggle}
-                                        canModerate={canModerate}
-                                        onDelete={onDelete}
-                                    />
-                                ))}
-                                {loose.map((n) => (
-                                    <NarrativeRow
-                                        key={n._id}
-                                        n={n}
-                                        selectable={canModerate}
-                                        checked={sel.selected.has(n._id)}
-                                        onCheck={sel.toggle}
-                                        canModerate={canModerate}
-                                        onDelete={onDelete}
-                                    />
-                                ))}
-                                {narratives.length === 0 && (
-                                    <tr>
-                                        <td colSpan={canModerate ? 9 : 7} className="px-4 py-12 text-center text-neutral-500">
-                                            <div className="flex flex-col items-center">
-                                                <BookOpen className="mb-4 h-12 w-12 text-neutral-300" />
-                                                <p>No narratives found.</p>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+            <ConfirmDialog
+                open={!!confirmDelete}
+                title="Delete narrative?"
+                description={`"${confirmDelete?.name ?? ""}" disappears from the app and the admin lists.`}
+                confirmLabel="Delete"
+                tone="danger"
+                onConfirm={() => confirmDelete && deleteMutation.mutate(confirmDelete.id)}
+                onCancel={() => setConfirmDelete(null)}
+                isPending={deleteMutation.isPending}
+            />
 
-                {totalPages > 1 && (
-                    <Pagination
-                        page={page}
-                        totalPages={totalPages}
-                        total={data?.total ?? 0}
-                        onPageChange={setPage}
-                        theme="orange"
-                    />
-                )}
-            </div>
-
-            {/* Removed BulkActionBar */}
-
-            <ConfirmModal
+            <ConfirmDialog
                 open={confirmBulk === "approve"}
-                title="Bulk Approve Narratives"
-                message={`Approve ${sel.count} ${sel.count === 1 ? "narrative" : "narratives"}? Only those under review will change; approved narratives become publicly visible.`}
-                confirmLabel={`Approve ${sel.count}`}
-                confirmStyle="bg-emerald-600 hover:bg-emerald-700"
-                onConfirm={() => bulkApprove.mutate(sel.ids)}
+                title={`Approve ${count} ${plural}?`}
+                description={
+                    tab === "queue"
+                        ? "Approved narratives become publicly visible immediately."
+                        : "Only those under review will change; approved narratives become publicly visible."
+                }
+                confirmLabel={`Approve ${count}`}
+                onConfirm={() => bulkApprove.mutate(Array.from(selected))}
                 onCancel={() => setConfirmBulk(null)}
                 isPending={bulkApprove.isPending}
             />
-            <ConfirmModal
+            <ConfirmDialog
                 open={confirmBulk === "delete"}
-                title="Bulk Delete Narratives"
-                message={`Delete ${sel.count} ${sel.count === 1 ? "narrative" : "narratives"}? This cannot be undone.`}
-                confirmLabel={`Delete ${sel.count}`}
-                confirmStyle="bg-red-600 hover:bg-red-700"
-                onConfirm={() => bulkDelete.mutate(sel.ids)}
+                title={`Delete ${count} ${plural}?`}
+                description="They disappear from the app and the admin lists."
+                confirmLabel={`Delete ${count}`}
+                tone="danger"
+                onConfirm={() => bulkDelete.mutate(Array.from(selected))}
                 onCancel={() => setConfirmBulk(null)}
                 isPending={bulkDelete.isPending}
             />
+
+            <CreateNarrativeModal open={createOpen} onClose={() => setCreateOpen(false)} />
         </div>
     );
 }
-

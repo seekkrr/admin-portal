@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, ChevronsUpDown, Columns3, Download, X, type LucideIcon } from "lucide-react";
 import { safeStorage } from "@/utils/storage";
 import { cx } from "@/utils/cx";
@@ -163,6 +164,8 @@ export function DataTable<T>({
     });
     const [chooserOpen, setChooserOpen] = useState(false);
     const chooserRef = useRef<HTMLDivElement>(null);
+    const chooserPopRef = useRef<HTMLDivElement>(null);
+    const [chooserPos, setChooserPos] = useState<CSSProperties | null>(null);
 
     useEffect(() => {
         if (storageKey) safeStorage.set(`dt-cols:${storageKey}`, Array.from(hidden));
@@ -170,9 +173,19 @@ export function DataTable<T>({
 
     useEffect(() => {
         if (!chooserOpen) return;
-        const onDown = (e: Event) => {
-            if (chooserRef.current && !chooserRef.current.contains(e.target as Node)) setChooserOpen(false);
+        // The chooser opens in a fixed layer so a short table doesn't clip it.
+        const place = () => {
+            const r = chooserRef.current?.getBoundingClientRect();
+            if (r) setChooserPos({ position: "fixed", top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) });
         };
+        place();
+        const onDown = (e: Event) => {
+            const t = e.target as Node;
+            if (chooserRef.current?.contains(t) || chooserPopRef.current?.contains(t)) return;
+            setChooserOpen(false);
+        };
+        window.addEventListener("resize", place);
+        window.addEventListener("scroll", place, true);
         const onKey = (e: globalThis.KeyboardEvent) => {
             if (e.key === "Escape") setChooserOpen(false);
         };
@@ -181,6 +194,8 @@ export function DataTable<T>({
         return () => {
             document.removeEventListener("mousedown", onDown);
             document.removeEventListener("keydown", onKey);
+            window.removeEventListener("resize", place);
+            window.removeEventListener("scroll", place, true);
         };
     }, [chooserOpen]);
 
@@ -426,33 +441,38 @@ export function DataTable<T>({
                                 <Button size="sm" variant="ghost" icon={Columns3} aria-expanded={chooserOpen} aria-haspopup="true" onClick={() => setChooserOpen((v) => !v)}>
                                     Columns
                                 </Button>
-                                {chooserOpen && (
-                                    <div
-                                        role="group"
-                                        aria-label="Show columns"
-                                        className="absolute right-0 top-full z-40 mt-1.5 w-56 rounded-card border border-line bg-surface p-2 shadow-pop animate-scale-in"
-                                    >
-                                        <p className="px-2 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Show columns</p>
-                                        <div className="max-h-72 space-y-0.5 overflow-y-auto">
-                                            {hideableColumns.map((c) => (
-                                                <div key={c.id} className="rounded-lg px-2 py-1.5 hover:bg-surface-muted">
-                                                    <Checkbox
-                                                        checked={!hidden.has(c.id)}
-                                                        onChange={(v) =>
-                                                            setHidden((prev) => {
-                                                                const next = new Set(prev);
-                                                                if (v) next.delete(c.id);
-                                                                else next.add(c.id);
-                                                                return next;
-                                                            })
-                                                        }
-                                                        label={c.header}
-                                                    />
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
+                                {chooserOpen &&
+                                    chooserPos &&
+                                    createPortal(
+                                        <div
+                                            ref={chooserPopRef}
+                                            role="group"
+                                            aria-label="Show columns"
+                                            style={chooserPos}
+                                            className="z-[70] w-56 rounded-card border border-line bg-surface p-2 shadow-pop animate-scale-in"
+                                        >
+                                            <p className="px-2 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Show columns</p>
+                                            <div className="max-h-72 space-y-0.5 overflow-y-auto">
+                                                {hideableColumns.map((c) => (
+                                                    <div key={c.id} className="rounded-lg px-2 py-1.5 hover:bg-surface-muted">
+                                                        <Checkbox
+                                                            checked={!hidden.has(c.id)}
+                                                            onChange={(v) =>
+                                                                setHidden((prev) => {
+                                                                    const next = new Set(prev);
+                                                                    if (v) next.delete(c.id);
+                                                                    else next.add(c.id);
+                                                                    return next;
+                                                                })
+                                                            }
+                                                            label={c.header}
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>,
+                                        document.body
+                                    )}
                             </div>
                         )}
                         {exportName && (

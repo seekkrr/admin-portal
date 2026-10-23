@@ -1,4 +1,4 @@
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import {
     BellRing,
     Building2,
@@ -7,6 +7,7 @@ import {
     Map as MapIcon,
     BookOpen,
     MapPinPlus,
+    MessageSquareWarning,
     RotateCcw,
     ShieldCheck,
     Siren,
@@ -24,12 +25,35 @@ import { refundsService } from "@/features/financial/services/refunds.service";
 import { notificationAccessService } from "@/features/notification-access/services/notificationAccess.service";
 import { collabsAdminService } from "@/features/collabs/services/collabs-admin.service";
 import type { CollabsAnalytics } from "@/features/collabs/types";
+import { api } from "@/services/api";
+import { API_ENDPOINTS } from "@/config/api";
 
 /**
- * "What needs me": pending counts from EXISTING endpoints. Each item is its
- * own query (or a `select` over a shared one), so one failing call only hides
- * its own card. Shared with the side menu, which shows the same counts.
+ * "What needs me": pending counts. The partner hub's admin queue counts
+ * (GET /api/v2/admin/hub -> queues) answer most cards in one call; a card whose
+ * count the hub doesn't give (or when the hub call fails, e.g. for finance)
+ * falls back to its own existing endpoint. Each fallback is its own query (or a
+ * `select` over a shared one), so one failing call only hides its own card.
+ * Shared with the side menu, which shows the same counts.
  */
+
+/** Queue counts from the partner hub (admin, super_admin, moderator). */
+export interface HubQueues {
+    business_applications?: number;
+    creator_applications?: number;
+    places?: number;
+    briefs?: number;
+    reports?: number;
+    fraud_flags?: number;
+    messages?: number;
+}
+
+const HUB_ROLES = ["admin", "super_admin", "moderator"];
+
+async function fetchHubQueues(): Promise<HubQueues> {
+    const { data } = await api.get<{ queues?: HubQueues }>(API_ENDPOINTS.PARTNER_ADMIN.HUB);
+    return data.queues ?? {};
+}
 
 export interface TodayItem {
     key: string;
@@ -48,6 +72,8 @@ export interface TodayItem {
 
 type Def = Omit<TodayItem, "count" | "isLoading" | "isError"> & {
     roles?: readonly string[];
+    /** The hub queue that has this count (used before the fallback call). */
+    hubKey?: keyof HubQueues;
     queryKey: readonly unknown[];
     queryFn: () => Promise<unknown>;
     select: (data: unknown) => number;
@@ -69,6 +95,7 @@ const DEFS: Def[] = [
         navTo: "/markers/applications",
         icon: MapPinPlus,
         area: "Places and map",
+        hubKey: "places",
         queryKey: ["today", "place-requests"],
         queryFn: () => markersService.listApplications({ status: "pending", page: 1, page_size: 1 }),
         select: (d) => (d as { total?: number }).total ?? 0,
@@ -81,6 +108,7 @@ const DEFS: Def[] = [
         navTo: "/creator-applications",
         icon: UserPlus,
         area: "People",
+        hubKey: "creator_applications",
         queryKey: ["today", "creator-applications"],
         queryFn: () => creatorApplicationsService.listApplications({ status: "pending", page: 1, page_size: 1 }),
         select: (d) => (d as { pagination?: { total?: number } }).pagination?.total ?? 0,
@@ -130,6 +158,7 @@ const DEFS: Def[] = [
         icon: Inbox,
         area: "Businesses",
         roles: STAFF,
+        hubKey: "business_applications",
         queryKey: ANALYTICS_KEY,
         queryFn: analytics,
         select: fromAnalytics((a) => a.businesses?.pending_applications),
@@ -169,6 +198,7 @@ const DEFS: Def[] = [
         icon: ShieldCheck,
         area: "Trust and safety",
         roles: STAFF,
+        hubKey: "briefs",
         queryKey: ANALYTICS_KEY,
         queryFn: analytics,
         select: fromAnalytics((a) => a.moderation_pending),
@@ -182,9 +212,24 @@ const DEFS: Def[] = [
         icon: Flag,
         area: "Trust and safety",
         roles: STAFF,
+        hubKey: "reports",
         queryKey: ANALYTICS_KEY,
         queryFn: analytics,
         select: fromAnalytics((a) => a.open_reports),
+    },
+    {
+        key: "held-messages",
+        label: "Held chat messages",
+        description: "Collab chat messages the filter held back",
+        to: "/held-messages",
+        navTo: "/held-messages",
+        icon: MessageSquareWarning,
+        area: "Trust and safety",
+        roles: STAFF,
+        hubKey: "messages",
+        queryKey: ["today", "held-messages"],
+        queryFn: async () => (await api.get<{ messages?: unknown[] }>(API_ENDPOINTS.PARTNER_ADMIN.HELD_MESSAGES)).data.messages ?? [],
+        select: (d) => (d as unknown[]).length,
     },
     {
         key: "fraud-flags",
@@ -195,6 +240,7 @@ const DEFS: Def[] = [
         icon: Siren,
         area: "Trust and safety",
         roles: STAFF,
+        hubKey: "fraud_flags",
         queryKey: ANALYTICS_KEY,
         queryFn: analytics,
         select: fromAnalytics((a) => a.open_fraud_flags),
@@ -217,11 +263,24 @@ const DEFS: Def[] = [
 export function useTodayItems(): TodayItem[] {
     const roles = useAuthStore((s) => s.user?.role);
     const defs = DEFS.filter((d) => !d.roles || d.roles.some((r) => roles?.includes(r as never)));
+    const canHub = !!roles?.some((r) => HUB_ROLES.includes(r));
+    const hub = useQuery({
+        queryKey: ["today", "hub"],
+        queryFn: fetchHubQueues,
+        enabled: canHub,
+        staleTime: 60_000,
+        refetchOnWindowFocus: true,
+        retry: false,
+    });
+    // A card uses the hub's count when the hub answered with it; otherwise its own call.
+    const fromHub = (d: Def): number | undefined => (d.hubKey && hub.isSuccess ? hub.data[d.hubKey] : undefined);
+    const needsFallback = (d: Def) => !d.hubKey || !canHub || hub.isError || (hub.isSuccess && typeof fromHub(d) !== "number");
     const results = useQueries({
         queries: defs.map((d) => ({
             queryKey: d.queryKey,
             queryFn: d.queryFn,
             select: d.select,
+            enabled: needsFallback(d),
             staleTime: 60_000,
             refetchOnWindowFocus: true,
             retry: false,
@@ -229,18 +288,11 @@ export function useTodayItems(): TodayItem[] {
     });
     return defs.map((d, i) => {
         const r = results[i];
-        return {
-            key: d.key,
-            label: d.label,
-            description: d.description,
-            to: d.to,
-            navTo: d.navTo,
-            icon: d.icon,
-            area: d.area,
-            count: r?.data as number | undefined,
-            isLoading: !!r?.isLoading,
-            isError: !!r?.isError,
-        };
+        const hubCount = fromHub(d);
+        const base = { key: d.key, label: d.label, description: d.description, to: d.to, navTo: d.navTo, icon: d.icon, area: d.area };
+        if (typeof hubCount === "number") return { ...base, count: hubCount, isLoading: false, isError: false };
+        if (!needsFallback(d)) return { ...base, count: undefined, isLoading: hub.isLoading, isError: false };
+        return { ...base, count: r?.data as number | undefined, isLoading: !!r?.isLoading, isError: !!r?.isError };
     });
 }
 

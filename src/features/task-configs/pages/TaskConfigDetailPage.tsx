@@ -1,23 +1,24 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-    ArrowLeft,
-    Settings2,
-    Power,
-    Trash2,
-    KeyRound,
-    Calculator,
-    Gift,
-    Layers,
-} from "lucide-react";
+import { Settings2, Power, Trash2, KeyRound, Calculator, Gift, Layers } from "lucide-react";
 import { toast } from "sonner";
-import { Card } from "@/components/ui/Card";
-import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { LoadingFallback } from "@components/LoadingFallback";
 import { useAuthStore } from "@store/auth.store";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Panel, DetailList, DetailRow } from "@/components/ui/Panel";
+import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Checkbox, Field, TextArea } from "@/components/ui/Field";
+import { Tag } from "@/components/ui/StatusPill";
+import { IdLink } from "@/components/ui/IdLink";
+import { CopyText } from "@/components/ui/CopyText";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/States";
+import { humanizeStatus } from "@/components/ui/status";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { formatDateTime } from "@/utils/date";
 import { taskConfigsService } from "../services/task-configs.service";
 import { stepRewardsService } from "../services/step-rewards.service";
+import { RewardResult } from "../components/EvaluateModal";
 import type { RewardEvaluation, StepReward, TaskConfig } from "@/types";
 
 export function TaskConfigDetailPage() {
@@ -34,12 +35,13 @@ export function TaskConfigDetailPage() {
     const [showDelete, setShowDelete] = useState(false);
     const [hardDelete, setHardDelete] = useState(false);
 
-    const { data: task, isLoading, error } = useQuery({
+    const { data: task, isLoading, error, refetch } = useQuery({
         queryKey: ["task-config-detail", taskId],
         queryFn: () => taskConfigsService.getById(taskId),
         enabled: !!taskId,
         staleTime: 60 * 1000,
     });
+    usePageTitle(task?.title);
 
     const fullQuery = useQuery({
         queryKey: ["task-config-full", taskId],
@@ -55,8 +57,7 @@ export function TaskConfigDetailPage() {
         staleTime: 60 * 1000,
     });
 
-    // Sibling task configs at the same marker / quest (oversight: spot duplicate
-    // or conflicting tasks). Uses the dedicated by-marker / by-quest endpoints.
+    // Sibling task configs at the same place / quest (spot duplicate or conflicting tasks).
     const byMarkerQuery = useQuery({
         queryKey: ["task-configs-by-marker", task?.marker_id],
         queryFn: () => taskConfigsService.byMarker(task?.marker_id ?? ""),
@@ -94,129 +95,62 @@ export function TaskConfigDetailPage() {
         },
     });
 
-    if (isLoading) return <LoadingFallback message="Loading task config..." />;
+    if (isLoading) return <LoadingState label="Loading task config…" />;
 
     if (error || !task) {
         return (
-            <div className="p-6 text-center">
-                <p className="text-red-500 mb-4">Failed to load task config or it does not exist.</p>
-                <Link to="/task-configs" className="text-slate-600 hover:underline">
-                    Back to Task Configs
-                </Link>
-            </div>
+            <Panel>
+                {error ? (
+                    <ErrorState error={error} title="Couldn't load this task config" onRetry={() => refetch()} />
+                ) : (
+                    <EmptyState icon={Settings2} title="This task config doesn't exist." action={<Link to="/task-configs" className="text-sm font-medium text-accent-700 hover:underline">Back to task configs</Link>} />
+                )}
+            </Panel>
         );
     }
 
     const full = fullQuery.data;
     const correctAnswer = full?.quiz_data?.correct_answer;
-    const expectedValue =
-        full?.qr_data && typeof full.qr_data === "object"
-            ? (full.qr_data as Record<string, unknown>).expected_value
-            : undefined;
+    const expectedValue = full?.qr_data && typeof full.qr_data === "object" ? (full.qr_data as Record<string, unknown>).expected_value : undefined;
 
     return (
-        <div className="animate-fade-in max-w-4xl mx-auto space-y-4">
-            <div className="flex items-center justify-between">
-                <Link
-                    to="/task-configs"
-                    className="flex items-center gap-2 text-sm font-medium text-neutral-600 hover:text-neutral-900 transition-colors bg-white border border-neutral-200 py-2 px-3 rounded-xl shadow-sm hover:bg-neutral-50"
-                >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back
-                </Link>
-                {CAN_MANAGE && (
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={() => toggleMutation.mutate()}
-                            disabled={toggleMutation.isPending}
-                            className="py-2.5 px-4 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors text-neutral-700 bg-neutral-100 hover:bg-neutral-200 disabled:opacity-50"
-                        >
-                            <Power className="w-4 h-4" />
-                            {task.is_active ? "Deactivate" : "Activate"}
-                        </button>
-                        <button
-                            onClick={() => setShowDelete(true)}
-                            disabled={deleteMutation.isPending}
-                            className="py-2.5 px-4 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
-                        >
-                            <Trash2 className="w-4 h-4" />
-                            Delete
-                        </button>
-                    </div>
-                )}
-            </div>
+        <div className="space-y-5">
+            <PageHeader
+                icon={Settings2}
+                title={task.title}
+                badge={
+                    <span className="flex flex-wrap items-center gap-1.5 text-sm font-normal">
+                        <Tag>{humanizeStatus(task.task_type)}</Tag>
+                        <Tag tone={task.is_active ? "good" : "neutral"}>{task.is_active ? "Active" : "Inactive"}</Tag>
+                    </span>
+                }
+                description={`${task.base_points.toLocaleString("en-IN")} points`}
+                actions={
+                    CAN_MANAGE && (
+                        <>
+                            <Button variant="secondary" icon={Power} onClick={() => toggleMutation.mutate()} loading={toggleMutation.isPending}>
+                                {task.is_active ? "Deactivate" : "Activate"}
+                            </Button>
+                            <Button variant="danger" icon={Trash2} onClick={() => setShowDelete(true)} disabled={deleteMutation.isPending}>
+                                Delete
+                            </Button>
+                        </>
+                    )
+                }
+            />
 
-            <Card padding="md">
-                <div className="flex items-start gap-4">
-                    <div className="bg-slate-100 text-slate-600 rounded-xl w-10 h-10 flex items-center justify-center shrink-0">
-                        <Settings2 className="w-5 h-5" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold text-neutral-900">{task.title}</h1>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-neutral-500">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                                {task.task_type}
-                            </span>
-                            <span
-                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-                                    task.is_active
-                                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                        : "bg-neutral-50 text-neutral-600 border-neutral-200"
-                                }`}
-                            >
-                                {task.is_active ? "Active" : "Inactive"}
-                            </span>
-                            <span className="text-xs">{task.base_points} pts</span>
-                        </div>
-                    </div>
-                </div>
-            </Card>
-
-            {/* Details */}
-            <Card padding="none" className="overflow-hidden">
-                <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
-                    <h3 className="text-base font-semibold">Details</h3>
-                </div>
-                <div className="p-6 space-y-4 text-sm">
-                    <DetailRow label="Description" value={task.description ?? null} />
-                    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                        <span className="w-36 shrink-0 font-medium text-neutral-500">Marker</span>
-                        <Link
-                            to={`/markers/${task.marker_id}`}
-                            className="text-slate-600 hover:underline font-mono break-all"
-                        >
-                            {task.marker_id}
-                        </Link>
-                    </div>
-                    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                        <span className="w-36 shrink-0 font-medium text-neutral-500">Quest</span>
-                        {task.quest_id ? (
-                            <Link
-                                to={`/quests/${task.quest_id}`}
-                                className="text-slate-600 hover:underline font-mono break-all"
-                            >
-                                {task.quest_id}
-                            </Link>
-                        ) : (
-                            <span className="text-neutral-800">—</span>
-                        )}
-                    </div>
-                    <DetailRow label="Base points" value={String(task.base_points)} />
-                    <DetailRow label="Created by" value={task.created_by ?? null} />
-                    <DetailRow
-                        label="Created"
-                        value={task.created_at ? new Date(task.created_at).toLocaleString() : null}
-                    />
-                    <DetailRow
-                        label="Updated"
-                        value={task.updated_at ? new Date(task.updated_at).toLocaleString() : null}
-                    />
-                    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                        <span className="w-36 shrink-0 font-medium text-neutral-500">ID</span>
-                        <span className="text-neutral-800 font-mono break-all">{task._id}</span>
-                    </div>
-                </div>
-            </Card>
+            <Panel title="Details">
+                <DetailList>
+                    <DetailRow label="Description" value={task.description ? <span className="whitespace-pre-wrap">{task.description}</span> : "—"} />
+                    <DetailRow label="Place" value={<IdLink kind="place" id={task.marker_id} short={false} />} />
+                    <DetailRow label="Quest" value={<IdLink kind="quest" id={task.quest_id} short={false} />} />
+                    <DetailRow label="Base points" value={task.base_points.toLocaleString("en-IN")} />
+                    <DetailRow label="Created by" value={<IdLink kind="user" id={task.created_by} />} />
+                    <DetailRow label="Created" value={formatDateTime(task.created_at)} />
+                    <DetailRow label="Updated" value={formatDateTime(task.updated_at)} />
+                    <DetailRow label="ID" value={<CopyText value={task._id} mono truncate={false} />} />
+                </DetailList>
+            </Panel>
 
             {/* Type-specific config objects */}
             <PhotoRequirementsSection value={task.photo_requirements} />
@@ -227,101 +161,56 @@ export function TaskConfigDetailPage() {
             <SocialTaskSection value={task.social_task} />
             <HintsSection value={task.hints} />
 
-            {/* Reveal answer keys */}
             {CAN_MANAGE && (
-                <Card padding="none" className="overflow-hidden">
-                    <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6 flex items-center justify-between">
-                        <h3 className="text-base font-semibold flex items-center gap-2">
-                            <KeyRound className="w-4 h-4 text-amber-600" />
-                            Answer Keys
-                        </h3>
-                        <button
-                            onClick={() => setRevealAnswers((v) => !v)}
-                            className="text-sm font-medium text-slate-600 hover:text-slate-900"
-                        >
+                <Panel
+                    title="Answer keys"
+                    icon={KeyRound}
+                    actions={
+                        <Button size="sm" variant="ghost" onClick={() => setRevealAnswers((v) => !v)} aria-expanded={revealAnswers}>
                             {revealAnswers ? "Hide" : "Reveal answer keys"}
-                        </button>
-                    </div>
-                    {revealAnswers && (
-                        <div className="p-6 text-sm">
-                            {fullQuery.isLoading ? (
-                                <p className="text-neutral-500">Loading answer keys...</p>
-                            ) : fullQuery.error ? (
-                                <p className="text-red-500">Failed to load answer keys.</p>
-                            ) : correctAnswer === undefined && expectedValue === undefined ? (
-                                <p className="text-neutral-500">No answer keys for this task type.</p>
-                            ) : (
-                                <div className="space-y-3">
-                                    {correctAnswer !== undefined && (
-                                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                                            <p className="text-xs font-semibold uppercase tracking-wider text-amber-600">
-                                                Quiz correct answer
-                                            </p>
-                                            <p className="mt-1 font-mono text-amber-900 break-all">
-                                                {String(correctAnswer)}
-                                            </p>
-                                        </div>
-                                    )}
-                                    {expectedValue !== undefined && (
-                                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                                            <p className="text-xs font-semibold uppercase tracking-wider text-amber-600">
-                                                QR expected value
-                                            </p>
-                                            <p className="mt-1 font-mono text-amber-900 break-all">
-                                                {String(expectedValue)}
-                                            </p>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </Card>
+                        </Button>
+                    }
+                    bodyClassName={revealAnswers ? "p-4 sm:p-5" : "hidden"}
+                >
+                    {revealAnswers &&
+                        (fullQuery.isLoading ? (
+                            <p className="text-sm text-ink-muted">Loading answer keys…</p>
+                        ) : fullQuery.error ? (
+                            <ErrorState error={fullQuery.error} title="Couldn't load the answer keys" compact onRetry={() => fullQuery.refetch()} />
+                        ) : correctAnswer === undefined && expectedValue === undefined ? (
+                            <p className="text-sm text-ink-muted">No answer keys for this task type.</p>
+                        ) : (
+                            <div className="space-y-3">
+                                {correctAnswer !== undefined && <AnswerKey label="Quiz correct answer" value={String(correctAnswer)} />}
+                                {expectedValue !== undefined && <AnswerKey label="QR expected value" value={String(expectedValue)} />}
+                            </div>
+                        ))}
+                </Panel>
             )}
 
-            {/* Linked step reward */}
-            <Card padding="none" className="overflow-hidden">
-                <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
-                    <h3 className="text-base font-semibold flex items-center gap-2">
-                        <Gift className="w-4 h-4 text-slate-600" />
-                        Linked Step Reward
-                    </h3>
-                </div>
-                <div className="p-6 text-sm">
-                    {linkedRewardQuery.isLoading ? (
-                        <p className="text-neutral-500">Loading linked step reward...</p>
-                    ) : linkedRewardQuery.data ? (
-                        <LinkedReward reward={linkedRewardQuery.data} />
-                    ) : (
-                        <p className="text-neutral-500">No step reward configured for this task.</p>
-                    )}
-                </div>
-            </Card>
+            <Panel title="Linked step reward" icon={Gift}>
+                {linkedRewardQuery.isLoading ? (
+                    <p className="text-sm text-ink-muted">Loading linked step reward…</p>
+                ) : linkedRewardQuery.data ? (
+                    <LinkedReward reward={linkedRewardQuery.data} />
+                ) : (
+                    <p className="text-sm text-ink-muted">No step reward configured for this task.</p>
+                )}
+            </Panel>
 
-            {/* Related task configs (by marker / by quest) */}
-            <Card padding="none" className="overflow-hidden">
-                <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
-                    <h3 className="text-base font-semibold flex items-center gap-2">
-                        <Layers className="w-4 h-4 text-slate-600" />
-                        Related Task Configs
-                    </h3>
-                </div>
-                <div className="p-6 space-y-6 text-sm">
+            <Panel title="Related task configs" icon={Layers}>
+                <div className="space-y-5">
                     <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-2">
-                            At the same marker
-                        </p>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">At the same place</p>
                         <RelatedList
                             isLoading={byMarkerQuery.isLoading}
                             items={(byMarkerQuery.data ?? []).filter((t) => t._id !== taskId)}
-                            emptyLabel="No other task configs at this marker."
+                            emptyLabel="No other task configs at this place."
                         />
                     </div>
                     {task.quest_id && (
                         <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-2">
-                                In the same quest
-                            </p>
+                            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">In the same quest</p>
                             <RelatedList
                                 isLoading={byQuestQuery.isLoading}
                                 items={(byQuestQuery.data ?? []).filter((t) => t._id !== taskId)}
@@ -330,14 +219,16 @@ export function TaskConfigDetailPage() {
                         </div>
                     )}
                 </div>
-            </Card>
+            </Panel>
 
-            <ConfirmModal
+            <ConfirmDialog
                 open={showDelete}
-                title="Delete Task Config"
-                message={`Are you sure you want to delete "${task.title}"? This action cannot be undone.`}
-                confirmLabel={IS_SUPER && hardDelete ? "Hard Delete" : "Delete"}
-                confirmStyle="bg-red-600 hover:bg-red-700"
+                title={IS_SUPER && hardDelete ? "Permanently delete task config?" : "Delete task config?"}
+                description={IS_SUPER && hardDelete ? "It is removed for good and can't be recovered." : `Delete "${task.title}"? It stops showing at its place.`}
+                confirmLabel={IS_SUPER && hardDelete ? "Delete permanently" : "Delete"}
+                tone="danger"
+                level={IS_SUPER && hardDelete ? "type" : "simple"}
+                typeToConfirm={task.title.trim() || "DELETE"}
                 onConfirm={() => deleteMutation.mutate()}
                 onCancel={() => {
                     setShowDelete(false);
@@ -345,55 +236,35 @@ export function TaskConfigDetailPage() {
                 }}
                 isPending={deleteMutation.isPending}
             >
-                {IS_SUPER && (
-                    <label className="flex items-center gap-2 mt-3 mb-1 px-1 cursor-pointer select-none">
-                        <input
-                            type="checkbox"
-                            checked={hardDelete}
-                            onChange={(e) => setHardDelete(e.target.checked)}
-                            className="w-4 h-4 rounded border-red-300 text-red-600 focus:ring-red-500 accent-red-600"
-                        />
-                        <span className="text-xs text-red-600 font-medium">
-                            Permanently delete (cannot be recovered)
-                        </span>
-                    </label>
-                )}
-            </ConfirmModal>
+                {IS_SUPER && <Checkbox checked={hardDelete} onChange={setHardDelete} label="Delete permanently" hint="Can't be recovered." />}
+            </ConfirmDialog>
         </div>
     );
 }
 
-function RelatedList({
-    isLoading,
-    items,
-    emptyLabel,
-}: {
-    isLoading: boolean;
-    items: TaskConfig[];
-    emptyLabel: string;
-}) {
-    if (isLoading) return <p className="text-neutral-500">Loading...</p>;
-    if (items.length === 0) return <p className="text-neutral-500">{emptyLabel}</p>;
+function AnswerKey({ label, value }: { label: string; value: string }) {
     return (
-        <ul className="divide-y divide-neutral-100 rounded-xl border border-neutral-100">
+        <div className="rounded-control border border-warn-line bg-warn-soft p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-warn">{label}</p>
+            <p className="mt-1 break-all font-mono text-sm text-ink">{value}</p>
+        </div>
+    );
+}
+
+function RelatedList({ isLoading, items, emptyLabel }: { isLoading: boolean; items: TaskConfig[]; emptyLabel: string }) {
+    if (isLoading) return <p className="text-sm text-ink-muted">Loading…</p>;
+    if (items.length === 0) return <p className="text-sm text-ink-muted">{emptyLabel}</p>;
+    return (
+        <ul className="divide-y divide-line rounded-control border border-line">
             {items.map((t) => (
                 <li key={t._id}>
-                    <Link
-                        to={`/task-configs/${t._id}`}
-                        className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-neutral-50 transition-colors"
-                    >
-                        <span className="flex items-center gap-2 min-w-0">
-                            <span className="font-medium text-neutral-800 truncate">{t.title}</span>
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
-                                {t.task_type}
-                            </span>
-                            {!t.is_active && (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-neutral-50 text-neutral-500 border border-neutral-200 shrink-0">
-                                    Inactive
-                                </span>
-                            )}
+                    <Link to={`/task-configs/${t._id}`} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-surface-muted">
+                        <span className="flex min-w-0 flex-wrap items-center gap-2">
+                            <span className="truncate font-medium text-ink">{t.title}</span>
+                            <Tag>{humanizeStatus(t.task_type)}</Tag>
+                            {!t.is_active && <Tag>Inactive</Tag>}
                         </span>
-                        <span className="text-xs text-neutral-500 shrink-0">{t.base_points} pts</span>
+                        <span className="shrink-0 text-xs tabular-nums text-ink-muted">{t.base_points} pts</span>
                     </Link>
                 </li>
             ))}
@@ -401,190 +272,149 @@ function RelatedList({
     );
 }
 
-function DetailRow({ label, value }: { label: string; value: string | null }) {
-    return (
-        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-            <span className="w-36 shrink-0 font-medium text-neutral-500">{label}</span>
-            <span className="text-neutral-800 whitespace-pre-wrap break-words">{value || "—"}</span>
-        </div>
-    );
+function plainValue(val: unknown): ReactNode {
+    if (val === null || val === undefined) return "—";
+    if (typeof val === "object") return <pre className="overflow-x-auto rounded-control bg-surface-muted px-2 py-1 font-mono text-xs">{JSON.stringify(val, null, 2)}</pre>;
+    return String(val);
 }
 
 function KVSection({ title, entries }: { title: string; entries: [string, unknown][] }) {
     return (
-        <Card padding="none" className="overflow-hidden">
-            <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
-                <h3 className="text-base font-semibold">{title}</h3>
-            </div>
-            <div className="p-6 space-y-3 text-sm">
+        <Panel title={title}>
+            <DetailList>
                 {entries.map(([key, val]) => (
-                    <div key={key} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                        <span className="w-36 shrink-0 font-medium text-neutral-500 capitalize">{key.replace(/_/g, " ")}</span>
-                        <span className="text-neutral-800 break-words">
-                            {val === null || val === undefined ? "—" : typeof val === "object"
-                                ? <pre className="text-xs font-mono bg-neutral-50 rounded px-2 py-1 overflow-x-auto">{JSON.stringify(val, null, 2)}</pre>
-                                : String(val)}
-                        </span>
-                    </div>
+                    <DetailRow key={key} label={<span className="capitalize">{key.replace(/_/g, " ")}</span>} value={plainValue(val)} />
                 ))}
-            </div>
-        </Card>
+            </DetailList>
+        </Panel>
     );
 }
 
+function isFilledObject(value: unknown): value is Record<string, unknown> {
+    return !!value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0;
+}
+
 function PhotoRequirementsSection({ value }: { value: unknown }) {
-    if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length === 0) return null;
-    const pr = value as Record<string, unknown>;
+    if (!isFilledObject(value)) return null;
     const entries: [string, unknown][] = [];
-    if (pr.min_photos !== undefined) entries.push(["Min photos", pr.min_photos]);
-    if (pr.max_photos !== undefined) entries.push(["Max photos", pr.max_photos]);
-    if (pr.description !== undefined) entries.push(["Description", pr.description]);
-    Object.entries(pr).filter(([k]) => !["min_photos","max_photos","description"].includes(k)).forEach(e => entries.push(e));
+    if (value.min_photos !== undefined) entries.push(["Min photos", value.min_photos]);
+    if (value.max_photos !== undefined) entries.push(["Max photos", value.max_photos]);
+    if (value.description !== undefined) entries.push(["Description", value.description]);
+    Object.entries(value)
+        .filter(([k]) => !["min_photos", "max_photos", "description"].includes(k))
+        .forEach((e) => entries.push(e));
     return <KVSection title="Photo requirements" entries={entries} />;
 }
 
 function QrDataSection({ value }: { value: unknown }) {
-    if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length === 0) return null;
-    const qr = value as Record<string, unknown>;
+    if (!isFilledObject(value)) return null;
     const entries: [string, unknown][] = [];
-    if (qr.code !== undefined) entries.push(["Code", qr.code]);
-    if (qr.expected_value !== undefined) entries.push(["Expected value", qr.expected_value]);
-    Object.entries(qr).filter(([k]) => !["code","expected_value"].includes(k)).forEach(e => entries.push(e));
+    if (value.code !== undefined) entries.push(["Code", value.code]);
+    if (value.expected_value !== undefined) entries.push(["Expected value", value.expected_value]);
+    Object.entries(value)
+        .filter(([k]) => !["code", "expected_value"].includes(k))
+        .forEach((e) => entries.push(e));
     return <KVSection title="QR data" entries={entries} />;
 }
 
 function QuizDataSection({ value }: { value: unknown }) {
-    if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length === 0) return null;
-    const quiz = value as Record<string, unknown>;
-    const question = quiz.question as string | undefined;
-    const options = Array.isArray(quiz.options) ? quiz.options as string[] : [];
+    if (!isFilledObject(value)) return null;
+    const question = value.question as string | undefined;
+    const options = Array.isArray(value.options) ? (value.options as string[]) : [];
     if (!question && options.length === 0) return null;
     return (
-        <Card padding="none" className="overflow-hidden">
-            <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
-                <h3 className="text-base font-semibold">Quiz data</h3>
-            </div>
-            <div className="p-6 space-y-3 text-sm">
-                {question && (
-                    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                        <span className="w-36 shrink-0 font-medium text-neutral-500">Question</span>
-                        <span className="text-neutral-800">{question}</span>
-                    </div>
-                )}
+        <Panel title="Quiz">
+            <DetailList>
+                {question && <DetailRow label="Question" value={question} />}
                 {options.length > 0 && (
-                    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                        <span className="w-36 shrink-0 font-medium text-neutral-500">Options</span>
-                        <ol className="list-decimal list-inside space-y-1 text-neutral-800">
-                            {options.map((opt, i) => <li key={i}>{opt}</li>)}
-                        </ol>
-                    </div>
+                    <DetailRow
+                        label="Options"
+                        value={
+                            <ol className="list-inside list-decimal space-y-1">
+                                {options.map((opt, i) => (
+                                    <li key={i}>{opt}</li>
+                                ))}
+                            </ol>
+                        }
+                    />
                 )}
-            </div>
-        </Card>
+            </DetailList>
+        </Panel>
     );
 }
 
 function GameConfigSection({ value }: { value: unknown }) {
-    if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length === 0) return null;
-    return <KVSection title="Game config" entries={Object.entries(value as Record<string, unknown>)} />;
+    if (!isFilledObject(value)) return null;
+    return <KVSection title="Game config" entries={Object.entries(value)} />;
+}
+
+function SocialTaskSection({ value }: { value: unknown }) {
+    if (!isFilledObject(value)) return null;
+    return <KVSection title="Social task" entries={Object.entries(value)} />;
 }
 
 function CollectionItemsSection({ value }: { value: unknown }) {
     if (!value || !Array.isArray(value) || value.length === 0) return null;
     return (
-        <Card padding="none" className="overflow-hidden">
-            <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
-                <h3 className="text-base font-semibold">Collection items ({value.length})</h3>
-            </div>
-            <div className="p-6">
-                <ol className="space-y-2 text-sm list-none">
-                    {value.map((item, i) => (
-                        <li key={i} className="rounded-xl border border-neutral-100 bg-neutral-50 px-4 py-2.5">
-                            <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider mr-2">#{i + 1}</span>
-                            {typeof item === "object" && item !== null
-                                ? Object.entries(item as Record<string, unknown>).map(([k, v]) => (
-                                    <span key={k} className="mr-3 text-neutral-700">
-                                        <span className="text-neutral-500 capitalize">{k.replace(/_/g, " ")}: </span>{String(v)}
-                                    </span>
-                                ))
-                                : <span className="text-neutral-700">{String(item)}</span>}
-                        </li>
-                    ))}
-                </ol>
-            </div>
-        </Card>
-    );
-}
-
-function SocialTaskSection({ value }: { value: unknown }) {
-    if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length === 0) return null;
-    const entries = Object.entries(value as Record<string, unknown>);
-    return (
-        <Card padding="none" className="overflow-hidden">
-            <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
-                <h3 className="text-base font-semibold">Social task</h3>
-            </div>
-            <div className="p-6 space-y-3 text-sm">
-                {entries.map(([key, val]) => (
-                    <div key={key} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                        <span className="w-36 shrink-0 font-medium text-neutral-500 capitalize">{key.replace(/_/g, " ")}</span>
-                        <span className="text-neutral-800 break-words">
-                            {val === null || val === undefined
-                                ? "—"
-                                : typeof val === "object"
-                                  ? <pre className="text-xs font-mono bg-neutral-50 rounded px-2 py-1 overflow-x-auto">{JSON.stringify(val, null, 2)}</pre>
-                                  : String(val)}
-                        </span>
-                    </div>
+        <Panel title={`Collection items (${value.length})`}>
+            <ol className="space-y-2 text-sm">
+                {value.map((item, i) => (
+                    <li key={i} className="rounded-control border border-line bg-surface-muted px-4 py-2.5">
+                        <span className="mr-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">#{i + 1}</span>
+                        {typeof item === "object" && item !== null ? (
+                            Object.entries(item as Record<string, unknown>).map(([k, v]) => (
+                                <span key={k} className="mr-3 text-ink">
+                                    <span className="capitalize text-ink-muted">{k.replace(/_/g, " ")}: </span>
+                                    {String(v)}
+                                </span>
+                            ))
+                        ) : (
+                            <span className="text-ink">{String(item)}</span>
+                        )}
+                    </li>
                 ))}
-            </div>
-        </Card>
+            </ol>
+        </Panel>
     );
 }
 
 function HintsSection({ value }: { value: unknown }) {
     if (!value || !Array.isArray(value) || value.length === 0) return null;
     return (
-        <Card padding="none" className="overflow-hidden">
-            <div className="bg-neutral-50/50 border-b border-neutral-100 p-4 sm:px-6">
-                <h3 className="text-base font-semibold">Hints ({value.length})</h3>
-            </div>
-            <div className="p-6">
-                <ol className="space-y-3 text-sm list-none">
-                    {value.map((hint, idx) => {
-                        if (!hint || typeof hint !== "object") {
-                            return (
-                                <li key={idx} className="rounded-xl border border-neutral-100 bg-neutral-50 px-4 py-3">
-                                    <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Hint {idx + 1}</span>
-                                    <p className="mt-1 text-neutral-700">{String(hint)}</p>
-                                </li>
-                            );
-                        }
-                        const h = hint as Record<string, unknown>;
-                        const text = (h.text ?? h.hint ?? h.content ?? h.description) as string | undefined;
-                        const cost = h.cost ?? h.point_cost ?? h.points;
-                        const otherEntries = Object.entries(h).filter(
-                            ([k]) => !["text", "hint", "content", "description", "cost", "point_cost", "points"].includes(k)
-                        );
+        <Panel title={`Hints (${value.length})`}>
+            <ol className="space-y-3 text-sm">
+                {value.map((hint, idx) => {
+                    if (!hint || typeof hint !== "object") {
                         return (
-                            <li key={idx} className="rounded-xl border border-neutral-100 bg-neutral-50 px-4 py-3">
-                                <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Hint {idx + 1}</span>
-                                {text !== undefined && <p className="mt-1 text-neutral-800">{text}</p>}
-                                {cost !== undefined && (
-                                    <p className="mt-1 text-xs text-neutral-500">Cost: <span className="font-semibold text-neutral-700">{String(cost)}</span> pts</p>
-                                )}
-                                {otherEntries.map(([k, v]) => (
-                                    <p key={k} className="mt-0.5 text-xs text-neutral-500">
-                                        <span className="capitalize">{k.replace(/_/g, " ")}</span>:{" "}
-                                        <span className="text-neutral-700">{typeof v === "object" ? JSON.stringify(v) : String(v)}</span>
-                                    </p>
-                                ))}
+                            <li key={idx} className="rounded-control border border-line bg-surface-muted px-4 py-3">
+                                <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Hint {idx + 1}</span>
+                                <p className="mt-1 text-ink">{String(hint)}</p>
                             </li>
                         );
-                    })}
-                </ol>
-            </div>
-        </Card>
+                    }
+                    const h = hint as Record<string, unknown>;
+                    const text = (h.text ?? h.hint ?? h.content ?? h.description) as string | undefined;
+                    const cost = h.cost ?? h.point_cost ?? h.points;
+                    const otherEntries = Object.entries(h).filter(([k]) => !["text", "hint", "content", "description", "cost", "point_cost", "points"].includes(k));
+                    return (
+                        <li key={idx} className="rounded-control border border-line bg-surface-muted px-4 py-3">
+                            <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Hint {idx + 1}</span>
+                            {text !== undefined && <p className="mt-1 text-ink">{text}</p>}
+                            {cost !== undefined && (
+                                <p className="mt-1 text-xs text-ink-muted">
+                                    Cost: <span className="font-semibold text-ink">{String(cost)}</span> pts
+                                </p>
+                            )}
+                            {otherEntries.map(([k, v]) => (
+                                <p key={k} className="mt-0.5 text-xs text-ink-muted">
+                                    <span className="capitalize">{k.replace(/_/g, " ")}</span>: <span className="text-ink">{typeof v === "object" ? JSON.stringify(v) : String(v)}</span>
+                                </p>
+                            ))}
+                        </li>
+                    );
+                })}
+            </ol>
+        </Panel>
     );
 }
 
@@ -593,8 +423,7 @@ function LinkedReward({ reward }: { reward: StepReward }) {
     const [result, setResult] = useState<RewardEvaluation | null>(null);
 
     const evaluateMutation = useMutation({
-        mutationFn: (context: Record<string, unknown>) =>
-            stepRewardsService.evaluate(reward._id, context),
+        mutationFn: (context: Record<string, unknown>) => stepRewardsService.evaluate(reward._id, context),
         onSuccess: (res) => setResult(res),
         onError: (e: Error) => toast.error(e.message || "Failed to evaluate reward"),
     });
@@ -615,71 +444,29 @@ function LinkedReward({ reward }: { reward: StepReward }) {
         evaluateMutation.mutate(parsed);
     };
 
-    const inputClass =
-        "w-full rounded-xl py-2.5 px-4 border border-neutral-200 text-sm focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-500/20 transition-all";
-
     return (
         <div className="space-y-4">
-            <div className="space-y-2">
-                <DetailRow label="Base points" value={String(reward.base_points)} />
-                <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                    <span className="w-36 shrink-0 font-medium text-neutral-500">Bonus conditions</span>
-                    <span className="text-neutral-800">{reward.bonus_conditions?.length ?? 0}</span>
-                </div>
-            </div>
+            <DetailList>
+                <DetailRow label="Base points" value={reward.base_points.toLocaleString("en-IN")} />
+                <DetailRow label="Bonus conditions" value={reward.bonus_conditions?.length ?? 0} />
+            </DetailList>
 
             {reward.bonus_conditions && reward.bonus_conditions.length > 0 && (
-                <pre className="text-xs font-mono text-neutral-700 bg-neutral-50 rounded-xl p-4 overflow-x-auto whitespace-pre-wrap break-words">
+                <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-control bg-surface-muted p-4 font-mono text-xs text-ink">
                     {JSON.stringify(reward.bonus_conditions, null, 2)}
                 </pre>
             )}
 
-            <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Evaluate tester
-                </p>
-                <textarea
-                    rows={4}
-                    className={`${inputClass} resize-none font-mono text-xs`}
-                    value={contextJson}
-                    onChange={(e) => setContextJson(e.target.value)}
-                />
+            <div className="space-y-3 rounded-card border border-line bg-surface-muted p-4">
+                <Field label="Try it — context (JSON)" hint='For example {"time_taken": 30}.'>
+                    <TextArea rows={4} className="font-mono text-xs" value={contextJson} onChange={(e) => setContextJson(e.target.value)} />
+                </Field>
                 <div className="flex justify-end">
-                    <button
-                        onClick={handleEvaluate}
-                        disabled={evaluateMutation.isPending}
-                        className="px-4 py-2.5 text-sm font-medium text-white bg-slate-700 hover:bg-slate-800 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"
-                    >
-                        {evaluateMutation.isPending ? (
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        ) : (
-                            <Calculator className="w-4 h-4" />
-                        )}
+                    <Button variant="primary" icon={Calculator} onClick={handleEvaluate} loading={evaluateMutation.isPending}>
                         Evaluate
-                    </button>
+                    </Button>
                 </div>
-                {result && (
-                    <div className="grid grid-cols-3 gap-3">
-                        <div className="rounded-xl border border-neutral-200 bg-white p-3 text-center">
-                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-                                Base
-                            </p>
-                            <p className="mt-1 text-xl font-bold text-neutral-800">{result.base_points}</p>
-                        </div>
-                        <div className="rounded-xl border border-neutral-200 bg-white p-3 text-center">
-                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-                                Bonus
-                            </p>
-                            <p className="mt-1 text-xl font-bold text-neutral-800">{result.bonus_points}</p>
-                        </div>
-                        <div className="rounded-xl border border-slate-300 bg-slate-50 p-3 text-center">
-                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-                                Total
-                            </p>
-                            <p className="mt-1 text-xl font-bold text-slate-700">{result.total_points}</p>
-                        </div>
-                    </div>
-                )}
+                {result && <RewardResult result={result} />}
             </div>
         </div>
     );

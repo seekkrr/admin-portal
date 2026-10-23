@@ -13,6 +13,7 @@ import {
     Globe,
     GitPullRequestArrow,
     Handshake,
+    History,
     Inbox,
     LayoutDashboard,
     ListFilter,
@@ -21,12 +22,15 @@ import {
     Map,
     MapPin,
     MapPinPlus,
+    Megaphone,
     MessageSquare,
+    MessageSquareWarning,
     MessagesSquare,
     ReceiptText,
     Rocket,
     RotateCcw,
     Settings2,
+    Shapes,
     ShieldCheck,
     Siren,
     SlidersHorizontal,
@@ -35,6 +39,7 @@ import {
     Sun,
     Tag,
     Ticket,
+    TicketCheck,
     Trophy,
     UserCheck,
     UserPlus,
@@ -105,6 +110,8 @@ export const NAV_GROUPS: NavGroup[] = [
             { icon: Globe, label: "Regions", to: "/regions", keywords: ["cities", "areas"], detailLabel: "Region" },
             // Explore-map order/settings need the admin-only regions:manage permission.
             { icon: Compass, label: "Explore map", to: "/explore-map", roles: [...ADMIN_NAV_ROLES], keywords: ["region order", "map settings"] },
+            // Categories admin routes are admin/super_admin only.
+            { icon: Shapes, label: "Categories", to: "/place-categories", roles: [...ADMIN_NAV_ROLES], keywords: ["place categories", "marker categories", "sub-categories"] },
         ],
     },
     {
@@ -112,7 +119,7 @@ export const NAV_GROUPS: NavGroup[] = [
         items: [
             { icon: Map, label: "Quests", to: "/quests", keywords: ["review queue", "trails"], detailLabel: "Quest" },
             { icon: BookOpen, label: "Narratives", to: "/narratives", keywords: ["stories", "audio"], detailLabel: "Narrative" },
-            { icon: CalendarDays, label: "Events", to: "/events", keywords: ["festivals"] },
+            { icon: CalendarDays, label: "Events", to: "/events", keywords: ["festivals"], detailLabel: "Event" },
             { icon: ListFilter, label: "Timeline filters", to: "/timeline-filters" },
             { icon: Settings2, label: "Task configs", to: "/task-configs", keywords: ["tasks", "step rewards"], detailLabel: "Task config" },
             { icon: Trophy, label: "Achievements", to: "/achievements", keywords: ["badges", "levels"], detailLabel: "Achievement" },
@@ -128,7 +135,7 @@ export const NAV_GROUPS: NavGroup[] = [
             { icon: Handshake, label: "Collabs overview", to: "/collabs/overview", roles: [...COLLAB_STAFF_NAV_ROLES], keywords: ["collabs"] },
             { icon: GitPullRequestArrow, label: "Collab requests", to: "/collabs/applications", roles: [...COLLAB_STAFF_NAV_ROLES] },
             { icon: UserCheck, label: "Collab creators", to: "/collabs/creators", roles: [...COLLAB_STAFF_NAV_ROLES], keywords: ["handle verification"] },
-            { icon: Ticket, label: "Experiences", to: "/collabs/experiences", roles: [...COLLAB_STAFF_NAV_ROLES], keywords: ["bookings", "slots", "tours", "classes"] },
+            { icon: Ticket, label: "Experiences", to: "/collabs/experiences", roles: [...COLLAB_STAFF_NAV_ROLES], keywords: ["bookings", "slots", "tours", "classes"], detailLabel: "Experience" },
             { icon: Store, label: "Check-in offers", to: "/business-offers", roles: [...ADMIN_NAV_ROLES], keywords: ["business offers"] },
         ],
     },
@@ -139,12 +146,16 @@ export const NAV_GROUPS: NavGroup[] = [
             { icon: Star, label: "Reviews", to: "/reviews", detailLabel: "Review" },
             { icon: Flag, label: "Reports", to: "/collabs/reports", roles: [...COLLAB_STAFF_NAV_ROLES] },
             { icon: Siren, label: "Fraud flags", to: "/collabs/fraud-flags", roles: [...COLLAB_STAFF_NAV_ROLES] },
+            { icon: MessageSquareWarning, label: "Held messages", to: "/held-messages", roles: [...COLLAB_STAFF_NAV_ROLES], keywords: ["chat", "held chat messages", "collab chat"] },
+            { icon: History, label: "Change history", to: "/change-history", roles: [...COLLAB_STAFF_NAV_ROLES], keywords: ["audit", "audit log", "who changed what"] },
         ],
     },
     {
         group: "Money",
         items: [
             { icon: ArrowLeftRight, label: "Transactions", to: "/transactions", roles: [...FINANCE_ROLES], keywords: ["payments"], detailLabel: "Transaction" },
+            // GET /api/v2/bookings needs bookings:manage (moderator, admin, super_admin).
+            { icon: TicketCheck, label: "Quest bookings", to: "/quest-bookings", roles: [...COLLAB_STAFF_NAV_ROLES], keywords: ["bookings", "booked quests"] },
             { icon: RotateCcw, label: "Refunds", to: "/refunds", roles: [...FINANCE_ROLES], detailLabel: "Refund" },
             { icon: ReceiptText, label: "Payment events", to: "/payment-events", roles: [...FINANCE_ROLES] },
             { icon: Banknote, label: "Payouts", to: "/payouts", roles: [...FINANCE_ROLES], detailLabel: "Payout" },
@@ -158,6 +169,7 @@ export const NAV_GROUPS: NavGroup[] = [
     {
         group: "Settings",
         items: [
+            { icon: Megaphone, label: "Push messages", to: "/push-messages", roles: [...ADMIN_NAV_ROLES], keywords: ["broadcast", "push", "notifications", "scheduled pushes"] },
             { icon: Mail, label: "Email templates", to: "/email-templates", roles: [...ADMIN_NAV_ROLES], detailLabel: "Template" },
             { icon: Rocket, label: "Rollout", to: "/collabs/rollout", roles: [...ADMIN_NAV_ROLES], keywords: ["partner portal sections", "terms", "feature flags"] },
             { icon: SlidersHorizontal, label: "Match tuning", to: "/collabs/match", roles: [...ADMIN_NAV_ROLES], keywords: ["algorithm"] },

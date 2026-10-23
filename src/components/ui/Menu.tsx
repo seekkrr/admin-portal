@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { MoreHorizontal, type LucideIcon } from "lucide-react";
 import { cx } from "@/utils/cx";
@@ -30,12 +31,18 @@ export interface MenuProps {
 /**
  * Overflow / dropdown menu. Keyboard: Enter/Space/↓ opens, ↑↓ Home End move,
  * Escape closes and returns focus to the trigger, Tab closes.
+ *
+ * The list opens in a layer on top of the page (fixed position), so it is
+ * never clipped by a table, a card or a dialog, and it opens upwards when
+ * there's no room below the trigger.
  */
 export function Menu({ items, label = "More actions", trigger, triggerVariant = "secondary", size = "md", align = "right", className }: MenuProps) {
     const visible = items.filter((i) => !i.hidden);
     const [open, setOpen] = useState(false);
     const rootRef = useRef<HTMLDivElement>(null);
+    const listRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
+    const [pos, setPos] = useState<CSSProperties | null>(null);
     const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
     const menuId = useId();
     const navigate = useNavigate();
@@ -53,10 +60,38 @@ export function Menu({ items, label = "More actions", trigger, triggerVariant = 
         if (target !== undefined) itemRefs.current[target]?.focus();
     };
 
+    const place = useCallback(() => {
+        const el = triggerRef.current;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        const below = window.innerHeight - r.bottom;
+        const up = below < 280 && r.top > below;
+        const next: CSSProperties = { position: "fixed" };
+        if (up) next.bottom = window.innerHeight - r.top + 6;
+        else next.top = r.bottom + 6;
+        if (align === "right") next.right = Math.max(8, window.innerWidth - r.right);
+        else next.left = Math.max(8, r.left);
+        next.maxHeight = Math.max(160, (up ? r.top : below) - 16);
+        setPos(next);
+    }, [align]);
+
+    useLayoutEffect(() => {
+        if (!open) return;
+        place();
+        window.addEventListener("resize", place);
+        window.addEventListener("scroll", place, true);
+        return () => {
+            window.removeEventListener("resize", place);
+            window.removeEventListener("scroll", place, true);
+        };
+    }, [open, place]);
+
     useEffect(() => {
         if (!open) return;
         const onDown = (e: MouseEvent | TouchEvent) => {
-            if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+            const t = e.target as Node;
+            if (rootRef.current?.contains(t) || listRef.current?.contains(t)) return;
+            setOpen(false);
         };
         document.addEventListener("mousedown", onDown);
         document.addEventListener("touchstart", onDown);
@@ -122,44 +157,49 @@ export function Menu({ items, label = "More actions", trigger, triggerVariant = 
             >
                 {trigger ?? <MoreHorizontal className={size === "sm" ? "w-3.5 h-3.5" : "w-4 h-4"} aria-hidden />}
             </button>
-            {open && (
-                <div
-                    id={menuId}
-                    role="menu"
-                    aria-label={label}
-                    onKeyDown={onMenuKeyDown}
-                    className={cx(
-                        "absolute top-full mt-1.5 z-50 min-w-[200px] max-w-[min(320px,calc(100vw-2rem))] rounded-card border border-line bg-surface p-1 shadow-pop animate-scale-in",
-                        align === "right" ? "right-0 origin-top-right" : "left-0 origin-top-left"
-                    )}
-                >
-                    {visible.map((item, i) => {
-                        const Icon = item.icon;
-                        return (
-                            <button
-                                key={item.label}
-                                ref={(el) => {
-                                    itemRefs.current[i] = el;
-                                }}
-                                type="button"
-                                role="menuitem"
-                                tabIndex={-1}
-                                disabled={item.disabled}
-                                onClick={() => select(item)}
-                                className={cx(
-                                    "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed",
-                                    item.danger
-                                        ? "text-bad hover:bg-bad-soft focus:bg-bad-soft"
-                                        : "text-ink hover:bg-brand-50 focus:bg-brand-50"
-                                )}
-                            >
-                                {Icon && <Icon className="h-4 w-4 shrink-0 opacity-80" aria-hidden />}
-                                <span className="truncate">{item.label}</span>
-                            </button>
-                        );
-                    })}
-                </div>
-            )}
+            {open &&
+                pos &&
+                createPortal(
+                    <div
+                        ref={listRef}
+                        id={menuId}
+                        role="menu"
+                        aria-label={label}
+                        onKeyDown={onMenuKeyDown}
+                        style={pos}
+                        className={cx(
+                            "z-[70] min-w-[200px] max-w-[min(320px,calc(100vw-2rem))] overflow-y-auto rounded-card border border-line bg-surface p-1 shadow-pop animate-scale-in",
+                            align === "right" ? "origin-top-right" : "origin-top-left"
+                        )}
+                    >
+                        {visible.map((item, i) => {
+                            const Icon = item.icon;
+                            return (
+                                <button
+                                    key={item.label}
+                                    ref={(el) => {
+                                        itemRefs.current[i] = el;
+                                    }}
+                                    type="button"
+                                    role="menuitem"
+                                    tabIndex={-1}
+                                    disabled={item.disabled}
+                                    onClick={() => select(item)}
+                                    className={cx(
+                                        "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed",
+                                        item.danger
+                                            ? "text-bad hover:bg-bad-soft focus:bg-bad-soft"
+                                            : "text-ink hover:bg-brand-50 focus:bg-brand-50"
+                                    )}
+                                >
+                                    {Icon && <Icon className="h-4 w-4 shrink-0 opacity-80" aria-hidden />}
+                                    <span className="truncate">{item.label}</span>
+                                </button>
+                            );
+                        })}
+                    </div>,
+                    document.body
+                )}
         </div>
     );
 }

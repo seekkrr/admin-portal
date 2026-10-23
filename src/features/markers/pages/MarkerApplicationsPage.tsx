@@ -1,223 +1,264 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { Check, Eye, MapPin, MapPinPlus, X } from "lucide-react";
+import { useAuthStore } from "@store/auth.store";
 import { markersService } from "../services/markers.service";
-import { FilterDropdown } from "@/components/FilterDropdown";
+import { ButtonLink, IconButton } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { FilterBar, FilterSelect, type FilterChip, type FilterOption } from "@/components/ui/FilterBar";
+import { chipLabel } from "@/components/ui/filters";
+import { DataTable, type DataColumn } from "@/components/ui/DataTable";
 import { Pagination } from "@/components/ui/Pagination";
-import { Inbox, ArrowLeft, Filter, Check, X } from "lucide-react";
-import { Link } from "react-router-dom";
-import { LoadingFallback } from "@components/LoadingFallback";
-import { Badge } from "@/components/ui/Badge";
-import type { MarkerApplicationStatus } from "@/types";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Tag } from "@/components/ui/StatusPill";
+import { PlaceRequestStatus } from "../components/PlaceRequestStatus";
+import { IdLink } from "@/components/ui/IdLink";
+import { useUrlState } from "@/hooks/useUrlState";
+import { runBulk } from "@/hooks/useBulkSelection";
+import { formatDate } from "@/utils/date";
+import type { MarkerApplication } from "@/types";
 
-const STATUS_OPTIONS: { value: "" | MarkerApplicationStatus; label: string }[] = [
+const PER_PAGE = 20;
+const REVIEW_ROLES = ["admin", "super_admin", "moderator"];
+
+const STATUS_OPTIONS: FilterOption[] = [
     { value: "pending", label: "Pending" },
     { value: "under_review", label: "Under review" },
     { value: "approved", label: "Approved" },
     { value: "rejected", label: "Rejected" },
-    { value: "", label: "All" },
 ];
 
-const STATUS_BADGE: Record<MarkerApplicationStatus, string> = {
-    pending: "bg-amber-50 text-amber-700 border-amber-200",
-    under_review: "bg-blue-50 text-blue-700 border-blue-200",
-    approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    rejected: "bg-red-50 text-red-700 border-red-200",
-};
+const isOpen = (a: Pick<MarkerApplication, "status">) => a.status === "pending" || a.status === "under_review";
+
+type Pending = { kind: "approve" | "reject"; ids: string[]; title?: string };
 
 export function MarkerApplicationsPage() {
-    const [page, setPage] = useState(1);
-    const [perPage] = useState(20);
-    const [status, setStatus] = useState<"" | MarkerApplicationStatus>("pending");
     const queryClient = useQueryClient();
+    const navigate = useNavigate();
+    const { user } = useAuthStore();
+    const canReview = !!user?.role?.some((r) => REVIEW_ROLES.includes(r));
 
-    const approveMutation = useMutation({
-        mutationFn: (id: string) => markersService.approveApplication(id),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["admin-marker-applications"] });
-            queryClient.invalidateQueries({ queryKey: ["admin-markers"] });
-            toast.success("Application approved");
-        },
-        onError: () => toast.error("Failed to approve application"),
-    });
+    // Status (default: pending) and page live in the address. "all" = no status filter.
+    const { state, set } = useUrlState({ status: "pending", page: 1 });
+    const status = state.status === "all" || STATUS_OPTIONS.some((o) => o.value === state.status) ? state.status : "pending";
+    const page = Math.max(1, state.page);
 
-    const rejectMutation = useMutation({
-        mutationFn: (id: string) => markersService.rejectApplication(id),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["admin-marker-applications"] });
-            toast.success("Application rejected");
-        },
-        onError: () => toast.error("Failed to reject application"),
-    });
+    const [selected, setSelected] = useState<Set<string>>(new Set());
+    const [pending, setPending] = useState<Pending | null>(null);
 
-    const { data, isLoading, error } = useQuery({
+    const { data, isLoading, isFetching, error, refetch } = useQuery({
         queryKey: ["admin-marker-applications", { status, page }],
         queryFn: () =>
             markersService.listApplications({
-                status: status || undefined,
+                status: status === "all" ? undefined : status,
                 page,
-                page_size: perPage,
+                page_size: PER_PAGE,
             }),
         staleTime: 5 * 60 * 1000,
+        placeholderData: (prev) => prev,
+    });
+
+    const afterChange = () => {
+        queryClient.invalidateQueries({ queryKey: ["admin-marker-applications"] });
+        queryClient.invalidateQueries({ queryKey: ["admin-markers"] });
+        queryClient.invalidateQueries({ queryKey: ["today", "place-requests"] });
+    };
+
+    const decide = useMutation({
+        mutationFn: ({ kind, ids, reason }: { kind: Pending["kind"]; ids: string[]; reason?: string }) =>
+            runBulk(ids, (id) => (kind === "approve" ? markersService.approveApplication(id) : markersService.rejectApplication(id, reason))),
+        onSuccess: ({ ok, failed }, { kind }) => {
+            afterChange();
+            const verb = kind === "approve" ? "Approved" : "Rejected";
+            if (ok > 0) toast.success(`${verb} ${ok} place request${ok === 1 ? "" : "s"}`);
+            if (failed > 0) toast.error(`${failed} couldn't be ${kind === "approve" ? "approved" : "rejected"}`);
+            setSelected(new Set());
+            setPending(null);
+        },
+        onError: (err: Error) => {
+            toast.error(err.message);
+            setPending(null);
+        },
     });
 
     const applications = data?.applications ?? [];
 
+    const columns: DataColumn<MarkerApplication>[] = [
+        {
+            id: "title",
+            header: "Proposed place",
+            hideable: false,
+            sortValue: (a) => a.proposed_title,
+            cell: (a) => (
+                <Link to={`/markers/applications/${a.id}`} className="font-medium text-ink hover:text-accent-700 hover:underline">
+                    {a.proposed_title}
+                </Link>
+            ),
+        },
+        {
+            id: "category",
+            header: "Category",
+            sortValue: (a) => a.proposed_categories?.[0] ?? "",
+            csv: (a) => (a.proposed_categories ?? []).join(", "),
+            cell: (a) =>
+                a.proposed_categories && a.proposed_categories.length > 0 ? (
+                    <Tag title={a.proposed_categories.join(", ")} className="max-w-[200px] capitalize">
+                        <span className="truncate">
+                            {a.proposed_categories[0]} {a.proposed_categories.length > 1 ? `+${a.proposed_categories.length - 1}` : ""}
+                        </span>
+                    </Tag>
+                ) : (
+                    <span className="text-ink-faint">—</span>
+                ),
+        },
+        {
+            id: "submitter",
+            header: "Submitted by",
+            csv: (a) => a.user_id,
+            cell: (a) => <IdLink kind="user" id={a.user_id} />,
+        },
+        { id: "status", header: "Status", sortValue: (a) => a.status, cell: (a) => <PlaceRequestStatus status={a.status} /> },
+        {
+            id: "submitted",
+            header: "Submitted",
+            sortValue: (a) => a.created_at ?? "",
+            csv: (a) => formatDate(a.created_at),
+            cell: (a) => <span className="whitespace-nowrap text-ink-muted">{formatDate(a.created_at)}</span>,
+        },
+    ];
 
-
-    if (isLoading) return <LoadingFallback message="Loading applications..." />;
-
-    if (error) {
-        return <div className="p-6 text-center text-red-500">Failed to load marker applications.</div>;
+    const chips: FilterChip[] = [];
+    if (status !== "pending") {
+        chips.push({
+            key: "status",
+            label: status === "all" ? "Status: All" : chipLabel("Status", status, STATUS_OPTIONS),
+            onRemove: () => set({ status: "pending" }),
+        });
     }
 
+    const count = pending?.ids.length ?? 0;
+    const many = count > 1;
+
     return (
-        <div className="animate-fade-in space-y-6">
-            <div>
-                <Link
-                    to="/markers"
-                    className="flex items-center gap-2 text-sm font-medium text-neutral-500 hover:text-neutral-900 transition-colors mb-2"
-                >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back to Markers
-                </Link>
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-sm">
-                        <Inbox className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold text-neutral-900">Marker Applications</h1>
-                    </div>
-                </div>
-                <p className="text-neutral-500 mt-1">
-                    Review community-submitted marker proposals
-                </p>
-            </div>
+        <div className="space-y-5">
+            <PageHeader
+                icon={MapPinPlus}
+                title="Place requests"
+                description={
+                    <>
+                        New places people asked to add
+                        {data && <span className="text-ink-faint"> · {data.total.toLocaleString("en-IN")} shown by this filter</span>}
+                    </>
+                }
+                actions={
+                    <ButtonLink to="/markers" variant="secondary" icon={MapPin}>
+                        All places
+                    </ButtonLink>
+                }
+            />
 
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 space-y-3">
-                <div className="flex items-center gap-4">
-                    <FilterDropdown
-                        value={status}
-                        onChange={(val) => {
-                            setStatus(val as "" | MarkerApplicationStatus);
-                            setPage(1);
-                        }}
-                        options={STATUS_OPTIONS}
-                        theme="orange"
-                        placeholder="All Statuses"
-                        icon={<Filter className="w-4 h-4 text-orange-500" />}
-                    />
-                </div>
-            </div>
+            <FilterBar chips={chips} onReset={() => set({ status: "pending" })}>
+                <FilterSelect
+                    label="Status"
+                    value={status === "all" ? "" : status}
+                    onChange={(v) => set({ status: v || "all" })}
+                    options={STATUS_OPTIONS}
+                    allLabel="All statuses"
+                />
+            </FilterBar>
 
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-neutral-200 text-sm">
-                        <thead className="border-b border-neutral-100 bg-neutral-50/60">
-                            <tr>
-                                <th className="px-4 py-3.5 text-left font-semibold text-neutral-500 uppercase tracking-wider text-xs w-[25%]">Proposed Title</th>
-                                <th className="px-4 py-3.5 text-left font-semibold text-neutral-500 uppercase tracking-wider text-xs w-[15%]">Category</th>
-                                <th className="px-4 py-3.5 text-left font-semibold text-neutral-500 uppercase tracking-wider text-xs w-[15%]">Submitter</th>
-                                <th className="px-4 py-3.5 text-left font-semibold text-neutral-500 uppercase tracking-wider text-xs w-[15%]">Status</th>
-                                <th className="px-4 py-3.5 text-left font-semibold text-neutral-500 uppercase tracking-wider text-xs w-[15%]">Submitted</th>
-                                <th className="px-4 py-3.5 text-right font-semibold text-neutral-500 uppercase tracking-wider text-xs w-[15%]">Actions</th>
-                            </tr>
-                        </thead>
-                            <tbody className="bg-white divide-y divide-neutral-200">
-                                {applications.map((app) => (
-                                    <tr key={app.id} className="hover:bg-neutral-50 transition-colors">
-                                        <td className="px-4 py-4">
-                                            <Link
-                                                to={`/markers/applications/${app.id}`}
-                                                className="font-medium text-neutral-900 hover:text-orange-600"
-                                            >
-                                                {app.proposed_title}
-                                            </Link>
-                                        </td>
-                                        <td className="px-4 py-4 max-w-[200px]">
-                                            {(app.proposed_categories && app.proposed_categories.length > 0) ? (
-                                                <div className="flex flex-wrap gap-1">
-                                                    <span className="inline-block px-2.5 py-1 bg-neutral-100 text-neutral-600 rounded-lg text-xs font-medium capitalize truncate max-w-full" title={app.proposed_categories.join(', ')}>
-                                                        {app.proposed_categories[0]} {app.proposed_categories.length > 1 ? `+${app.proposed_categories.length - 1}` : ''}
-                                                    </span>
-                                                </div>
-                                            ) : (
-                                                <span className="text-neutral-400 text-sm">—</span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            {app.user_id ? (
-                                                <span
-                                                    className="text-xs font-mono text-neutral-500"
-                                                    title={app.user_id}
-                                                >
-                                                    {app.user_id.slice(0, 8)}…
-                                                </span>
-                                            ) : (
-                                                <span className="text-neutral-400">—</span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <Badge label={app.status.replace("_", " ")} styles={STATUS_BADGE[app.status]} />
-                                        </td>
-                                        <td className="px-4 py-4 whitespace-nowrap text-neutral-500">
-                                            {app.created_at ? new Date(app.created_at).toLocaleDateString() : "N/A"}
-                                        </td>
-                                        <td className="px-4 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                                                {(app.status === "pending" || app.status === "under_review") && (
-                                                    <>
-                                                        <button
-                                                            onClick={() => approveMutation.mutate(app.id)}
-                                                            title="Approve"
-                                                            className="p-1.5 rounded-lg text-neutral-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
-                                                        >
-                                                            <Check className="w-4 h-4" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => rejectMutation.mutate(app.id)}
-                                                            title="Reject"
-                                                            className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                                        >
-                                                            <X className="w-4 h-4" />
-                                                        </button>
-                                                    </>
-                                                )}
-                                                <Link
-                                                    to={`/markers/applications/${app.id}`}
-                                                    title="View application"
-                                                    className="p-1.5 rounded-lg text-neutral-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                                                </Link>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {applications.length === 0 && (
-                                    <tr>
-                                        <td colSpan={5} className="px-4 py-12 text-center text-neutral-500">
-                                            <div className="flex flex-col items-center justify-center">
-                                                <Inbox className="w-12 h-12 text-neutral-300 mb-4" />
-                                                <p>No marker applications found.</p>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+            <DataTable
+                label="Place requests"
+                rows={applications}
+                columns={columns}
+                rowKey={(a) => a.id}
+                isLoading={isLoading && !data}
+                isFetching={isFetching && !!data}
+                error={error}
+                onRetry={() => refetch()}
+                empty={{
+                    icon: MapPinPlus,
+                    title: status === "pending" ? "No place requests. You're up to date." : "No place requests match this filter.",
+                }}
+                onRowClick={(a) => navigate(`/markers/applications/${a.id}`)}
+                selectedIds={canReview ? selected : undefined}
+                onSelectionChange={canReview ? setSelected : undefined}
+                bulkActions={[
+                    { label: "Approve", icon: Check, onClick: (ids) => setPending({ kind: "approve", ids }) },
+                    { label: "Reject", icon: X, tone: "danger", onClick: (ids) => setPending({ kind: "reject", ids }) },
+                ]}
+                bulkBusy={decide.isPending}
+                rowActions={(a) => (
+                    <>
+                        {canReview && isOpen(a) && (
+                            <>
+                                <IconButton
+                                    icon={Check}
+                                    size="sm"
+                                    label={`Approve ${a.proposed_title}`}
+                                    className="hover:bg-good-soft hover:text-good"
+                                    onClick={() => setPending({ kind: "approve", ids: [a.id], title: a.proposed_title })}
+                                />
+                                <IconButton
+                                    icon={X}
+                                    size="sm"
+                                    label={`Reject ${a.proposed_title}`}
+                                    className="hover:bg-bad-soft hover:text-bad"
+                                    onClick={() => setPending({ kind: "reject", ids: [a.id], title: a.proposed_title })}
+                                />
+                            </>
+                        )}
+                        <IconButton icon={Eye} size="sm" label={`Open ${a.proposed_title}`} onClick={() => navigate(`/markers/applications/${a.id}`)} />
+                    </>
+                )}
+                storageKey="place-requests"
+                exportName="place-requests"
+                summary={data ? `${applications.length} of ${data.total.toLocaleString("en-IN")}` : undefined}
+                card={{
+                    title: (a) => a.proposed_title,
+                    subtitle: (a) => (a.proposed_categories?.length ? a.proposed_categories.join(", ") : undefined),
+                    fields: ["status", "submitter", "submitted"],
+                }}
+                footer={
+                    data && <Pagination page={data.page} totalPages={data.total_pages} total={data.total} pageSize={PER_PAGE} onPageChange={(p) => set({ page: p })} />
+                }
+            />
 
-                    {data && (
-                        <Pagination
-                            page={data.page}
-                            totalPages={data.total_pages}
-                            total={data.total}
-                            onPageChange={setPage}
-                            theme="orange"
-                        />
-                    )}
-                </div>
+            <ConfirmDialog
+                open={pending?.kind === "approve"}
+                title={many ? `Approve ${count} place requests?` : "Approve place request?"}
+                description={
+                    many
+                        ? "Each one becomes a live place in the app."
+                        : `“${pending?.title ?? "This request"}” becomes a live place in the app.`
+                }
+                confirmLabel={many ? `Approve ${count}` : "Approve"}
+                onConfirm={() => pending && decide.mutate({ kind: "approve", ids: pending.ids })}
+                onCancel={() => setPending(null)}
+                isPending={decide.isPending}
+            />
+
+            <ConfirmDialog
+                open={pending?.kind === "reject"}
+                title={many ? `Reject ${count} place requests?` : "Reject place request?"}
+                description={
+                    many
+                        ? "The people who asked see this reason."
+                        : `The person who asked for “${pending?.title ?? "this place"}” sees this reason.`
+                }
+                level="reason"
+                reasonLabel="Reason"
+                reasonPlaceholder="e.g. This place already exists, or the location is wrong."
+                reasonMinLength={3}
+                reasonMaxLength={1000}
+                confirmLabel={many ? `Reject ${count}` : "Reject"}
+                tone="danger"
+                onConfirm={(reason) => pending && decide.mutate({ kind: "reject", ids: pending.ids, reason })}
+                onCancel={() => setPending(null)}
+                isPending={decide.isPending}
+            />
         </div>
     );
 }

@@ -1,25 +1,33 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CreditCard, Pencil, RefreshCcw, Plus, Ticket, Receipt, Save, Filter, Layers } from "lucide-react";
+import { CreditCard, Pencil, RefreshCcw, Plus, Ticket, Receipt, Save, Layers } from "lucide-react";
 import { AccessDenied } from "@components/AccessDenied";
-import { FilterDropdown, type DropdownOption } from "@/components/FilterDropdown";
+import { Button } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Tabs } from "@/components/ui/Tabs";
+import { FilterBar, FilterSelect, type FilterChip, type FilterOption } from "@/components/ui/FilterBar";
+import { chipLabel } from "@/components/ui/filters";
+import { DataTable, type DataColumn } from "@/components/ui/DataTable";
 import { Pagination } from "@/components/ui/Pagination";
-import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { Card } from "@/components/ui/Card";
+import { Modal } from "@/components/ui/Modal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Checkbox, Field, TextInput } from "@/components/ui/Field";
+import { PanelState } from "@/components/ui/States";
+import { StatusPill, Tag } from "@/components/ui/StatusPill";
+import { IdLink } from "@/components/ui/IdLink";
+import { useUrlState } from "@/hooks/useUrlState";
+import { formatDate, formatDateTime } from "@/utils/date";
 import { collabsAdminService } from "../services/collabs-admin.service";
 import { useCollabAccess } from "../roles";
-import {
-    Checkbox, Chip, Field, LoadingButtonIcon, Modal, PageHeader, PanelState, SegmentedTabs, StatusPill, Toolbar,
-    btnPrimary, btnSecondary, btnSmNeutral, inputClass, thClass,
-} from "../components/CollabsUi";
 import { EntitlementsSummary, PlanEntitlementsEditor } from "../components/EntitlementsEditor";
 import { OverridePanel } from "../components/OverridePanel";
-import { fmtDate, fmtDateTime, formatInr, humanize, isoToLocalInput, localInputToIso, totalPagesOf } from "../utils";
+import { Notice } from "../components/AdminBits";
+import { formatInr, humanize, isoToLocalInput, localInputToIso, totalPagesOf } from "../utils";
 import type { AdminPlan, AdminSubscription, BillingCoupon, Entitlements, UpdatePlanPayload, UpsertBillingCouponPayload } from "../types";
 
 type Tab = "plans" | "coupons" | "subscriptions";
+const TABS: Tab[] = ["plans", "coupons", "subscriptions"];
 
 // ── Plans ──────────────────────────────────────────────────
 
@@ -68,46 +76,43 @@ function PlanEditModal({ plan, onClose }: { plan: AdminPlan; onClose: () => void
     return (
         <Modal
             open
-            onClose={() => !save.isPending && onClose()}
+            onClose={onClose}
+            dismissible={!save.isPending}
             title={`Edit plan · ${plan.code}`}
             icon={Layers}
             size="2xl"
             footer={
                 <>
-                    <button type="button" onClick={onClose} disabled={save.isPending} className={btnSecondary}>
+                    <Button variant="secondary" onClick={onClose} disabled={save.isPending}>
                         Cancel
-                    </button>
-                    <button type="button" onClick={() => save.mutate()} disabled={save.isPending || trialInvalid} className={btnPrimary}>
-                        <LoadingButtonIcon loading={save.isPending} icon={Save} /> Save plan
-                    </button>
+                    </Button>
+                    <Button variant="primary" icon={Save} onClick={() => save.mutate()} disabled={trialInvalid} loading={save.isPending}>
+                        Save plan
+                    </Button>
                 </>
             }
         >
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Display name" htmlFor="plan-name">
-                    <input id="plan-name" type="text" maxLength={60} value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Display name">
+                    <TextInput type="text" maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />
                 </Field>
-                <Field label="Sort order" htmlFor="plan-sort" hint="Optional; lower shows first.">
-                    <input id="plan-sort" type="number" value={sort} onChange={(e) => setSort(e.target.value)} className={inputClass} placeholder="Keep" />
+                <Field label="Sort order" hint="Optional; lower shows first.">
+                    <TextInput type="number" value={sort} onChange={(e) => setSort(e.target.value)} placeholder="Keep" />
                 </Field>
-                <Field label="Monthly price (₹, ex-GST)" htmlFor="plan-monthly" hint={plan.custom ? "Custom plan — shown as “Contact us”." : undefined}>
-                    <input id="plan-monthly" type="number" min={0} value={monthly} onChange={(e) => setMonthly(e.target.value)} className={inputClass} />
+                <Field label="Monthly price (₹, ex-GST)" hint={plan.custom ? "Custom plan — shown as “Contact us”." : undefined}>
+                    <TextInput type="number" min={0} value={monthly} onChange={(e) => setMonthly(e.target.value)} />
                 </Field>
-                <Field label="Annual price (₹, ex-GST)" htmlFor="plan-annual" hint="Annual = 2 months free by convention.">
-                    <input id="plan-annual" type="number" min={0} value={annual} onChange={(e) => setAnnual(e.target.value)} className={inputClass} />
+                <Field label="Annual price (₹, ex-GST)" hint="Annual = 2 months free by convention.">
+                    <TextInput type="number" min={0} value={annual} onChange={(e) => setAnnual(e.target.value)} />
                 </Field>
-                <Field label="Trial days" htmlFor="plan-trial" hint={trialInvalid ? "0–90 days." : undefined}>
-                    <input id="plan-trial" type="number" min={0} max={90} value={trialDays} onChange={(e) => setTrialDays(e.target.value)} className={inputClass} />
+                <Field label="Trial days" error={trialInvalid ? "0–90 days." : undefined}>
+                    <TextInput type="number" min={0} max={90} value={trialDays} onChange={(e) => setTrialDays(e.target.value)} />
                 </Field>
-                <div className="pt-7">
+                <div className="sm:pt-7">
                     <Checkbox checked={active} onChange={setActive} label="Active" hint="Inactive plans are hidden from pricing and checkout." />
                 </div>
             </div>
-            {priceChanged && !plan.custom && (
-                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
-                    Price changed — run “Sync to Razorpay” after saving so checkout uses the new amount.
-                </p>
-            )}
+            {priceChanged && !plan.custom && <Notice tone="warn">Price changed — run “Sync to Razorpay” after saving so checkout uses the new amount.</Notice>}
             <Field label="Entitlements" hint="Unlimited = no cap. Limits apply per business per month where relevant.">
                 <PlanEntitlementsEditor value={entitlements} onChange={setEntitlements} />
             </Field>
@@ -135,60 +140,71 @@ function PlansTab() {
     return (
         <>
             <PanelState isLoading={isLoading} error={error} isEmpty={plans.length === 0} emptyIcon={Layers} emptyText="No plans configured" onRetry={() => refetch()}>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                     {plans.map((p) => (
-                        <Card key={p.code} padding="none" className="overflow-hidden flex flex-col">
-                            <div className="p-5 space-y-3 flex-1">
+                        <li key={p.code} className="flex flex-col overflow-hidden rounded-card border border-line bg-surface shadow-card">
+                            <div className="flex-1 space-y-3 p-5">
                                 <div className="flex items-start justify-between gap-2">
-                                    <div>
-                                        <h3 className="text-lg font-bold text-neutral-900">{p.name ?? p.code}</h3>
-                                        <p className="text-[11px] font-mono text-neutral-400">{p.code}</p>
+                                    <div className="min-w-0">
+                                        <h2 className="text-lg font-semibold text-ink">{p.name ?? p.code}</h2>
+                                        <p className="font-mono text-xs text-ink-faint">{p.code}</p>
                                     </div>
                                     <div className="flex flex-col items-end gap-1">
                                         <StatusPill status={p.active ? "active" : "paused"} label={p.active ? "Active" : "Inactive"} />
-                                        {p.custom && <Chip tone="violet">Custom</Chip>}
+                                        {p.custom && <Tag tone="info">Custom</Tag>}
                                     </div>
                                 </div>
                                 <div>
                                     {p.custom || p.price_monthly_inr === null ? (
-                                        <p className="text-2xl font-extrabold text-neutral-900">Contact us</p>
+                                        <p className="text-2xl font-semibold text-ink">Contact us</p>
                                     ) : (
                                         <>
-                                            <p className="text-2xl font-extrabold text-neutral-900">
+                                            <p className="text-2xl font-semibold tabular-nums text-ink">
                                                 {formatInr(p.price_monthly_inr)}
-                                                <span className="text-sm font-medium text-neutral-500"> /mo + GST</span>
+                                                <span className="text-sm font-medium text-ink-muted"> /mo + GST</span>
                                             </p>
-                                            <p className="text-xs text-neutral-500">
+                                            <p className="text-xs text-ink-muted">
                                                 {formatInr(p.price_annual_inr)}/yr · incl. GST {formatInr(p.price_monthly_inr_incl_gst)}/mo
                                             </p>
                                         </>
                                     )}
-                                    {p.trial_days > 0 && <p className="text-xs text-teal-700 mt-1">{p.trial_days}-day free trial</p>}
+                                    {p.trial_days > 0 && <p className="mt-1 text-xs text-accent-700">{p.trial_days}-day free trial</p>}
                                 </div>
                                 <EntitlementsSummary value={p.entitlements} />
-                                <div className="text-[11px] text-neutral-500 space-y-0.5 pt-2 border-t border-neutral-100">
-                                    <p>Razorpay monthly: <span className="font-mono">{p.razorpay_plan_ids?.monthly ?? "not synced"}</span></p>
-                                    <p>Razorpay annual: <span className="font-mono">{p.razorpay_plan_ids?.annual ?? "not synced"}</span></p>
+                                <div className="space-y-0.5 border-t border-line pt-2 text-xs text-ink-muted">
+                                    <p>
+                                        Razorpay monthly: <span className="font-mono">{p.razorpay_plan_ids?.monthly ?? "not synced"}</span>
+                                    </p>
+                                    <p>
+                                        Razorpay annual: <span className="font-mono">{p.razorpay_plan_ids?.annual ?? "not synced"}</span>
+                                    </p>
                                 </div>
                             </div>
-                            <div className="px-5 py-3 border-t border-neutral-100 bg-neutral-50/50 flex justify-end gap-2">
-                                <button type="button" onClick={() => setSyncing(p)} disabled={p.custom} className={btnSmNeutral} title={p.custom ? "Custom plans aren't sold via Razorpay" : undefined}>
-                                    <RefreshCcw className="w-3.5 h-3.5" /> Sync to Razorpay
-                                </button>
-                                <button type="button" onClick={() => setEditing(p)} className={btnSmNeutral}>
-                                    <Pencil className="w-3.5 h-3.5" /> Edit
-                                </button>
+                            <div className="flex flex-wrap justify-end gap-2 border-t border-line bg-surface-muted px-5 py-3">
+                                <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    icon={RefreshCcw}
+                                    onClick={() => setSyncing(p)}
+                                    disabled={p.custom}
+                                    title={p.custom ? "Custom plans aren't sold via Razorpay" : undefined}
+                                >
+                                    Sync to Razorpay
+                                </Button>
+                                <Button size="sm" variant="secondary" icon={Pencil} onClick={() => setEditing(p)}>
+                                    Edit
+                                </Button>
                             </div>
-                        </Card>
+                        </li>
                     ))}
-                </div>
+                </ul>
             </PanelState>
             {editing && <PlanEditModal key={editing.code} plan={editing} onClose={() => setEditing(null)} />}
-            <ConfirmModal
+            <ConfirmDialog
                 open={!!syncing}
-                theme="warning"
-                title="Sync to Razorpay"
-                message={
+                tone="warning"
+                title="Sync to Razorpay?"
+                description={
                     syncing
                         ? `Create/refresh the Razorpay plans for “${syncing.name ?? syncing.code}” at ${formatInr(syncing.price_monthly_inr)}/mo and ${formatInr(
                               syncing.price_annual_inr
@@ -196,7 +212,6 @@ function PlansTab() {
                         : ""
                 }
                 confirmLabel="Sync"
-                confirmStyle="bg-amber-600 hover:bg-amber-700"
                 onConfirm={() => syncing && sync.mutate(syncing.code)}
                 onCancel={() => setSyncing(null)}
                 isPending={sync.isPending}
@@ -248,53 +263,55 @@ function CouponModal({ coupon, plans, onClose }: { coupon: BillingCoupon | null;
     return (
         <Modal
             open
-            onClose={() => !save.isPending && onClose()}
+            onClose={onClose}
+            dismissible={!save.isPending}
             title={isNew ? "New plan coupon" : `Edit coupon · ${coupon.code}`}
             icon={Ticket}
             size="lg"
             footer={
                 <>
-                    <button type="button" onClick={onClose} disabled={save.isPending} className={btnSecondary}>
+                    <Button variant="secondary" onClick={onClose} disabled={save.isPending}>
                         Cancel
-                    </button>
-                    <button type="button" onClick={() => save.mutate()} disabled={save.isPending || codeInvalid || maxInvalid} className={btnPrimary}>
-                        <LoadingButtonIcon loading={save.isPending} icon={Save} /> Save coupon
-                    </button>
+                    </Button>
+                    <Button variant="primary" icon={Save} onClick={() => save.mutate()} disabled={codeInvalid || maxInvalid} loading={save.isPending}>
+                        Save coupon
+                    </Button>
                 </>
             }
         >
-            <Field label="Code" htmlFor="bc-code" required hint={isNew ? "2–30 characters; stored uppercase." : "Codes can't be renamed."}>
-                <input
-                    id="bc-code"
+            <Field label="Code" required hint={isNew ? "2–30 characters; stored uppercase." : "Codes can't be renamed."}>
+                <TextInput
                     type="text"
                     value={code}
                     disabled={!isNew}
                     onChange={(e) => setCode(e.target.value.toUpperCase())}
-                    className={`${inputClass} font-mono uppercase tracking-wider`}
+                    className="font-mono uppercase tracking-wider"
                     placeholder="BIRPILOT"
                 />
             </Field>
-            <Field label="Description" htmlFor="bc-desc">
-                <input id="bc-desc" type="text" maxLength={200} value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
+            <Field label="Description">
+                <TextInput type="text" maxLength={200} value={description} onChange={(e) => setDescription(e.target.value)} />
             </Field>
-            <Field label="Razorpay offer id" htmlFor="bc-offer" hint="Create the offer in the Razorpay dashboard, then paste its id.">
-                <input id="bc-offer" type="text" maxLength={60} value={offerId} onChange={(e) => setOfferId(e.target.value)} className={`${inputClass} font-mono`} placeholder="offer_…" />
+            <Field label="Razorpay offer id" hint="Create the offer in the Razorpay dashboard, then paste its id.">
+                <TextInput type="text" maxLength={60} value={offerId} onChange={(e) => setOfferId(e.target.value)} className="font-mono" placeholder="offer_…" />
             </Field>
-            <Field label="Valid for plans" hint="None selected = any paid plan.">
-                <div className="flex flex-wrap gap-3">
+            <fieldset>
+                <legend className="mb-1.5 text-sm font-medium text-ink">Valid for plans</legend>
+                <div className="flex flex-wrap gap-x-4 gap-y-2">
                     {plans
                         .filter((p) => !p.custom)
                         .map((p) => (
                             <Checkbox key={p.code} checked={planCodes.includes(p.code)} onChange={() => togglePlan(p.code)} label={p.name ?? p.code} />
                         ))}
                 </div>
-            </Field>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Max redemptions" htmlFor="bc-max" hint={maxInvalid ? "Must be at least 1." : "Blank = unlimited."}>
-                    <input id="bc-max" type="number" min={1} value={maxRedemptions} onChange={(e) => setMaxRedemptions(e.target.value)} className={inputClass} />
+                <p className="mt-1 text-xs text-ink-faint">None selected = any paid plan.</p>
+            </fieldset>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Max redemptions" error={maxInvalid ? "Must be at least 1." : undefined} hint="Blank = unlimited.">
+                    <TextInput type="number" min={1} value={maxRedemptions} onChange={(e) => setMaxRedemptions(e.target.value)} />
                 </Field>
-                <Field label="Expires at" htmlFor="bc-exp" hint="Blank = never.">
-                    <input id="bc-exp" type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className={inputClass} />
+                <Field label="Expires at" hint="Blank = never.">
+                    <TextInput type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
                 </Field>
             </div>
             <Checkbox checked={active} onChange={setActive} label="Active" />
@@ -304,62 +321,91 @@ function CouponModal({ coupon, plans, onClose }: { coupon: BillingCoupon | null;
 
 function CouponsTab() {
     const [editing, setEditing] = useState<BillingCoupon | null | "new">(null);
-    const { data, isLoading, error, refetch } = useQuery({ queryKey: ["collabs-billing-coupons"], queryFn: collabsAdminService.listCoupons });
+    const { data, isLoading, isFetching, error, refetch } = useQuery({ queryKey: ["collabs-billing-coupons"], queryFn: collabsAdminService.listCoupons });
     const plansQuery = useQuery({ queryKey: ["collabs-plans"], queryFn: collabsAdminService.listPlans, staleTime: 5 * 60 * 1000 });
     const coupons = data ?? [];
+
+    const columns: DataColumn<BillingCoupon>[] = [
+        {
+            id: "code",
+            header: "Code",
+            hideable: false,
+            sortValue: (c) => c.code,
+            cell: (c) => (
+                <div className="min-w-0">
+                    <div className="font-mono font-semibold text-ink">{c.code}</div>
+                    {c.description && <div className="text-xs text-ink-faint">{c.description}</div>}
+                </div>
+            ),
+        },
+        {
+            id: "plans",
+            header: "Plans",
+            csv: (c) => (c.plans.length ? c.plans.join(", ") : "Any"),
+            cell: (c) => (
+                <div className="flex flex-wrap gap-1">
+                    {c.plans.length ? c.plans.map((p) => <Tag key={p}>{humanize(p)}</Tag>) : <span className="text-xs text-ink-faint">Any</span>}
+                </div>
+            ),
+        },
+        {
+            id: "redemptions",
+            header: "Redemptions",
+            align: "right",
+            sortValue: (c) => c.redemptions,
+            csv: (c) => `${c.redemptions}${c.max_redemptions !== null ? ` / ${c.max_redemptions}` : ""}`,
+            cell: (c) => (
+                <span className="tabular-nums text-ink-muted">
+                    {c.redemptions}
+                    {c.max_redemptions !== null ? ` / ${c.max_redemptions}` : ""}
+                </span>
+            ),
+        },
+        {
+            id: "expires",
+            header: "Expires",
+            sortValue: (c) => c.expires_at ?? "",
+            csv: (c) => (c.expires_at ? formatDateTime(c.expires_at) : "Never"),
+            cell: (c) => <span className="whitespace-nowrap text-ink-muted">{c.expires_at ? formatDateTime(c.expires_at) : "Never"}</span>,
+        },
+        { id: "offer", header: "Razorpay offer", csv: (c) => c.razorpay_offer_id ?? "", cell: (c) => <span className="font-mono text-xs text-ink-muted">{c.razorpay_offer_id ?? "—"}</span> },
+        {
+            id: "status",
+            header: "Status",
+            sortValue: (c) => c.active,
+            csv: (c) => (c.active ? "Active" : "Inactive"),
+            cell: (c) => <StatusPill status={c.active ? "active" : "paused"} label={c.active ? "Active" : "Inactive"} />,
+        },
+    ];
+
     return (
         <>
             <div className="flex justify-end">
-                <button type="button" onClick={() => setEditing("new")} className={btnPrimary}>
-                    <Plus className="w-4 h-4" /> New coupon
-                </button>
+                <Button variant="primary" icon={Plus} onClick={() => setEditing("new")}>
+                    New coupon
+                </Button>
             </div>
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-                <PanelState isLoading={isLoading} error={error} isEmpty={coupons.length === 0} emptyIcon={Ticket} emptyText="No plan coupons yet" onRetry={() => refetch()}>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-neutral-100 bg-neutral-50/60">
-                                    <th className={thClass}>Code</th>
-                                    <th className={thClass}>Plans</th>
-                                    <th className={thClass}>Redemptions</th>
-                                    <th className={thClass}>Expires</th>
-                                    <th className={thClass}>Razorpay offer</th>
-                                    <th className={thClass}>Status</th>
-                                    <th className={`${thClass} text-right`}>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-neutral-50">
-                                {coupons.map((c) => (
-                                    <tr key={c.code} className="hover:bg-neutral-50/60">
-                                        <td className="px-4 py-3">
-                                            <div className="font-mono font-semibold text-neutral-900">{c.code}</div>
-                                            {c.description && <div className="text-[11px] text-neutral-400">{c.description}</div>}
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <div className="flex flex-wrap gap-1">{c.plans.length ? c.plans.map((p) => <Chip key={p}>{humanize(p)}</Chip>) : <span className="text-neutral-400 text-xs">Any</span>}</div>
-                                        </td>
-                                        <td className="px-4 py-3 text-neutral-600">
-                                            {c.redemptions}
-                                            {c.max_redemptions !== null ? ` / ${c.max_redemptions}` : ""}
-                                        </td>
-                                        <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">{c.expires_at ? fmtDateTime(c.expires_at) : "Never"}</td>
-                                        <td className="px-4 py-3 font-mono text-xs text-neutral-500">{c.razorpay_offer_id ?? "—"}</td>
-                                        <td className="px-4 py-3">
-                                            <StatusPill status={c.active ? "active" : "paused"} label={c.active ? "Active" : "Inactive"} />
-                                        </td>
-                                        <td className="px-4 py-3 text-right">
-                                            <button type="button" onClick={() => setEditing(c)} className={btnSmNeutral}>
-                                                <Pencil className="w-3.5 h-3.5" /> Edit
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </PanelState>
-            </div>
+            <DataTable
+                label="Plan coupons"
+                rows={coupons}
+                columns={columns}
+                rowKey={(c) => c.code}
+                isLoading={isLoading}
+                isFetching={isFetching && !!data}
+                error={error}
+                onRetry={() => refetch()}
+                empty={{ icon: Ticket, title: "No plan coupons yet" }}
+                onRowClick={setEditing}
+                rowActions={(c) => (
+                    <Button size="sm" variant="ghost" icon={Pencil} onClick={() => setEditing(c)}>
+                        Edit
+                    </Button>
+                )}
+                storageKey="plan-coupons"
+                exportName="plan-coupons"
+                summary={data ? `${coupons.length} coupons` : undefined}
+                card={{ title: (c) => c.code, subtitle: (c) => c.description ?? undefined, fields: ["status", "redemptions", "expires", "plans"] }}
+            />
             {editing && (
                 <CouponModal
                     key={editing === "new" ? "new" : editing.code}
@@ -374,103 +420,106 @@ function CouponsTab() {
 
 // ── Subscriptions ──────────────────────────────────────────
 
-const SUB_STATUS_OPTIONS: DropdownOption[] = [
-    { value: "", label: "All statuses" },
-    { value: "trialing", label: "Trialing", dot: "bg-blue-500" },
-    { value: "active", label: "Active", dot: "bg-emerald-500" },
-    { value: "pending", label: "Pending", dot: "bg-amber-500" },
-    { value: "halted", label: "Halted", dot: "bg-red-500" },
-    { value: "cancelled", label: "Cancelled", dot: "bg-red-500" },
-    { value: "free", label: "Free", dot: "bg-neutral-400" },
+const SUB_STATUS_OPTIONS: FilterOption[] = [
+    { value: "trialing", label: "Trialing" },
+    { value: "active", label: "Active" },
+    { value: "pending", label: "Pending" },
+    { value: "halted", label: "Halted" },
+    { value: "cancelled", label: "Cancelled" },
+    { value: "free", label: "Free" },
 ];
 
-function SubscriptionsTab() {
-    const [status, setStatus] = useState("");
-    const [page, setPage] = useState(1);
+function SubscriptionsTab({ status, page, onStatus, onPage }: { status: string; page: number; onStatus: (v: string) => void; onPage: (p: number) => void }) {
     const [overriding, setOverriding] = useState<AdminSubscription | null>(null);
-    const { data, isLoading, error, refetch } = useQuery({
+    const { data, isLoading, isFetching, error, refetch } = useQuery({
         queryKey: ["collabs-subscriptions", status, page],
         queryFn: () => collabsAdminService.listSubscriptions({ status: status || undefined, page }),
         placeholderData: (prev) => prev,
     });
     const subs = data?.subscriptions ?? [];
     // Keep the open modal in sync with refreshed rows (after an override save).
-    const current = overriding ? subs.find((s) => s.business_id === overriding.business_id) ?? overriding : null;
+    const current = overriding ? (subs.find((s) => s.business_id === overriding.business_id) ?? overriding) : null;
+
+    const columns: DataColumn<AdminSubscription>[] = [
+        {
+            id: "business",
+            header: "Business",
+            hideable: false,
+            sortValue: (s) => s.business_name ?? s.business_id,
+            csv: (s) => s.business_name ?? s.business_id,
+            cell: (s) => <IdLink kind="business" id={s.business_id} label={s.business_name ?? s.business_id} />,
+        },
+        { id: "plan", header: "Plan", sortValue: (s) => s.plan_code ?? "free", csv: (s) => humanize(s.plan_code ?? "free"), cell: (s) => humanize(s.plan_code ?? "free") },
+        {
+            id: "status",
+            header: "Status",
+            sortValue: (s) => s.status ?? "free",
+            csv: (s) => `${s.status ?? "free"}${s.cancel_at_period_end ? " (cancels at period end)" : ""}`,
+            cell: (s) => (
+                <div className="flex flex-col items-start gap-1">
+                    <StatusPill status={s.status ?? "free"} />
+                    {s.cancel_at_period_end && <span className="text-xs text-bad">Cancels at period end</span>}
+                </div>
+            ),
+        },
+        { id: "period", header: "Period", sortValue: (s) => s.period ?? "", csv: (s) => s.period ?? "", cell: (s) => <span className="text-ink-muted">{s.period ? humanize(s.period) : "—"}</span> },
+        {
+            id: "renews",
+            header: "Renews / trial ends",
+            sortValue: (s) => (s.status === "trialing" ? s.trial_ends_at : s.current_period_end) ?? "",
+            csv: (s) => (s.status === "trialing" ? `Trial → ${formatDate(s.trial_ends_at)}` : formatDate(s.current_period_end)),
+            cell: (s) => (
+                <span className="whitespace-nowrap text-ink-muted">{s.status === "trialing" ? `Trial → ${formatDate(s.trial_ends_at)}` : formatDate(s.current_period_end)}</span>
+            ),
+        },
+        { id: "coupon", header: "Coupon", csv: (s) => s.coupon_code ?? "", cell: (s) => <span className="font-mono text-xs">{s.coupon_code ?? "—"}</span> },
+        {
+            id: "override",
+            header: "Override",
+            className: "max-w-[260px]",
+            csv: (s) => (s.override ? `${s.override.plan_code ?? ""}${s.override.until ? ` until ${formatDate(s.override.until)}` : ""}` : ""),
+            cell: (s) =>
+                s.override ? (
+                    <div className="space-y-1">
+                        {s.override.plan_code && <Tag tone="warn">Plan → {humanize(s.override.plan_code)}</Tag>}
+                        <EntitlementsSummary value={s.override.entitlements ?? {}} />
+                        <div className="text-xs text-ink-faint">{s.override.until ? `until ${formatDate(s.override.until)}` : "no expiry"}</div>
+                    </div>
+                ) : (
+                    <span className="text-xs text-ink-faint">—</span>
+                ),
+        },
+    ];
+
+    const chips: FilterChip[] = [];
+    if (status) chips.push({ key: "status", label: chipLabel("Status", status, SUB_STATUS_OPTIONS), onRemove: () => onStatus("") });
 
     return (
         <>
-            <Toolbar>
-                <FilterDropdown
-                    options={SUB_STATUS_OPTIONS}
-                    value={status}
-                    onChange={(v) => {
-                        setStatus(v);
-                        setPage(1);
-                    }}
-                    icon={<Filter className="w-3.5 h-3.5" />}
-                    placeholder="Status"
-                    theme="teal"
-                />
-                {data && <span className="text-sm text-neutral-500">{data.total} subscriptions</span>}
-            </Toolbar>
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-                <PanelState isLoading={isLoading && !data} error={error} isEmpty={subs.length === 0} emptyIcon={Receipt} emptyText="No subscriptions found" onRetry={() => refetch()}>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-neutral-100 bg-neutral-50/60">
-                                    <th className={thClass}>Business</th>
-                                    <th className={thClass}>Plan</th>
-                                    <th className={thClass}>Status</th>
-                                    <th className={thClass}>Period</th>
-                                    <th className={thClass}>Renews / trial ends</th>
-                                    <th className={thClass}>Coupon</th>
-                                    <th className={thClass}>Override</th>
-                                    <th className={`${thClass} text-right`}>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-neutral-50">
-                                {subs.map((s) => (
-                                    <tr key={s.business_id} className="hover:bg-neutral-50/60 align-top">
-                                        <td className="px-4 py-3">
-                                            <Link to={`/collabs/businesses/${s.business_id}`} className="font-medium text-neutral-900 hover:underline">
-                                                {s.business_name ?? s.business_id}
-                                            </Link>
-                                        </td>
-                                        <td className="px-4 py-3 text-neutral-700">{humanize(s.plan_code ?? "free")}</td>
-                                        <td className="px-4 py-3">
-                                            <StatusPill status={s.status ?? "free"} />
-                                            {s.cancel_at_period_end && <div className="text-[11px] text-red-600 mt-1">Cancels at period end</div>}
-                                        </td>
-                                        <td className="px-4 py-3 text-neutral-600">{s.period ? humanize(s.period) : "—"}</td>
-                                        <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">
-                                            {s.status === "trialing" ? `Trial → ${fmtDate(s.trial_ends_at)}` : fmtDate(s.current_period_end)}
-                                        </td>
-                                        <td className="px-4 py-3 font-mono text-xs">{s.coupon_code ?? "—"}</td>
-                                        <td className="px-4 py-3 max-w-[260px]">
-                                            {s.override ? (
-                                                <div className="space-y-1">
-                                                    {s.override.plan_code && <Chip tone="amber">Plan → {humanize(s.override.plan_code)}</Chip>}
-                                                    <EntitlementsSummary value={s.override.entitlements ?? {}} />
-                                                    <div className="text-[11px] text-neutral-400">{s.override.until ? `until ${fmtDate(s.override.until)}` : "no expiry"}</div>
-                                                </div>
-                                            ) : (
-                                                <span className="text-neutral-400 text-xs">—</span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3 text-right">
-                                            <button type="button" onClick={() => setOverriding(s)} className={btnSmNeutral}>
-                                                <Pencil className="w-3.5 h-3.5" /> Override
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </PanelState>
-                {data && <Pagination page={page} totalPages={totalPagesOf(data)} total={data.total} onPageChange={setPage} theme="teal" />}
-            </div>
+            <FilterBar chips={chips} onReset={() => onStatus("")}>
+                <FilterSelect label="Status" value={status} onChange={onStatus} options={SUB_STATUS_OPTIONS} allLabel="All statuses" />
+            </FilterBar>
+            <DataTable
+                label="Subscriptions"
+                rows={subs}
+                columns={columns}
+                rowKey={(s) => s.business_id}
+                isLoading={isLoading && !data}
+                isFetching={isFetching && !!data}
+                error={error}
+                onRetry={() => refetch()}
+                empty={{ icon: Receipt, title: "No subscriptions found", description: status ? "Try clearing the filter." : undefined }}
+                rowActions={(s) => (
+                    <Button size="sm" variant="ghost" icon={Pencil} onClick={() => setOverriding(s)}>
+                        Override
+                    </Button>
+                )}
+                storageKey="subscriptions"
+                exportName="subscriptions"
+                summary={data ? `${subs.length} of ${data.total.toLocaleString("en-IN")}` : undefined}
+                card={{ title: (s) => s.business_name ?? s.business_id, subtitle: (s) => humanize(s.plan_code ?? "free"), fields: ["status", "renews", "coupon", "override"] }}
+                footer={data && <Pagination page={page} totalPages={totalPagesOf(data)} total={data.total} pageSize={data.page_size} onPageChange={onPage} />}
+            />
             <Modal open={!!current} onClose={() => setOverriding(null)} title={`Plan override · ${current?.business_name ?? ""}`} icon={Receipt} size="2xl">
                 {current && <OverridePanel businessId={current.business_id} current={current.override} currentPlanCode={current.plan_code} />}
             </Modal>
@@ -480,16 +529,19 @@ function SubscriptionsTab() {
 
 export function PlansBillingPage() {
     const { isAdmin } = useCollabAccess();
-    const [tab, setTab] = useState<Tab>("plans");
+    const { state, set } = useUrlState({ tab: "plans", status: "", page: 1 });
+    const tab: Tab = TABS.includes(state.tab as Tab) ? (state.tab as Tab) : "plans";
+    const subStatus = SUB_STATUS_OPTIONS.some((o) => o.value === state.status) ? state.status : "";
 
     if (!isAdmin) return <AccessDenied message="Only admins can manage plans and billing." />;
 
     return (
-        <div className="space-y-5 animate-fade-in">
-            <PageHeader icon={CreditCard} title="Plans & Billing" gradient="from-emerald-500 to-emerald-600" subtitle="Business plans (INR + GST via Razorpay), plan coupons and subscriptions" />
-            <SegmentedTabs<Tab>
+        <div className="space-y-5">
+            <PageHeader icon={CreditCard} title="Plans and billing" description="Business plans (INR + GST via Razorpay), plan coupons and subscriptions" />
+            <Tabs<Tab>
+                label="Billing sections"
                 value={tab}
-                onChange={setTab}
+                onChange={(v) => set({ tab: v, status: "", page: 1 })}
                 tabs={[
                     { value: "plans", label: "Plans" },
                     { value: "coupons", label: "Coupons" },
@@ -498,7 +550,9 @@ export function PlansBillingPage() {
             />
             {tab === "plans" && <PlansTab />}
             {tab === "coupons" && <CouponsTab />}
-            {tab === "subscriptions" && <SubscriptionsTab />}
+            {tab === "subscriptions" && (
+                <SubscriptionsTab status={subStatus} page={Math.max(1, state.page)} onStatus={(v) => set({ status: v })} onPage={(p) => set({ page: p })} />
+            )}
         </div>
     );
 }
