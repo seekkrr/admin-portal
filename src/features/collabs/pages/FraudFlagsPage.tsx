@@ -4,12 +4,20 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Siren, Check, KeyRound, Repeat, MapPinOff } from "lucide-react";
 import { AccessDenied } from "@components/AccessDenied";
+import { Button } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Tabs } from "@/components/ui/Tabs";
+import { DataTable, type DataColumn } from "@/components/ui/DataTable";
 import { Pagination } from "@/components/ui/Pagination";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { IdLink } from "@/components/ui/IdLink";
+import { useUrlState } from "@/hooks/useUrlState";
+import { formatDateTime } from "@/utils/date";
 import { collabsAdminService } from "../services/collabs-admin.service";
 import { useCollabAccess } from "../roles";
-import { MonoId, PageHeader, PanelState, ReasonModal, SegmentedTabs, StatusPill, Toolbar, btnSmApprove, thClass } from "../components/CollabsUi";
 import { MarkerLink } from "../components/CollabPickers";
-import { fmtDateTime, humanize, totalPagesOf } from "../utils";
+import { humanize, totalPagesOf } from "../utils";
 import type { FraudFlag, FraudFlagStatus } from "../types";
 
 const TYPE_META: Record<string, { label: string; icon: typeof Siren; help: string }> = {
@@ -18,18 +26,26 @@ const TYPE_META: Record<string, { label: string; icon: typeof Siren; help: strin
     repeat_pairing: { label: "Repeat pairing", icon: Repeat, help: "Same creator × business redeemed repeatedly" },
 };
 
+const STATUSES: FraudFlagStatus[] = ["open", "resolved"];
+
+function detailsText(flag: FraudFlag): string {
+    return Object.entries(flag.details ?? {})
+        .map(([k, v]) => `${humanize(k)}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`)
+        .join("; ");
+}
+
 function FlagDetails({ flag }: { flag: FraudFlag }) {
     const entries = Object.entries(flag.details ?? {});
-    if (entries.length === 0) return <span className="text-neutral-400">—</span>;
+    if (entries.length === 0) return <span className="text-ink-faint">—</span>;
     return (
         <div className="space-y-0.5 text-xs">
             {entries.map(([k, v]) => (
-                <div key={k} className="flex gap-1.5">
-                    <span className="text-neutral-500">{humanize(k)}:</span>
+                <div key={k} className="flex flex-wrap gap-1.5">
+                    <span className="text-ink-muted">{humanize(k)}:</span>
                     {k === "marker_id" && typeof v === "string" ? (
                         <MarkerLink id={v} />
                     ) : (
-                        <span className="text-neutral-800 font-medium">{typeof v === "object" ? JSON.stringify(v) : String(v)}</span>
+                        <span className="break-all font-medium text-ink">{typeof v === "object" ? JSON.stringify(v) : String(v)}</span>
                     )}
                 </div>
             ))}
@@ -40,11 +56,12 @@ function FlagDetails({ flag }: { flag: FraudFlag }) {
 export function FraudFlagsPage() {
     const { isStaff } = useCollabAccess();
     const queryClient = useQueryClient();
-    const [status, setStatus] = useState<FraudFlagStatus>("open");
-    const [page, setPage] = useState(1);
+    const { state, set } = useUrlState({ status: "open", page: 1 });
+    const status: FraudFlagStatus = STATUSES.includes(state.status as FraudFlagStatus) ? (state.status as FraudFlagStatus) : "open";
+    const page = Math.max(1, state.page);
     const [resolving, setResolving] = useState<FraudFlag | null>(null);
 
-    const { data, isLoading, error, refetch } = useQuery({
+    const { data, isLoading, isFetching, error, refetch } = useQuery({
         queryKey: ["collabs-fraud-flags", status, page],
         queryFn: () => collabsAdminService.listFraudFlags({ status, page }),
         enabled: isStaff,
@@ -66,113 +83,114 @@ export function FraudFlagsPage() {
 
     const flags = data?.flags ?? [];
 
+    const columns: DataColumn<FraudFlag>[] = [
+        {
+            id: "signal",
+            header: "Signal",
+            hideable: false,
+            sortValue: (f) => TYPE_META[f.type]?.label ?? f.type,
+            cell: (f) => {
+                const meta = TYPE_META[f.type];
+                const Icon = meta?.icon ?? Siren;
+                return (
+                    <div className="flex items-start gap-2">
+                        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-bad-soft text-bad">
+                            <Icon className="h-3.5 w-3.5" aria-hidden />
+                        </span>
+                        <div>
+                            <div className="font-medium text-ink">{meta?.label ?? humanize(f.type)}</div>
+                            {meta && <div className="text-xs text-ink-faint">{meta.help}</div>}
+                        </div>
+                    </div>
+                );
+            },
+        },
+        { id: "business", header: "Business", csv: (f) => f.business_id ?? "", cell: (f) => <IdLink kind="business" id={f.business_id} /> },
+        {
+            id: "creator",
+            header: "Creator",
+            csv: (f) => f.creator_user_id ?? "",
+            cell: (f) =>
+                f.creator_user_id ? (
+                    <div className="flex flex-col items-start gap-0.5">
+                        <IdLink kind="user" id={f.creator_user_id} />
+                        <Link to={`/collabs/applications?creator_user_id=${f.creator_user_id}`} className="text-xs text-accent-700 hover:underline">
+                            Collab requests
+                        </Link>
+                    </div>
+                ) : (
+                    <span className="text-ink-faint">—</span>
+                ),
+        },
+        { id: "details", header: "Details", csv: detailsText, cell: (f) => <FlagDetails flag={f} /> },
+        {
+            id: "raised",
+            header: "Raised",
+            sortValue: (f) => f.created_at ?? "",
+            csv: (f) => formatDateTime(f.created_at),
+            cell: (f) => <span className="whitespace-nowrap text-ink-muted">{formatDateTime(f.created_at)}</span>,
+        },
+        { id: "status", header: "Status", sortValue: (f) => f.status, cell: (f) => <StatusPill status={f.status} /> },
+    ];
+
     return (
-        <div className="p-6 max-w-[1400px] mx-auto space-y-5 animate-fade-in">
-            <PageHeader
-                icon={Siren}
-                title="Fraud Flags"
-                gradient="from-red-500 to-red-600"
-                subtitle="Automatic signals: code lockouts, redemptions without a nearby check-in, repeated pairings"
+        <div className="space-y-5">
+            <PageHeader icon={Siren} title="Fraud flags" description="Automatic signals: code lockouts, redemptions without a nearby check-in, repeated pairings" />
+
+            <Tabs<FraudFlagStatus>
+                label="Flag status"
+                value={status}
+                onChange={(v) => set({ status: v })}
+                tabs={[
+                    { value: "open", label: "Open", count: status === "open" ? data?.total : undefined },
+                    { value: "resolved", label: "Resolved" },
+                ]}
             />
 
-            <Toolbar>
-                <SegmentedTabs<FraudFlagStatus>
-                    value={status}
-                    onChange={(v) => {
-                        setStatus(v);
-                        setPage(1);
-                    }}
-                    tabs={[
-                        { value: "open", label: "Open", count: status === "open" ? data?.total : undefined },
-                        { value: "resolved", label: "Resolved" },
-                    ]}
-                />
-            </Toolbar>
+            <DataTable
+                label="Fraud flags"
+                rows={flags}
+                columns={columns}
+                rowKey={(f) => f.id}
+                isLoading={isLoading && !data}
+                isFetching={isFetching && !!data}
+                error={error}
+                onRetry={() => refetch()}
+                empty={{ icon: Siren, title: `No ${status} fraud flags` }}
+                rowActions={(f) =>
+                    f.status === "open" ? (
+                        <Button size="sm" variant="secondary" icon={Check} onClick={() => setResolving(f)}>
+                            Resolve
+                        </Button>
+                    ) : null
+                }
+                storageKey="fraud-flags"
+                exportName="fraud-flags"
+                summary={data ? `${flags.length} of ${data.total.toLocaleString("en-IN")}` : undefined}
+                card={{
+                    title: (f) => TYPE_META[f.type]?.label ?? humanize(f.type),
+                    subtitle: (f) => TYPE_META[f.type]?.help,
+                    fields: ["business", "creator", "raised", "details"],
+                }}
+                footer={
+                    data && (
+                        <Pagination page={page} totalPages={totalPagesOf(data)} total={data.total} pageSize={data.page_size} onPageChange={(p) => set({ page: p })} />
+                    )
+                }
+            />
 
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-                <PanelState isLoading={isLoading && !data} error={error} isEmpty={flags.length === 0} emptyIcon={Siren} emptyText={`No ${status} fraud flags`} onRetry={() => refetch()}>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-neutral-100 bg-neutral-50/60">
-                                    <th className={thClass}>Signal</th>
-                                    <th className={thClass}>Business</th>
-                                    <th className={thClass}>Creator</th>
-                                    <th className={thClass}>Details</th>
-                                    <th className={thClass}>Raised</th>
-                                    <th className={`${thClass} text-right`}>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-neutral-50">
-                                {flags.map((f) => {
-                                    const meta = TYPE_META[f.type];
-                                    const Icon = meta?.icon ?? Siren;
-                                    return (
-                                        <tr key={f.id} className="hover:bg-neutral-50/60 align-top">
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-start gap-2">
-                                                    <span className="mt-0.5 w-7 h-7 rounded-lg bg-red-50 text-red-600 flex items-center justify-center shrink-0">
-                                                        <Icon className="w-3.5 h-3.5" />
-                                                    </span>
-                                                    <div>
-                                                        <div className="font-medium text-neutral-900">{meta?.label ?? humanize(f.type)}</div>
-                                                        {meta && <div className="text-[11px] text-neutral-400">{meta.help}</div>}
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                {f.business_id ? (
-                                                    <Link to={`/collabs/businesses/${f.business_id}`} className="text-teal-700 hover:underline">
-                                                        <MonoId id={f.business_id} />
-                                                    </Link>
-                                                ) : (
-                                                    "—"
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                {f.creator_user_id ? (
-                                                    <Link to={`/collabs/applications?creator_user_id=${f.creator_user_id}`} className="text-teal-700 hover:underline">
-                                                        <MonoId id={f.creator_user_id} />
-                                                    </Link>
-                                                ) : (
-                                                    "—"
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <FlagDetails flag={f} />
-                                            </td>
-                                            <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">{fmtDateTime(f.created_at)}</td>
-                                            <td className="px-4 py-3 text-right">
-                                                {f.status === "open" ? (
-                                                    <button type="button" onClick={() => setResolving(f)} className={btnSmApprove}>
-                                                        <Check className="w-3.5 h-3.5" /> Resolve
-                                                    </button>
-                                                ) : (
-                                                    <StatusPill status={f.status} />
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                </PanelState>
-                {data && <Pagination page={page} totalPages={totalPagesOf(data)} total={data.total} onPageChange={setPage} theme="rose" />}
-            </div>
-
-            <ReasonModal
+            <ConfirmDialog
                 open={!!resolving}
-                title="Resolve fraud flag"
+                title="Resolve fraud flag?"
                 description={resolving ? `${TYPE_META[resolving.type]?.label ?? humanize(resolving.type)} — mark as reviewed.` : undefined}
-                label="Note"
-                placeholder="e.g. Business changed its redeem code; creator warned"
-                maxLength={1000}
+                level="reason"
+                reasonLabel="Note"
+                reasonPlaceholder="e.g. Business changed its redeem code; creator warned"
+                reasonMaxLength={1000}
                 confirmLabel="Resolve"
-                tone="primary"
                 isPending={resolve.isPending}
                 onCancel={() => setResolving(null)}
-                onConfirm={(note) => resolving && resolve.mutate({ id: resolving.id, note })}
+                onConfirm={(note) => resolving && resolve.mutate({ id: resolving.id, note: note ?? "" })}
             />
         </div>
     );

@@ -113,15 +113,15 @@ export function SetupHostModal({
         >
             {business ? (
                 <div className="space-y-4">
-                    <div className="flex items-start gap-3 p-4 rounded-xl border border-emerald-200 bg-emerald-50/60">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                        <div className="min-w-0 text-sm text-neutral-700 space-y-1">
-                            <p className="font-semibold text-neutral-900">
+                    <div className="flex items-start gap-3 p-4 rounded-control border border-good-line bg-good-soft/60">
+                        <CheckCircle2 className="w-5 h-5 text-good shrink-0 mt-0.5" />
+                        <div className="min-w-0 text-sm text-ink-muted space-y-1">
+                            <p className="font-semibold text-ink">
                                 {result?.created ? `Created ${business.name} with Experiences on` : `Experiences is on for ${business.name}`}
                             </p>
                             {result?.created && <p>They're the owner and can sign in to the Partner Portal with their SeekKrr account.</p>}
                             {others > 0 && (
-                                <p className="text-xs text-neutral-500">
+                                <p className="text-xs text-ink-muted">
                                     They own {others + 1} businesses; Experiences was turned on for the newest one.
                                 </p>
                             )}
@@ -142,7 +142,7 @@ export function SetupHostModal({
                 </div>
             ) : (
                 <>
-                    <p className="text-sm text-neutral-600 leading-relaxed">
+                    <p className="text-sm text-ink-muted leading-relaxed">
                         Turns on Experiences for a business. With a user, it uses the newest business they own, or creates one with them as the owner
                         (Experiences on, Collabs off).
                     </p>
@@ -156,13 +156,13 @@ export function SetupHostModal({
                             placeholder="Paste a User ID, Business ID or email"
                             className={
                                 trimmed && !valid
-                                    ? monoInputClass.replace("border-neutral-200", "border-red-300").replace("bg-white", "bg-red-50")
+                                    ? monoInputClass.replace("border-line", "border-bad-line").replace("bg-surface", "bg-bad-soft")
                                     : monoInputClass
                             }
                             disabled={setup.isPending}
                             autoFocus
                         />
-                        {trimmed && !valid && <p className="mt-1 text-xs text-red-600">Must be a 24-character ID or an email address</p>}
+                        {trimmed && !valid && <p className="mt-1 text-xs text-bad">Must be a 24-character ID or an email address</p>}
                     </Field>
                     <Field label="Business name (for a new business)" htmlFor="host-business-name" hint="Optional. Defaults to “<first name>'s Experiences”.">
                         <input
@@ -220,7 +220,7 @@ function BusinessIdPicker({
     return (
         <div ref={boxRef} className="relative">
             <div className="relative">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
                 <input
                     id="new-exp-business"
                     type="text"
@@ -239,13 +239,13 @@ function BusinessIdPicker({
                     aria-controls="new-exp-business-list"
                 />
                 {search.isFetching ? (
-                    <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-teal-500 animate-spin" />
+                    <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-500 animate-spin" />
                 ) : (
                     value && (
                         <button
                             type="button"
                             onClick={() => onChange("")}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink-muted"
                             aria-label="Clear business"
                             disabled={disabled}
                         >
@@ -258,11 +258,11 @@ function BusinessIdPicker({
                 <ul
                     id="new-exp-business-list"
                     role="listbox"
-                    className="absolute left-0 right-0 top-full mt-1.5 z-10 bg-white border border-neutral-200 rounded-xl shadow-xl max-h-64 overflow-y-auto divide-y divide-neutral-50"
+                    className="absolute left-0 right-0 top-full mt-1.5 z-10 bg-surface border border-line rounded-control shadow-xl max-h-64 overflow-y-auto divide-y divide-line"
                 >
-                    {search.isError && <li className="px-4 py-3 text-xs text-red-500">Couldn't load businesses. Paste the ID instead.</li>}
+                    {search.isError && <li className="px-4 py-3 text-xs text-bad">Couldn't load businesses. Paste the ID instead.</li>}
                     {!search.isError && !search.isFetching && results.length === 0 && (
-                        <li className="px-4 py-3 text-xs text-neutral-500">
+                        <li className="px-4 py-3 text-xs text-ink-muted">
                             {q ? `No business with Experiences on matches “${q}”.` : "No businesses have Experiences on yet."} Use “Set up a host” first, or
                             paste a Business ID.
                         </li>
@@ -275,12 +275,12 @@ function BusinessIdPicker({
                                     onChange(b.id);
                                     setOpen(false);
                                 }}
-                                className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-teal-50/60 transition-colors"
+                                className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-accent-50/60 transition-colors"
                             >
-                                <Building2 className="w-4 h-4 text-teal-600 shrink-0" />
+                                <Building2 className="w-4 h-4 text-accent-600 shrink-0" />
                                 <span className="min-w-0 flex-1">
-                                    <span className="block text-sm font-medium text-neutral-800 truncate">{b.name}</span>
-                                    <span className="block font-mono text-[11px] text-neutral-400 truncate">{b.id}</span>
+                                    <span className="block text-sm font-medium text-ink truncate">{b.name}</span>
+                                    <span className="block font-mono text-[11px] text-ink-faint truncate">{b.id}</span>
                                 </span>
                                 <StatusPill status={b.status} />
                             </button>
@@ -300,12 +300,12 @@ function PickedBusiness({ businessId, onTurnOn, turningOn }: { businessId: strin
         staleTime: 30_000,
         retry: false,
     });
-    if (isLoading) return <p className="text-xs text-neutral-500 flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Looking up the business…</p>;
-    if (error || !data) return <p className="text-xs text-red-600">{error instanceof Error ? error.message : "Business not found"}</p>;
+    if (isLoading) return <p className="text-xs text-ink-muted flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Looking up the business…</p>;
+    if (error || !data) return <p className="text-xs text-bad">{error instanceof Error ? error.message : "Business not found"}</p>;
     const on = featuresOf(data).experiences;
     return (
-        <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-600">
-            <span className="font-medium text-neutral-800">{data.name}</span>
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-muted">
+            <span className="font-medium text-ink">{data.name}</span>
             <StatusPill status={data.status} />
             <FeatureChips business={data} />
             {!on && (
@@ -432,13 +432,13 @@ export function NewExperienceModal({
             }
         >
             {created ? (
-                <div className="space-y-3 text-sm text-neutral-700">
+                <div className="space-y-3 text-sm text-ink-muted">
                     <p>
                         <strong>{created.title}</strong> is saved as a draft
                         {created.business?.name || created.business_name ? ` for ${created.business?.name || created.business_name}` : ""}. It isn't visible in
                         the app yet.
                     </p>
-                    <p className="p-3 rounded-xl bg-violet-50 border border-violet-100 text-violet-900">
+                    <p className="p-3 rounded-control bg-info-soft border border-info-line text-info">
                         Open in Partner Portal to finish (photos, sections, slots), then publish it there.
                     </p>
                 </div>
@@ -475,7 +475,7 @@ export function NewExperienceModal({
                         />
                     </Field>
                     {error && (
-                        <div className="flex items-start gap-2 p-3 rounded-xl border border-red-200 bg-red-50 text-sm text-red-700">
+                        <div className="flex items-start gap-2 p-3 rounded-control border border-bad-line bg-bad-soft text-sm text-bad">
                             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                             <div className="min-w-0 flex-1 space-y-2">
                                 <p>{error}</p>

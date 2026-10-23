@@ -1,107 +1,94 @@
-import { Outlet, Link, useNavigate } from "react-router-dom";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@store/auth.store";
-import { LogOut, Menu, X } from "lucide-react";
-import { useState } from "react";
 import { Footer, Sidebar } from "@components/ui";
-import { NAV_ITEMS } from "@/config/navigation";
+import { LoadingFallback } from "@components/LoadingFallback";
+import { AppHeader } from "@/components/shell/AppHeader";
+import { BottomBar, MobileNavDrawer } from "@/components/shell/MobileNav";
+import { Breadcrumbs, DocumentTitle } from "@/components/shell/Breadcrumbs";
+import { useShellPrefs } from "@/components/shell/useShellPrefs";
+import { onOpenSearchPalette } from "@/components/shell/searchEvents";
+import { SearchPalette } from "@/features/search/SearchPalette";
+import { useNavCounts } from "@/features/today/useTodayItems";
 
+/**
+ * The app frame: sticky header (logo, search, Chat, signed-in user), a grouped
+ * role-filtered side menu on tablets/desktops, a drawer + bottom bar on
+ * phones, breadcrumbs and the page title. Pages render inside one page width
+ * and one gutter — they must not add their own outer padding.
+ */
 export function DashboardLayout() {
     const { logout } = useAuthStore();
     const navigate = useNavigate();
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-        const stored = localStorage.getItem("sidebar_collapsed");
-        return stored ? JSON.parse(stored) : false;
-    });
+    const { pathname } = useLocation();
+    // The chat screen has its own sticky composer at the bottom, so the phone
+    // bottom bar steps aside there (the header avatar still opens the menu).
+    const showBottomBar = !(pathname === "/chat" || pathname.startsWith("/chat/"));
+    const { collapsed, toggleCollapsed, closedGroups, toggleGroup } = useShellPrefs();
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [searchOpen, setSearchOpen] = useState(false);
+    const counts = useNavCounts();
+    const todayCount = Object.values(counts).reduce((a, b) => a + b, 0);
 
-    const toggleSidebar = () => {
-        const newState = !sidebarCollapsed;
-        setSidebarCollapsed(newState);
-        localStorage.setItem("sidebar_collapsed", JSON.stringify(newState));
-    };
+    const openSearch = useCallback(() => {
+        setMenuOpen(false);
+        setSearchOpen(true);
+    }, []);
+    const closeSearch = useCallback(() => setSearchOpen(false), []);
+    const openMenu = useCallback(() => setMenuOpen(true), []);
+    const closeMenu = useCallback(() => setMenuOpen(false), []);
+
+    // Ctrl/Cmd+K opens search from anywhere.
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "k") {
+                e.preventDefault();
+                setSearchOpen((v) => !v);
+            }
+        };
+        window.addEventListener("keydown", onKey);
+        const off = onOpenSearchPalette(openSearch);
+        return () => {
+            window.removeEventListener("keydown", onKey);
+            off();
+        };
+    }, [openSearch]);
 
     const handleLogout = async () => {
+        setMenuOpen(false);
         await logout();
         navigate("/login");
     };
 
     return (
-        <div className="min-h-screen bg-transparent flex flex-col">
-            <header className="bg-white/80 backdrop-blur-md border-b border-white/20 sticky top-0 z-40 font-sans h-16 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
-                <div className="w-full px-4 sm:px-6 lg:px-8 h-full">
-                    <div className="flex items-center h-full gap-4">
-                        {/* Logo */}
-                        <Link to="/" className="flex items-center gap-2">
-                            <img src="/seekkrr-logo.svg" alt="SeekKrr" className="h-8" />
-                        </Link>
+        <div className="flex min-h-dvh flex-col">
+            <DocumentTitle />
+            <AppHeader onOpenSearch={openSearch} onOpenMenu={openMenu} onLogout={handleLogout} />
 
-                        {/* User Menu */}
-                        <div className="hidden md:flex items-center gap-4 ml-auto">
-                            <button
-                                onClick={handleLogout}
-                                className="flex items-center gap-2 text-neutral-500 hover:text-neutral-900 transition-colors"
-                            >
-                                <LogOut className="w-5 h-5" />
-                                <span className="text-sm font-normal">Logout</span>
-                            </button>
-                        </div>
+            <div className="flex w-full flex-1">
+                <Sidebar collapsed={collapsed} onToggle={toggleCollapsed} closedGroups={closedGroups} onToggleGroup={toggleGroup} counts={counts} />
 
-                        {/* Mobile Menu Button */}
-                        <button
-                            className="md:hidden ml-auto p-2 text-neutral-600 hover:text-neutral-900"
-                            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                            aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
-                        >
-                            {isMobileMenuOpen ? (
-                                <X className="w-6 h-6" />
-                            ) : (
-                                <Menu className="w-6 h-6" />
-                            )}
-                        </button>
-                    </div>
-                </div>
-
-                {/* Mobile Menu */}
-                {isMobileMenuOpen && (
-                    <div className="md:hidden border-t border-neutral-200 bg-white absolute w-full left-0 top-16 shadow-lg z-50">
-                        <div className="px-4 py-4 space-y-4">
-                            {NAV_ITEMS.map((item) => (
-                                <Link
-                                    key={item.to}
-                                    to={item.to}
-                                    className="block py-2 text-neutral-600 hover:text-neutral-900"
-                                    onClick={() => setIsMobileMenuOpen(false)}
-                                >
-                                    {item.label}
-                                </Link>
-                            ))}
-                            <div className="pt-4 border-t border-neutral-100">
-                                <button
-                                    onClick={handleLogout}
-                                    className="w-full flex items-center gap-2 text-red-600 hover:text-red-700 font-normal"
-                                >
-                                    <LogOut className="w-5 h-5" />
-                                    Logout
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </header>
-
-            <div className="flex flex-1 max-w-[1920px] mx-auto w-full overflow-hidden">
-                {/* Sidebar - Controlled by parent state */}
-                <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
-
-                {/* Main Content */}
-                <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-                    <main className="flex-1 p-6 overflow-y-auto">
-                        <Outlet />
+                <div className={`${showBottomBar ? "pb-bottom-bar " : ""}flex min-w-0 flex-1 flex-col`}>
+                    <main id="main" tabIndex={-1} className="mx-auto w-full max-w-page flex-1 px-4 py-4 focus:outline-none sm:px-6 sm:py-6 lg:px-8">
+                        <Breadcrumbs />
+                        <Suspense fallback={<LoadingFallback />}>
+                            <Outlet />
+                        </Suspense>
                     </main>
-                    {/* Footer */}
                     <Footer />
                 </div>
             </div>
+
+            {showBottomBar && <BottomBar onOpenSearch={openSearch} onOpenMenu={openMenu} menuOpen={menuOpen} todayCount={todayCount} />}
+            <MobileNavDrawer
+                open={menuOpen}
+                onClose={closeMenu}
+                onLogout={handleLogout}
+                closedGroups={closedGroups}
+                onToggleGroup={toggleGroup}
+                counts={counts}
+            />
+            <SearchPalette open={searchOpen} onClose={closeSearch} />
         </div>
     );
 }

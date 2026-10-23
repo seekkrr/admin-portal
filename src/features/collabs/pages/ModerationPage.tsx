@@ -1,16 +1,22 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ShieldCheck, Check, X, AlertTriangle, Store, CalendarRange, Megaphone } from "lucide-react";
 import { AccessDenied } from "@components/AccessDenied";
+import { Button } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Tabs } from "@/components/ui/Tabs";
 import { Pagination } from "@/components/ui/Pagination";
-import { Card } from "@/components/ui/Card";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { PanelState } from "@/components/ui/States";
+import { StatusPill, Tag } from "@/components/ui/StatusPill";
+import { IdLink } from "@/components/ui/IdLink";
+import { useUrlState } from "@/hooks/useUrlState";
+import { formatDate, formatDateTime } from "@/utils/date";
 import { collabsAdminService } from "../services/collabs-admin.service";
 import { useCollabAccess } from "../roles";
-import { Chip, PageHeader, PanelState, ReasonModal, SegmentedTabs, StatusPill, btnSmApprove, btnSmReject } from "../components/CollabsUi";
 import { MarkerLink } from "../components/CollabPickers";
-import { fmtDate, fmtDateTime, humanize, totalPagesOf } from "../utils";
+import { humanize, totalPagesOf } from "../utils";
 import type { AdminCollab, ModerationStatus } from "../types";
 
 const FLAG_LABELS: Record<string, string> = {
@@ -20,6 +26,8 @@ const FLAG_LABELS: Record<string, string> = {
     auto_hidden_reports: "Auto-hidden after reports",
     hidden_by_admin: "Hidden by admin",
 };
+
+const STATUSES: ModerationStatus[] = ["pending", "approved", "rejected"];
 
 function BriefSummary({ collab }: { collab: AdminCollab }) {
     const b = collab.brief;
@@ -31,13 +39,13 @@ function BriefSummary({ collab }: { collab: AdminCollab }) {
     ];
     return (
         <div className="flex flex-wrap items-center gap-1.5">
-            <Megaphone className="w-3.5 h-3.5 text-neutral-400" />
+            <Megaphone className="h-3.5 w-3.5 text-ink-faint" aria-hidden />
             {parts.map((p) => (
-                <Chip key={p}>{p}</Chip>
+                <Tag key={p}>{p}</Tag>
             ))}
-            {b.disclosure_label && <Chip tone="violet">{b.disclosure_label}</Chip>}
-            {b.post_within_days ? <span className="text-[11px] text-neutral-500">post within {b.post_within_days}d</span> : null}
-            {b.usage_rights && b.usage_rights !== "none" && <span className="text-[11px] text-neutral-500">· rights: {humanize(b.usage_rights)}</span>}
+            {b.disclosure_label && <Tag tone="info">{b.disclosure_label}</Tag>}
+            {b.post_within_days ? <span className="text-xs text-ink-muted">post within {b.post_within_days}d</span> : null}
+            {b.usage_rights && b.usage_rights !== "none" && <span className="text-xs text-ink-muted">· rights: {humanize(b.usage_rights)}</span>}
         </div>
     );
 }
@@ -45,8 +53,9 @@ function BriefSummary({ collab }: { collab: AdminCollab }) {
 export function ModerationPage() {
     const { isStaff } = useCollabAccess();
     const queryClient = useQueryClient();
-    const [status, setStatus] = useState<ModerationStatus>("pending");
-    const [page, setPage] = useState(1);
+    const { state, set } = useUrlState({ status: "pending", page: 1 });
+    const status: ModerationStatus = STATUSES.includes(state.status as ModerationStatus) ? (state.status as ModerationStatus) : "pending";
+    const page = Math.max(1, state.page);
     const [rejecting, setRejecting] = useState<AdminCollab | null>(null);
 
     const { data, isLoading, error, refetch } = useQuery({
@@ -73,20 +82,13 @@ export function ModerationPage() {
     const collabs = data?.collabs ?? [];
 
     return (
-        <div className="p-6 max-w-[1200px] mx-auto space-y-5 animate-fade-in">
-            <PageHeader
-                icon={ShieldCheck}
-                title="Moderation Queue"
-                gradient="from-orange-500 to-orange-600"
-                subtitle="Collabs held by the keyword screen or hidden after reports"
-            />
+        <div className="space-y-5">
+            <PageHeader icon={ShieldCheck} title="Moderation" description="Collabs held by the keyword screen or hidden after reports" />
 
-            <SegmentedTabs<ModerationStatus>
+            <Tabs<ModerationStatus>
+                label="Moderation status"
                 value={status}
-                onChange={(v) => {
-                    setStatus(v);
-                    setPage(1);
-                }}
+                onChange={(v) => set({ status: v })}
                 tabs={[
                     { value: "pending", label: "Pending", count: status === "pending" ? data?.total : undefined },
                     { value: "approved", label: "Approved" },
@@ -99,115 +101,119 @@ export function ModerationPage() {
                 error={error}
                 isEmpty={collabs.length === 0}
                 emptyIcon={ShieldCheck}
-                emptyText={status === "pending" ? "Nothing to review — the queue is clear" : `No ${status} collabs`}
+                emptyText={status === "pending" ? "Nothing to review. The queue is clear." : `No ${status} collabs`}
                 onRetry={() => refetch()}
             >
-                <div className="space-y-3">
+                <ul className="space-y-3">
                     {collabs.map((c) => {
                         const pending = moderate.isPending && moderate.variables?.id === c.id;
                         return (
-                            <Card key={c.id} padding="none" className="overflow-hidden">
-                                <div className="p-5 space-y-3">
-                                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <li key={c.id} className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
+                                <div className="space-y-3 p-4 sm:p-5">
+                                    <div className="flex flex-wrap items-start justify-between gap-3">
                                         <div className="min-w-0">
-                                            <div className="flex items-center gap-2 flex-wrap text-xs text-neutral-500">
-                                                <Store className="w-3.5 h-3.5" />
+                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-muted">
+                                                <Store className="h-3.5 w-3.5" aria-hidden />
                                                 {c.business_id ? (
-                                                    <Link to={`/collabs/businesses/${c.business_id}`} className="font-medium text-neutral-700 hover:underline">
-                                                        {c.business_name ?? "Business"}
-                                                    </Link>
+                                                    <IdLink kind="business" id={c.business_id} label={c.business_name ?? "Business"} />
                                                 ) : (
                                                     <span>{c.business_name ?? "Unknown business"}</span>
                                                 )}
                                                 {c.marker_id && (
                                                     <>
-                                                        <span>·</span>
+                                                        <span aria-hidden>·</span>
                                                         <MarkerLink id={c.marker_id} />
                                                     </>
                                                 )}
                                                 <span>· {humanize(c.mode)}</span>
-                                                <span>· created {fmtDate(c.created_at)}</span>
+                                                <span>· created {formatDate(c.created_at)}</span>
                                             </div>
-                                            <h3 className="mt-1.5 text-lg font-semibold text-neutral-900">For: {c.offer}</h3>
-                                            <p className="text-sm text-neutral-700">
-                                                <span className="text-neutral-500">Wants:</span> {c.want || "—"}
+                                            <h2 className="mt-1.5 text-base font-semibold text-ink sm:text-lg">For: {c.offer}</h2>
+                                            <p className="text-sm text-ink">
+                                                <span className="text-ink-muted">Wants:</span> {c.want || "—"}
                                             </p>
                                         </div>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex flex-wrap items-center gap-2">
                                             <StatusPill status={c.moderation.status} />
                                             <StatusPill status={c.status} />
                                         </div>
                                     </div>
 
-                                    {c.description && <p className="text-sm text-neutral-600 whitespace-pre-wrap bg-neutral-50 rounded-xl p-3 border border-neutral-100">{c.description}</p>}
+                                    {c.description && (
+                                        <p className="whitespace-pre-wrap rounded-control border border-line bg-surface-muted p-3 text-sm text-ink">{c.description}</p>
+                                    )}
 
                                     <BriefSummary collab={c} />
 
-                                    <div className="flex items-center gap-3 flex-wrap text-xs text-neutral-500">
+                                    <div className="flex flex-wrap items-center gap-3 text-xs text-ink-muted">
                                         <span className="inline-flex items-center gap-1">
-                                            <CalendarRange className="w-3.5 h-3.5" />
-                                            {c.valid_from || c.valid_until ? `${fmtDate(c.valid_from)} → ${fmtDate(c.valid_until)}` : "No validity window"}
+                                            <CalendarRange className="h-3.5 w-3.5" aria-hidden />
+                                            {c.valid_from || c.valid_until ? `${formatDate(c.valid_from)} → ${formatDate(c.valid_until)}` : "No validity window"}
                                         </span>
                                         <span>
                                             Slots {c.slots_used}/{c.slots_total}
                                         </span>
                                         <span>Min tier: {humanize(c.min_creator_tier)}</span>
-                                        {c.allow_advance_requests && <Chip tone="teal">Advance requests</Chip>}
+                                        {c.allow_advance_requests && <Tag tone="brand">Advance requests</Tag>}
                                     </div>
 
                                     {c.moderation.flags.length > 0 && (
-                                        <div className="flex items-center gap-1.5 flex-wrap">
-                                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            <AlertTriangle className="h-3.5 w-3.5 text-warn" aria-hidden />
                                             {c.moderation.flags.map((f) => (
-                                                <Chip key={f} tone="amber">
+                                                <Tag key={f} tone="warn">
                                                     {FLAG_LABELS[f] ?? humanize(f)}
-                                                </Chip>
+                                                </Tag>
                                             ))}
                                         </div>
                                     )}
 
                                     {c.moderation.reason && (
-                                        <p className="text-xs text-neutral-500">
+                                        <p className="text-xs text-ink-muted">
                                             Review note: {c.moderation.reason}
-                                            {c.moderation.reviewed_at ? ` · ${fmtDateTime(c.moderation.reviewed_at)}` : ""}
+                                            {c.moderation.reviewed_at ? ` · ${formatDateTime(c.moderation.reviewed_at)}` : ""}
                                         </p>
                                     )}
                                 </div>
-                                <div className="px-5 py-3 border-t border-neutral-100 bg-neutral-50/50 flex justify-end gap-2">
+                                <div className="flex flex-wrap justify-end gap-2 border-t border-line bg-surface-muted px-4 py-3 sm:px-5">
                                     {c.moderation.status !== "rejected" && (
-                                        <button type="button" onClick={() => setRejecting(c)} disabled={pending} className={btnSmReject}>
-                                            <X className="w-4 h-4" /> Reject
-                                        </button>
+                                        <Button size="sm" variant="secondary" icon={X} onClick={() => setRejecting(c)} disabled={pending}>
+                                            Reject
+                                        </Button>
                                     )}
                                     {c.moderation.status !== "approved" && (
-                                        <button
-                                            type="button"
-                                            onClick={() => moderate.mutate({ id: c.id, decision: "approved" })}
+                                        <Button
+                                            size="sm"
+                                            variant="primary"
+                                            icon={Check}
+                                            loading={pending && moderate.variables?.decision === "approved"}
                                             disabled={pending}
-                                            className={btnSmApprove}
+                                            onClick={() => moderate.mutate({ id: c.id, decision: "approved" })}
                                         >
-                                            <Check className="w-4 h-4" /> Approve
-                                        </button>
+                                            Approve
+                                        </Button>
                                     )}
                                 </div>
-                            </Card>
+                            </li>
                         );
                     })}
-                </div>
+                </ul>
             </PanelState>
 
-            {data && (
-                <div className="bg-white rounded-2xl border border-neutral-200 overflow-hidden empty:hidden">
-                    <Pagination page={page} totalPages={totalPagesOf(data)} total={data.total} onPageChange={setPage} theme="orange" />
+            {data && totalPagesOf(data) > 1 && (
+                <div className="overflow-hidden rounded-card border border-line">
+                    <Pagination page={page} totalPages={totalPagesOf(data)} total={data.total} pageSize={data.page_size} onPageChange={(p) => set({ page: p })} />
                 </div>
             )}
 
-            <ReasonModal
+            <ConfirmDialog
                 open={!!rejecting}
-                title="Reject collab"
+                title="Reject collab?"
                 description={rejecting ? `“${rejecting.offer}” stays hidden from creators. The business sees the reason.` : undefined}
-                placeholder="e.g. Alcohol promotion isn't allowed in collab offers"
+                level="reason"
+                reasonPlaceholder="e.g. Alcohol promotion isn't allowed in collab offers"
                 confirmLabel="Reject collab"
+                tone="danger"
                 isPending={moderate.isPending}
                 onCancel={() => setRejecting(null)}
                 onConfirm={(reason) => rejecting && moderate.mutate({ id: rejecting.id, decision: "rejected", reason })}

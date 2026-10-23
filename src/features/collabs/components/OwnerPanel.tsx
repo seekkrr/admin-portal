@@ -36,7 +36,7 @@ export function OwnerPanel({ business, canEdit }: { business: AdminBusiness; can
                         <DetailRow label="Since" value={fmtDateTime(business.claimed_at)} />
                     </div>
                 ) : (
-                    <p className="text-sm text-neutral-500">No owner yet. Assign one to make the business live.</p>
+                    <p className="text-sm text-ink-muted">No owner yet. Assign one to make the business live.</p>
                 )}
                 {canEdit && (
                     <form

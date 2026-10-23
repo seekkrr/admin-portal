@@ -86,7 +86,7 @@ export function OverridePanel({
     return (
         <div className="space-y-4">
             {current && (
-                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 space-y-1">
+                <div className="p-3 rounded-control bg-warn-soft border border-warn-line text-xs text-warn space-y-1">
                     <p className="font-semibold">Override active</p>
                     <p>
                         Plan: {current.plan_code ?? "unchanged"} · Until: {current.until ? fmtDateTime(current.until) : "no expiry"}
@@ -146,8 +146,8 @@ export function OverridePanel({
                 </button>
             </div>
             {effective && (
-                <div className="p-4 rounded-xl border border-teal-200 bg-teal-50/40 space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-teal-700">Effective now</p>
+                <div className="p-4 rounded-control border border-accent-200 bg-accent-50/40 space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-accent-700">Effective now</p>
                     <DetailRow label="Plan" value={effective.plan_code} />
                     <DetailRow label="Status" value={<StatusPill status={effective.status} />} />
                     <DetailRow label="Override until" value={effective.override_until ? fmtDateTime(effective.override_until) : "—"} />

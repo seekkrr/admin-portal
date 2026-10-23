@@ -6,7 +6,7 @@ const MAX_SUB_CATEGORIES = 10;
 
 const chipClass = (on: boolean, disabled?: boolean) =>
     `px-3 py-1.5 rounded-full border text-xs font-medium transition-colors ${
-        on ? "bg-teal-600 border-teal-600 text-white" : "bg-white border-neutral-200 text-neutral-700 hover:border-teal-400"
+        on ? "bg-accent-600 border-accent-600 text-white" : "bg-surface border-line text-ink-muted hover:border-accent-400"
     } ${disabled ? "opacity-60 cursor-not-allowed" : ""}`;
 
 function ChipGroup({
@@ -64,12 +64,12 @@ export function BusinessCategoryPicker({
 }) {
     const { data: catalog = [], isLoading, error, refetch } = useBusinessCategories();
 
-    if (isLoading) return <p className="text-sm text-neutral-500">Loading categories…</p>;
+    if (isLoading) return <p className="text-sm text-ink-muted">Loading categories…</p>;
     if (error) {
         return (
-            <p className="text-sm text-neutral-500">
+            <p className="text-sm text-ink-muted">
                 Couldn't load categories.{" "}
-                <button type="button" onClick={() => refetch()} className="text-teal-700 font-medium hover:underline">
+                <button type="button" onClick={() => refetch()} className="text-accent-700 font-medium hover:underline">
                     Retry
                 </button>
             </p>
@@ -98,7 +98,7 @@ export function BusinessCategoryPicker({
             <ChipGroup label="Categories" options={categoryOptions} selected={categories} max={MAX_CATEGORIES} disabled={disabled} onToggle={toggleCategory} />
             {subOptions.length > 0 && (
                 <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-neutral-500">Type (up to {MAX_SUB_CATEGORIES})</p>
+                    <p className="text-xs font-medium text-ink-muted">Type (up to {MAX_SUB_CATEGORIES})</p>
                     <ChipGroup label="Types" options={subOptions} selected={subCategories} max={MAX_SUB_CATEGORIES} disabled={disabled} onToggle={toggleSub} />
                 </div>
             )}

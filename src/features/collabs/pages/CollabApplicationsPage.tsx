@@ -1,42 +1,45 @@
-import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { GitPullRequestArrow, Filter, Zap, ExternalLink, CheckCircle2, XCircle, Star, History, Link as LinkIcon, Lock } from "lucide-react";
+import { GitPullRequestArrow, Zap, ExternalLink, CheckCircle2, XCircle, Star, History, Link as LinkIcon, Lock } from "lucide-react";
 import { AccessDenied } from "@components/AccessDenied";
-import { FilterDropdown, type DropdownOption } from "@/components/FilterDropdown";
+import { Button } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { FilterBar, FilterSelect, type FilterChip, type FilterOption } from "@/components/ui/FilterBar";
+import { chipLabel } from "@/components/ui/filters";
+import { DataTable, type DataColumn } from "@/components/ui/DataTable";
 import { Pagination } from "@/components/ui/Pagination";
-import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { Drawer } from "@/components/ui/Modal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Field, SelectInput, TextArea } from "@/components/ui/Field";
+import { DetailList, DetailRow } from "@/components/ui/Panel";
+import { StatusPill, Tag } from "@/components/ui/StatusPill";
+import { IdLink } from "@/components/ui/IdLink";
+import { EntityPicker } from "@/components/ui/EntityPicker";
+import { useUrlState } from "@/hooks/useUrlState";
+import { formatDate, formatDateTime } from "@/utils/date";
+import { cx } from "@/utils/cx";
 import { collabsAdminService } from "../services/collabs-admin.service";
 import { useCollabAccess } from "../roles";
-import { useDebouncedValue } from "../hooks";
-import {
-    Chip, DetailRow, Drawer, Field, MonoId, PageHeader, PanelState, StatusPill, Toolbar, btnDanger, inputClass, thClass,
-} from "../components/CollabsUi";
 import { MarkerLink } from "../components/CollabPickers";
-import { fmtDate, fmtDateTime, humanize, totalPagesOf } from "../utils";
+import { DrawerSection } from "../components/AdminBits";
+import { humanize, totalPagesOf } from "../utils";
 import { APPLICATION_STATUSES, type AdminCollabApplication, type ApplicationRating } from "../types";
 
-const STATUS_OPTIONS: DropdownOption[] = [{ value: "", label: "All statuses" }, ...APPLICATION_STATUSES.map((s) => ({ value: s, label: humanize(s) }))];
-
-const idInputClass =
-    "w-56 px-3.5 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent";
+const STATUS_OPTIONS: FilterOption[] = APPLICATION_STATUSES.map((s) => ({ value: s, label: humanize(s) }));
 
 function Timeline({ app }: { app: AdminCollabApplication }) {
     const items = [...(app.timeline ?? [])];
-    if (items.length === 0) return <p className="text-sm text-neutral-400">No timeline entries.</p>;
+    if (items.length === 0) return <p className="text-sm text-ink-faint">No timeline entries.</p>;
     return (
-        <ol className="relative border-l-2 border-neutral-100 ml-2 space-y-4">
+        <ol className="relative ml-2 space-y-4 border-l-2 border-line">
             {items.map((t, i) => (
                 <li key={`${t.status}-${t.at}-${i}`} className="ml-4">
-                    <span
-                        className={`absolute -left-[7px] mt-1 w-3 h-3 rounded-full ring-4 ring-white ${
-                            i === items.length - 1 ? "bg-teal-500" : "bg-neutral-300"
-                        }`}
-                    />
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <span className={cx("absolute -left-[7px] mt-1 h-3 w-3 rounded-full ring-4 ring-surface", i === items.length - 1 ? "bg-accent-500" : "bg-line-strong")} />
+                    <div className="flex flex-wrap items-center gap-2">
                         <StatusPill status={t.status} />
-                        <span className="text-xs text-neutral-500">{fmtDateTime(t.at)}</span>
+                        <span className="text-xs text-ink-muted">{formatDateTime(t.at)}</span>
                     </div>
                 </li>
             ))}
@@ -48,68 +51,69 @@ function Stars({ score }: { score: number }) {
     return (
         <span className="inline-flex items-center gap-0.5" aria-label={`${score} out of 5 stars`}>
             {[1, 2, 3, 4, 5].map((n) => (
-                <Star key={n} className={`w-4 h-4 ${n <= score ? "fill-amber-400 text-amber-400" : "text-neutral-300"}`} />
+                <Star key={n} className={cx("h-4 w-4", n <= score ? "fill-highlight text-highlight" : "text-line-strong")} aria-hidden />
             ))}
-            <span className="ml-1.5 text-xs font-medium text-neutral-600">{score}/5</span>
+            <span className="ml-1.5 text-xs font-medium text-ink-muted">{score}/5</span>
         </span>
     );
 }
 
 function ReviewCard({ label, review }: { label: string; review: ApplicationRating | null }) {
     return (
-        <div className="p-3 rounded-xl border border-neutral-200 bg-neutral-50/60 space-y-1.5">
-            <div className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">{label}</div>
+        <div className="space-y-1.5 rounded-control border border-line bg-surface-muted p-3">
+            <div className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{label}</div>
             {review ? (
                 <>
                     <Stars score={review.score} />
                     {review.comment ? (
-                        <p className="text-sm text-neutral-800 whitespace-pre-line break-words">{review.comment}</p>
+                        <p className="whitespace-pre-line break-words text-sm text-ink">{review.comment}</p>
                     ) : (
-                        <p className="text-sm text-neutral-400 italic">No comment</p>
+                        <p className="text-sm italic text-ink-faint">No comment</p>
                     )}
-                    <p className="text-xs text-neutral-500">
+                    <p className="text-xs text-ink-muted">
                         {review.by_name ?? "Unknown"}
                         {review.by && (
                             <>
                                 {" "}
-                                <MonoId id={review.by} />
+                                <IdLink kind="user" id={review.by} />
                             </>
                         )}
                         {" · "}
-                        {fmtDateTime(review.at)}
+                        {formatDateTime(review.at)}
                     </p>
                 </>
             ) : (
-                <p className="text-sm text-neutral-400">Not reviewed yet</p>
+                <p className="text-sm text-ink-faint">Not reviewed yet</p>
             )}
         </div>
     );
 }
 
+function visitText(a: AdminCollabApplication): string {
+    if (a.visit_window) return `${formatDate(a.visit_window.from)} → ${formatDate(a.visit_window.to)}`;
+    if (a.due_at) return `Due ${formatDate(a.due_at)}`;
+    return "—";
+}
+
 export function CollabApplicationsPage() {
     const { isStaff, isAdmin } = useCollabAccess();
     const queryClient = useQueryClient();
-    const [searchParams] = useSearchParams();
-    const [status, setStatus] = useState("");
-    const [businessInput, setBusinessInput] = useState(searchParams.get("business_id") ?? "");
-    const [creatorInput, setCreatorInput] = useState(searchParams.get("creator_user_id") ?? "");
-    const businessId = useDebouncedValue(businessInput);
-    const creatorId = useDebouncedValue(creatorInput);
-    const [page, setPage] = useState(1);
+    const navigate = useNavigate();
+    const { state, set, reset } = useUrlState({ status: "", business_id: "", creator_user_id: "", page: 1 });
+    const status = STATUS_OPTIONS.some((o) => o.value === state.status) ? state.status : "";
+    const page = Math.max(1, state.page);
     const [selected, setSelected] = useState<AdminCollabApplication | null>(null);
     const [forceOpen, setForceOpen] = useState(false);
     const [forceStatus, setForceStatus] = useState("");
     const [forceReason, setForceReason] = useState("");
 
-    useEffect(() => setPage(1), [status, businessId, creatorId]);
-
     const params = {
         status: status || undefined,
-        business_id: businessId || undefined,
-        creator_user_id: creatorId || undefined,
+        business_id: state.business_id || undefined,
+        creator_user_id: state.creator_user_id || undefined,
         page,
     };
-    const { data, isLoading, error, refetch } = useQuery({
+    const { data, isLoading, isFetching, error, refetch } = useQuery({
         queryKey: ["collabs-applications", params],
         queryFn: () => collabsAdminService.listApplications(params),
         enabled: isStaff,
@@ -131,7 +135,6 @@ export function CollabApplicationsPage() {
     if (!isStaff) return <AccessDenied message="You need an admin or moderator role to view collab requests." />;
 
     const apps = data?.applications ?? [];
-    const hasFilters = !!(status || businessInput || creatorInput);
 
     const openForce = () => {
         setForceStatus("");
@@ -139,89 +142,88 @@ export function CollabApplicationsPage() {
         setForceOpen(true);
     };
 
+    const columns: DataColumn<AdminCollabApplication>[] = [
+        {
+            id: "creator",
+            header: "Creator",
+            hideable: false,
+            sortValue: (a) => a.creator_name ?? "",
+            csv: (a) => `${a.creator_name ?? ""} ${a.creator_user_id ?? ""}`.trim(),
+            cell: (a) => (
+                <div className="min-w-0">
+                    <div className="font-medium text-ink">{a.creator_name ?? "Creator"}</div>
+                    <IdLink kind="user" id={a.creator_user_id} />
+                </div>
+            ),
+        },
+        {
+            id: "business",
+            header: "Business",
+            sortValue: (a) => a.business_name ?? "",
+            csv: (a) => a.business_name ?? a.business_id ?? "",
+            cell: (a) => (a.business_id ? <IdLink kind="business" id={a.business_id} label={a.business_name ?? "Business"} /> : <span className="text-ink-faint">—</span>),
+        },
+        { id: "source", header: "Source", sortValue: (a) => a.source, csv: (a) => humanize(a.source), cell: (a) => <span className="text-ink-muted">{humanize(a.source)}</span> },
+        { id: "status", header: "Status", sortValue: (a) => a.status, cell: (a) => <StatusPill status={a.status} /> },
+        { id: "visit", header: "Visit / due", csv: (a) => visitText(a), cell: (a) => <span className="whitespace-nowrap text-xs text-ink-muted">{visitText(a)}</span> },
+        {
+            id: "updated",
+            header: "Updated",
+            sortValue: (a) => a.updated_at ?? a.created_at ?? "",
+            csv: (a) => formatDateTime(a.updated_at ?? a.created_at),
+            cell: (a) => <span className="whitespace-nowrap text-ink-muted">{formatDateTime(a.updated_at ?? a.created_at)}</span>,
+        },
+    ];
+
+    const chips: FilterChip[] = [];
+    if (status) chips.push({ key: "status", label: chipLabel("Status", status, STATUS_OPTIONS), onRemove: () => set({ status: "" }) });
+    if (state.business_id) chips.push({ key: "business", label: "Business filter", onRemove: () => set({ business_id: "" }) });
+    if (state.creator_user_id) chips.push({ key: "creator", label: "Creator filter", onRemove: () => set({ creator_user_id: "" }) });
+
     return (
-        <div className="p-6 max-w-[1400px] mx-auto space-y-5 animate-fade-in">
+        <div className="space-y-5">
             <PageHeader
                 icon={GitPullRequestArrow}
-                title="Collab Requests"
-                gradient="from-violet-500 to-violet-600"
-                subtitle={data ? `${data.total} applications — walk-ins, advance requests and invites` : "Loading..."}
+                title="Collab requests"
+                description={
+                    <>
+                        Walk-ins, advance requests and invites
+                        {data && <span className="text-ink-faint"> · {data.total.toLocaleString("en-IN")} total</span>}
+                    </>
+                }
             />
 
-            <Toolbar>
-                <FilterDropdown options={STATUS_OPTIONS} value={status} onChange={setStatus} icon={<Filter className="w-3.5 h-3.5" />} placeholder="Status" theme="indigo" />
-                <input
-                    type="text"
-                    value={businessInput}
-                    onChange={(e) => setBusinessInput(e.target.value)}
-                    placeholder="Business id"
-                    className={idInputClass}
-                    aria-label="Filter by business id"
-                />
-                <input
-                    type="text"
-                    value={creatorInput}
-                    onChange={(e) => setCreatorInput(e.target.value)}
-                    placeholder="Creator user id"
-                    className={idInputClass}
-                    aria-label="Filter by creator user id"
-                />
-                {hasFilters && (
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setStatus("");
-                            setBusinessInput("");
-                            setCreatorInput("");
-                        }}
-                        className="px-3 py-2.5 rounded-xl text-sm text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
-                    >
-                        Reset
-                    </button>
-                )}
-            </Toolbar>
+            <FilterBar chips={chips} onReset={reset}>
+                <FilterSelect label="Status" value={status} onChange={(v) => set({ status: v })} options={STATUS_OPTIONS} allLabel="All statuses" />
+                <EntityPicker type="business" variant="filter" label="Business" value={state.business_id} onChange={(id) => set({ business_id: id })} placeholder="Business…" />
+                <EntityPicker type="user" variant="filter" label="Creator" value={state.creator_user_id} onChange={(id) => set({ creator_user_id: id })} placeholder="Creator…" />
+            </FilterBar>
 
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-                <PanelState isLoading={isLoading && !data} error={error} isEmpty={apps.length === 0} emptyIcon={GitPullRequestArrow} emptyText="No collab requests match" onRetry={() => refetch()}>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-neutral-100 bg-neutral-50/60">
-                                    <th className={thClass}>Creator</th>
-                                    <th className={thClass}>Business</th>
-                                    <th className={thClass}>Source</th>
-                                    <th className={thClass}>Status</th>
-                                    <th className={thClass}>Visit / due</th>
-                                    <th className={thClass}>Updated</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-neutral-50">
-                                {apps.map((a) => (
-                                    <tr key={a.id} onClick={() => setSelected(a)} className="hover:bg-neutral-50/80 cursor-pointer transition-colors">
-                                        <td className="px-4 py-3">
-                                            <div className="font-medium text-neutral-900">{a.creator_name ?? "Creator"}</div>
-                                            <MonoId id={a.creator_user_id} />
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <div className="text-neutral-700">{a.business_name ?? "Business"}</div>
-                                            <MonoId id={a.business_id} />
-                                        </td>
-                                        <td className="px-4 py-3 text-neutral-600">{humanize(a.source)}</td>
-                                        <td className="px-4 py-3">
-                                            <StatusPill status={a.status} />
-                                        </td>
-                                        <td className="px-4 py-3 text-xs text-neutral-500 whitespace-nowrap">
-                                            {a.visit_window ? `${fmtDate(a.visit_window.from)} → ${fmtDate(a.visit_window.to)}` : a.due_at ? `Due ${fmtDate(a.due_at)}` : "—"}
-                                        </td>
-                                        <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">{fmtDateTime(a.updated_at ?? a.created_at)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </PanelState>
-                {data && <Pagination page={page} totalPages={totalPagesOf(data)} total={data.total} onPageChange={setPage} theme="violet" />}
-            </div>
+            <DataTable
+                label="Collab requests"
+                rows={apps}
+                columns={columns}
+                rowKey={(a) => a.id}
+                isLoading={isLoading && !data}
+                isFetching={isFetching && !!data}
+                error={error}
+                onRetry={() => refetch()}
+                empty={{ icon: GitPullRequestArrow, title: "No collab requests match", description: chips.length ? "Try clearing a filter." : undefined }}
+                onRowClick={setSelected}
+                storageKey="collab-requests"
+                exportName="collab-requests"
+                summary={data ? `${apps.length} of ${data.total.toLocaleString("en-IN")}` : undefined}
+                card={{
+                    title: (a) => `${a.creator_name ?? "Creator"} × ${a.business_name ?? "Business"}`,
+                    subtitle: (a) => humanize(a.source),
+                    fields: ["status", "visit", "updated"],
+                }}
+                footer={
+                    data && (
+                        <Pagination page={page} totalPages={totalPagesOf(data)} total={data.total} pageSize={data.page_size} onPageChange={(p) => set({ page: p })} />
+                    )
+                }
+            />
 
             <Drawer
                 open={!!selected}
@@ -231,137 +233,139 @@ export function CollabApplicationsPage() {
                 footer={
                     selected &&
                     (isAdmin ? (
-                        <button type="button" onClick={openForce} className={`${btnDanger} w-full`}>
-                            <Zap className="w-4 h-4" /> Force transition
-                        </button>
+                        <Button variant="danger" icon={Zap} block onClick={openForce}>
+                            Force transition
+                        </Button>
                     ) : (
-                        <p className="text-xs text-neutral-500 text-center">Forced transitions need an admin.</p>
+                        <p className="text-center text-xs text-ink-muted">Forced transitions need an admin.</p>
                     ))
                 }
             >
                 {selected && (
                     <>
-                        <section className="space-y-3">
+                        <DetailList>
                             <DetailRow label="Status" value={<StatusPill status={selected.status} />} />
                             <DetailRow label="Source" value={humanize(selected.source)} />
                             <DetailRow
                                 label="Business"
+                                value={selected.business_id ? <IdLink kind="business" id={selected.business_id} label={selected.business_name ?? selected.business_id} /> : "—"}
+                            />
+                            <DetailRow
+                                label="Creator"
                                 value={
-                                    selected.business_id ? (
-                                        <Link to={`/collabs/businesses/${selected.business_id}`} className="text-teal-700 hover:underline">
-                                            {selected.business_name ?? selected.business_id}
-                                        </Link>
+                                    selected.creator_user_id ? (
+                                        <span className="flex flex-wrap items-center gap-2">
+                                            <IdLink kind="user" id={selected.creator_user_id} label={selected.creator_name ?? undefined} />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelected(null);
+                                                    navigate(`/collabs/applications?creator_user_id=${selected.creator_user_id}`);
+                                                }}
+                                                className="text-xs font-medium text-accent-700 hover:underline"
+                                            >
+                                                All their requests
+                                            </button>
+                                        </span>
                                     ) : (
                                         "—"
                                     )
                                 }
                             />
-                            <DetailRow label="Creator" value={<MonoId id={selected.creator_user_id} short={false} />} />
-                            <DetailRow label="Collab" value={<MonoId id={selected.collab_id} short={false} />} />
+                            <DetailRow label="Collab" value={selected.collab_id ? <span className="font-mono text-xs">{selected.collab_id}</span> : "—"} />
                             <DetailRow label="Place" value={selected.marker_id ? <MarkerLink id={selected.marker_id} /> : "—"} />
                             {selected.visit_window && (
-                                <DetailRow label="Visit window" value={`${fmtDate(selected.visit_window.from)} → ${fmtDate(selected.visit_window.to)}`} />
+                                <DetailRow label="Visit window" value={`${formatDate(selected.visit_window.from)} → ${formatDate(selected.visit_window.to)}`} />
                             )}
                             {selected.redemption && (
-                                <DetailRow label="Redeemed" value={`${fmtDateTime(selected.redemption.at)} via ${selected.redemption.method === "staff_qr" ? "staff QR scan" : "redeem code"}`} />
+                                <DetailRow
+                                    label="Redeemed"
+                                    value={`${formatDateTime(selected.redemption.at)} via ${selected.redemption.method === "staff_qr" ? "staff QR scan" : "redeem code"}`}
+                                />
                             )}
-                            <DetailRow label="Deliverables due" value={fmtDateTime(selected.due_at)} />
+                            <DetailRow label="Deliverables due" value={formatDateTime(selected.due_at)} />
                             {selected.tracking_code && <DetailRow label="Tracking link" value={<span className="font-mono text-xs">seekkrr.com/t/{selected.tracking_code}</span>} />}
                             {selected.note && <DetailRow label="Creator note" value={selected.note} />}
                             {selected.decline_reason && <DetailRow label="Decline reason" value={selected.decline_reason} />}
-                        </section>
+                        </DetailList>
 
                         {selected.deliverables.length > 0 && (
-                            <section className="space-y-2">
-                                <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-2 border-b border-neutral-100 pb-2">
-                                    <LinkIcon className="w-4 h-4" /> Deliverables
-                                </h4>
+                            <DrawerSection title="Deliverables" icon={LinkIcon}>
                                 {selected.deliverables.map((d) => (
-                                    <div key={d.url} className="p-3 rounded-xl border border-neutral-200 bg-neutral-50/60 space-y-1">
-                                        <a href={d.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm text-teal-700 hover:underline break-all">
-                                            <ExternalLink className="w-3.5 h-3.5 shrink-0" /> {d.url}
+                                    <div key={d.url} className="space-y-1 rounded-control border border-line bg-surface-muted p-3">
+                                        <a href={d.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 break-all text-sm text-accent-700 hover:underline">
+                                            <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden /> {d.url}
                                         </a>
-                                        <div className="flex items-center gap-2 flex-wrap text-xs text-neutral-500">
-                                            <Chip>{humanize(d.type)}</Chip>
-                                            <span>{fmtDateTime(d.submitted_at)}</span>
+                                        <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+                                            <Tag>{humanize(d.type)}</Tag>
+                                            <span>{formatDateTime(d.submitted_at)}</span>
                                             {d.auto_check &&
                                                 (d.auto_check.ok ? (
-                                                    <span className="inline-flex items-center gap-1 text-emerald-700">
-                                                        <CheckCircle2 className="w-3.5 h-3.5" /> Link verified{d.auto_check.author ? ` (${d.auto_check.author})` : ""}
+                                                    <span className="inline-flex items-center gap-1 text-good">
+                                                        <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> Link verified{d.auto_check.author ? ` (${d.auto_check.author})` : ""}
                                                     </span>
                                                 ) : (
-                                                    <span className="inline-flex items-center gap-1 text-amber-700">
-                                                        <XCircle className="w-3.5 h-3.5" /> {d.auto_check.reason ?? "Unverified"}
+                                                    <span className="inline-flex items-center gap-1 text-warn">
+                                                        <XCircle className="h-3.5 w-3.5" aria-hidden /> {d.auto_check.reason ?? "Unverified"}
                                                     </span>
                                                 ))}
                                         </div>
                                     </div>
                                 ))}
-                            </section>
+                            </DrawerSection>
                         )}
 
-                        <section className="space-y-3">
-                            <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-2 border-b border-neutral-100 pb-2">
-                                <Star className="w-4 h-4" /> Reviews
-                            </h4>
+                        <DrawerSection title="Reviews" icon={Star}>
                             <ReviewCard label="Business → creator" review={selected.ratings?.business_to_creator ?? null} />
                             <ReviewCard label="Creator → business" review={selected.ratings?.creator_to_business ?? null} />
-                            <p className="flex items-start gap-1.5 text-[11px] text-neutral-400">
-                                <Lock className="w-3 h-3 mt-0.5 shrink-0" />
+                            <p className="flex items-start gap-1.5 text-xs text-ink-faint">
+                                <Lock className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
                                 Reviews are private: the business and the creator never see each other&apos;s review.
                             </p>
-                        </section>
+                        </DrawerSection>
 
-                        <section className="space-y-3">
-                            <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-2 border-b border-neutral-100 pb-2">
-                                <History className="w-4 h-4" /> Timeline
-                            </h4>
+                        <DrawerSection title="Timeline" icon={History}>
                             <Timeline app={selected} />
-                            <p className="text-[11px] text-neutral-400">Forced transitions are recorded with their reason in the audit log (not shown here).</p>
-                        </section>
+                            <p className="text-xs text-ink-faint">Forced transitions are recorded with their reason in the change history.</p>
+                        </DrawerSection>
                     </>
                 )}
             </Drawer>
 
-            <ConfirmModal
+            <ConfirmDialog
                 open={forceOpen && !!selected}
-                theme="danger"
-                title="Force transition"
-                message={
+                tone="danger"
+                title="Force transition?"
+                description={
                     selected
                         ? `Move this application from “${humanize(selected.status)}” to a new state, bypassing the normal rules. Slots and quota are NOT adjusted.`
                         : ""
                 }
                 confirmLabel="Force"
-                confirmStyle="bg-red-600 hover:bg-red-700"
                 onConfirm={() => force.mutate()}
                 onCancel={() => setForceOpen(false)}
                 isPending={force.isPending}
-                disabledConfirm={!forceStatus || forceStatus === selected?.status || forceReason.trim().length < 3}
+                confirmDisabled={!forceStatus || forceStatus === selected?.status || forceReason.trim().length < 3}
             >
-                <div className="space-y-3">
-                    <Field label="New status" htmlFor="force-status" required>
-                        <select id="force-status" value={forceStatus} onChange={(e) => setForceStatus(e.target.value)} className={inputClass}>
-                            <option value="">Select…</option>
-                            {APPLICATION_STATUSES.filter((s) => s !== selected?.status).map((s) => (
-                                <option key={s} value={s}>
-                                    {humanize(s)}
-                                </option>
-                            ))}
-                        </select>
-                    </Field>
-                    <Field label="Reason (audited)" htmlFor="force-reason" required hint="3–500 characters.">
-                        <textarea
-                            id="force-reason"
-                            value={forceReason}
-                            maxLength={500}
-                            onChange={(e) => setForceReason(e.target.value)}
-                            className={`${inputClass} resize-none min-h-[80px]`}
-                            placeholder="e.g. No-show adjudication: business confirmed the creator never visited"
-                        />
-                    </Field>
-                </div>
-            </ConfirmModal>
+                <Field label="New status" required>
+                    <SelectInput value={forceStatus} onChange={(e) => setForceStatus(e.target.value)}>
+                        <option value="">Select…</option>
+                        {APPLICATION_STATUSES.filter((s) => s !== selected?.status).map((s) => (
+                            <option key={s} value={s}>
+                                {humanize(s)}
+                            </option>
+                        ))}
+                    </SelectInput>
+                </Field>
+                <Field label="Reason (audited)" required hint="3–500 characters.">
+                    <TextArea
+                        value={forceReason}
+                        maxLength={500}
+                        onChange={(e) => setForceReason(e.target.value)}
+                        placeholder="e.g. No-show adjudication: business confirmed the creator never visited"
+                    />
+                </Field>
+            </ConfirmDialog>
         </div>
     );
 }

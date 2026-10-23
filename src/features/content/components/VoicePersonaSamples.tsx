@@ -50,8 +50,8 @@ export function VoicePersonaSamples({
     return (
         <div className="space-y-3">
             {!speechSupported && (
-                <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-                    <AlertTriangle className="h-5 w-5 text-amber-500" />
+                <div className="flex items-center gap-3 rounded-control border border-warn-line bg-warn-soft px-4 py-3 text-sm text-warn">
+                    <AlertTriangle className="h-5 w-5 text-warn" />
                     Voice preview is not supported in this browser.
                 </div>
             )}
@@ -62,10 +62,10 @@ export function VoicePersonaSamples({
                     return (
                         <div
                             key={persona.id}
-                            className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 transition-colors ${
+                            className={`flex items-center justify-between gap-3 rounded-control border px-4 py-3 transition-colors ${
                                 isSelected
-                                    ? "border-orange-400 bg-orange-50"
-                                    : "border-neutral-200 bg-white hover:border-orange-200"
+                                    ? "border-accent-300 bg-accent-50"
+                                    : "border-line bg-surface hover:border-accent-200"
                             }`}
                         >
                             <button
@@ -75,17 +75,17 @@ export function VoicePersonaSamples({
                                 className="flex flex-1 items-center gap-3 text-left disabled:cursor-default"
                             >
                                 <span
-                                    className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full ${
-                                        isSelected ? "bg-orange-600 text-white" : "bg-neutral-100 text-neutral-500"
+                                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                                        isSelected ? "bg-brand-900 text-white" : "bg-brand-50 text-brand-700"
                                     }`}
                                 >
                                     <Mic className="h-4 w-4" />
                                 </span>
                                 <span className="min-w-0">
-                                    <span className="block truncate text-sm font-semibold text-neutral-900">
+                                    <span className="block truncate text-sm font-semibold text-ink">
                                         {persona.label}
                                     </span>
-                                    <span className="block truncate text-xs text-neutral-500">
+                                    <span className="block truncate text-xs text-ink-muted">
                                         {persona.description}
                                     </span>
                                 </span>
@@ -94,7 +94,7 @@ export function VoicePersonaSamples({
                                 type="button"
                                 onClick={() => preview(persona)}
                                 aria-label={isSpeaking ? `Stop ${persona.label} preview` : `Preview ${persona.label}`}
-                                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-orange-200 text-orange-600 transition-colors hover:bg-orange-100"
+                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line-strong text-accent-700 transition-colors hover:bg-accent-50"
                             >
                                 {isSpeaking ? <Square className="h-3.5 w-3.5" /> : <Play className="ml-0.5 h-4 w-4" />}
                             </button>
@@ -106,22 +106,22 @@ export function VoicePersonaSamples({
                     type="button"
                     onClick={() => onSelect?.("custom")}
                     disabled={!onSelect}
-                    className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${
+                    className={`flex items-center gap-3 rounded-control border px-4 py-3 text-left transition-colors ${
                         selected === "custom"
-                            ? "border-orange-400 bg-orange-50"
-                            : "border-neutral-200 bg-white hover:border-orange-200"
+                            ? "border-accent-300 bg-accent-50"
+                            : "border-line bg-surface hover:border-accent-200"
                     } disabled:cursor-default`}
                 >
                     <span
-                        className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full ${
-                            selected === "custom" ? "bg-orange-600 text-white" : "bg-neutral-100 text-neutral-500"
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                            selected === "custom" ? "bg-brand-900 text-white" : "bg-brand-50 text-brand-700"
                         }`}
                     >
                         <Mic className="h-4 w-4" />
                     </span>
                     <span className="min-w-0">
-                        <span className="block truncate text-sm font-semibold text-neutral-900">Custom</span>
-                        <span className="block truncate text-xs text-neutral-500">Your ElevenLabs voice ID</span>
+                        <span className="block truncate text-sm font-semibold text-ink">Custom</span>
+                        <span className="block truncate text-xs text-ink-muted">Your ElevenLabs voice ID</span>
                     </span>
                 </button>
             </div>
@@ -132,9 +132,10 @@ export function VoicePersonaSamples({
                         value={customVoiceId ?? ""}
                         onChange={(e) => onCustomVoiceIdChange?.(e.target.value)}
                         placeholder="e.g. pNInz6obpgDQGcFmaJgB"
-                        className="w-full rounded-xl border border-neutral-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        aria-label="ElevenLabs voice ID"
+                        className="h-10 w-full rounded-control border border-line-strong bg-surface px-3 text-sm text-ink placeholder:text-ink-faint focus:border-transparent focus:outline-none focus:ring-2 focus:ring-accent-500"
                     />
-                    <p className="mt-1 text-xs text-neutral-500">20-character voice ID from your ElevenLabs voice library.</p>
+                    <p className="mt-1 text-xs text-ink-muted">20-character voice ID from your ElevenLabs voice library.</p>
                 </div>
             )}
         </div>

@@ -1,18 +1,36 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-    Search,
-    RefreshCw,
-    ListOrdered,
-} from "lucide-react";
-import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { Pagination } from "@/components/ui/Pagination";
-import { leaderboardsService } from "../services/leaderboards.service";
+import { RefreshCw, ListOrdered, Medal } from "lucide-react";
 import { useAuthStore } from "@store/auth.store";
-import type { LeaderboardEntry, LeaderboardResponse } from "@/types";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Tabs } from "@/components/ui/Tabs";
+import { Button } from "@/components/ui/Button";
+import { Panel } from "@/components/ui/Panel";
+import { Field } from "@/components/ui/Field";
+import { EntityPicker } from "@/components/ui/EntityPicker";
+import { DataTable, type DataColumn } from "@/components/ui/DataTable";
+import { Pagination } from "@/components/ui/Pagination";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { EmptyState } from "@/components/ui/States";
+import { IdLink } from "@/components/ui/IdLink";
+import { useUrlState } from "@/hooks/useUrlState";
+import { isRouteMissing } from "@/services/optional";
+import { formatDateTime } from "@/utils/date";
+import { leaderboardsService, type CompetitionEntry, type CompetitionKind } from "../services/leaderboards.service";
 
-type Tab = "global" | "quest" | "region";
+type Tab = "global" | "quest" | "region" | "competitions";
+type Recompute = "global" | "region" | "competitions";
+
+const PER_PAGE = 20;
+
+const EXPLORER = { value: "explorer" as CompetitionKind, label: "Ultimate explorer", score: "Check-ins", help: "Most check-ins" };
+
+const COMPETITIONS: { value: CompetitionKind; label: string; score: string; help: string }[] = [
+    EXPLORER,
+    { value: "creator", label: "Top creator", score: "Places created", help: "Most places created" },
+    { value: "crowd-favorite", label: "Crowd favourite", score: "Check-ins", help: "Most check-ins on the places they added" },
+];
 
 function initials(name: string | null): string {
     if (!name) return "?";
@@ -22,346 +40,245 @@ function initials(name: string | null): string {
     return (first + second).toUpperCase() || "?";
 }
 
-function fmtDate(value: string | null): string {
-    if (!value) return "—";
-    const d = new Date(value);
-    return Number.isNaN(d.getTime()) ? value : d.toLocaleString();
+/** Avatar + name, linking to the person's page. */
+function Person({ entry }: { entry: Pick<CompetitionEntry, "user_id" | "display_name" | "avatar_url"> }) {
+    const name = entry.display_name ?? "Anonymous";
+    return (
+        <span className="flex min-w-0 items-center gap-2.5">
+            {entry.avatar_url ? (
+                <img src={entry.avatar_url} alt="" className="h-8 w-8 shrink-0 rounded-full bg-surface-muted object-cover" />
+            ) : (
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-semibold text-brand-700" aria-hidden>
+                    {initials(entry.display_name)}
+                </span>
+            )}
+            {entry.user_id ? <IdLink kind="user" id={entry.user_id} label={name} className="truncate" /> : <span className="truncate font-medium text-ink">{name}</span>}
+        </span>
+    );
 }
 
+/** Rankings: global, per quest, per region, and the competition boards. */
 export function LeaderboardsPage() {
     const { user } = useAuthStore();
     const CAN_MANAGE = !!user?.role?.some((r) => ["admin", "super_admin"].includes(r));
     const IS_SUPER = !!user?.role?.includes("super_admin");
 
-    const [tab, setTab] = useState<Tab>("global");
+    const { state, set } = useUrlState({ tab: "global", quest: "", region: "", board: "explorer", page: 1 });
+    const tab: Tab = (["global", "quest", "region", "competitions"] as const).find((t) => t === state.tab) ?? "global";
+    const board: CompetitionKind = COMPETITIONS.find((c) => c.value === state.board)?.value ?? "explorer";
+    const page = Math.max(1, state.page);
+    const [confirm, setConfirm] = useState<Recompute | null>(null);
 
-    const [globalPage, setGlobalPage] = useState(1);
-
-    const [questIdInput, setQuestIdInput] = useState("");
-    const [questId, setQuestId] = useState("");
-    const [questPage, setQuestPage] = useState(1);
-
-    const [regionIdInput, setRegionIdInput] = useState("");
-    const [regionId, setRegionId] = useState("");
-    const [regionPage, setRegionPage] = useState(1);
-
-    const [confirmRecompute, setConfirmRecompute] = useState<null | "global" | "region">(null);
-
-    const globalQuery = useQuery({
-        queryKey: ["admin-leaderboard-global", { page: globalPage }],
-        queryFn: () => leaderboardsService.global(globalPage),
-        enabled: tab === "global",
+    const boardQuery = useQuery({
+        queryKey: ["admin-leaderboard", tab, tab === "quest" ? state.quest : tab === "region" ? state.region : tab === "competitions" ? board : "", { page }],
+        queryFn: (): Promise<{ entries: CompetitionEntry[]; total: number; page: number; total_pages: number }> => {
+            if (tab === "quest") return leaderboardsService.quest(state.quest, page, PER_PAGE);
+            if (tab === "region") return leaderboardsService.region(state.region, page, PER_PAGE);
+            if (tab === "competitions") return leaderboardsService.competition(board, page, PER_PAGE);
+            return leaderboardsService.global(page, PER_PAGE);
+        },
+        enabled: tab === "global" || tab === "competitions" || (tab === "quest" && !!state.quest) || (tab === "region" && !!state.region),
         staleTime: 60 * 1000,
+        placeholderData: (prev) => prev,
     });
 
-    const questQuery = useQuery({
-        queryKey: ["admin-leaderboard-quest", questId, { page: questPage }],
-        queryFn: () => leaderboardsService.quest(questId, questPage),
-        enabled: tab === "quest" && !!questId,
-        staleTime: 60 * 1000,
-    });
+    const onRecomputeError = (what: string) => (e: Error) => {
+        toast.error(isRouteMissing(e) ? `Recomputing ${what} isn't available on this server yet.` : e.message || `Failed to queue the ${what} recompute`);
+        setConfirm(null);
+    };
 
-    const regionQuery = useQuery({
-        queryKey: ["admin-leaderboard-region", regionId, { page: regionPage }],
-        queryFn: () => leaderboardsService.region(regionId, regionPage),
-        enabled: tab === "region" && !!regionId,
-        staleTime: 60 * 1000,
-    });
-
-    const recomputeRegionMutation = useMutation({
-        mutationFn: () => leaderboardsService.recomputeRegion(regionId),
+    const recomputeRegion = useMutation({
+        mutationFn: () => leaderboardsService.recomputeRegion(state.region),
         onSuccess: () => {
             toast.success("Region leaderboard recompute queued");
-            setConfirmRecompute(null);
+            setConfirm(null);
         },
-        onError: (e: Error) => {
-            toast.error(e.message || "Failed to queue region recompute");
-            setConfirmRecompute(null);
-        },
+        onError: onRecomputeError("region leaderboard"),
     });
 
-    const recomputeGlobalMutation = useMutation({
+    const recomputeGlobal = useMutation({
         mutationFn: () => leaderboardsService.recomputeGlobal(),
         onSuccess: () => {
             toast.success("Global leaderboard recompute queued");
-            setConfirmRecompute(null);
+            setConfirm(null);
         },
-        onError: (e: Error) => {
-            toast.error(e.message || "Failed to queue global recompute");
-            setConfirmRecompute(null);
-        },
+        onError: onRecomputeError("global leaderboard"),
     });
 
-    const activeData: LeaderboardResponse | undefined =
-        tab === "global" ? globalQuery.data : tab === "quest" ? questQuery.data : regionQuery.data;
-    const activeLoading =
-        tab === "global"
-            ? globalQuery.isLoading
-            : tab === "quest"
-              ? questQuery.isFetching && !!questId
-              : regionQuery.isFetching && !!regionId;
-    const activeError =
-        tab === "global" ? globalQuery.error : tab === "quest" ? questQuery.error : regionQuery.error;
+    const recomputeCompetitions = useMutation({
+        mutationFn: () => leaderboardsService.recomputeCompetitions(),
+        onSuccess: (res) => {
+            toast.success(res?.message || "Competition leaderboards are being recomputed");
+            setConfirm(null);
+        },
+        onError: onRecomputeError("competition leaderboards"),
+    });
 
-    const page = tab === "global" ? globalPage : tab === "quest" ? questPage : regionPage;
-    const setPage = tab === "global" ? setGlobalPage : tab === "quest" ? setQuestPage : setRegionPage;
-    const showRegionExtra = tab === "region";
+    const recomputePending = recomputeRegion.isPending || recomputeGlobal.isPending || recomputeCompetitions.isPending;
 
-    const entries: LeaderboardEntry[] = activeData?.entries ?? [];
-    const totalPages = activeData?.total_pages ?? 1;
+    const competition = COMPETITIONS.find((c) => c.value === board) ?? EXPLORER;
+    const isCompetition = tab === "competitions";
+    const isRegion = tab === "region";
+    const data = boardQuery.data;
+    const entries = data?.entries ?? [];
+    const dataPage = data?.page ?? page;
 
-    const idSet = tab === "quest" ? questId : tab === "region" ? regionId : "";
-    const needsId = (tab === "quest" || tab === "region") && !idSet;
+    const columns: DataColumn<CompetitionEntry>[] = [
+        {
+            id: "rank",
+            header: "Rank",
+            hideable: false,
+            sortValue: (e) => e.rank,
+            csv: (e) => e.rank,
+            cell: (e) => <span className="font-semibold tabular-nums text-ink">{e.rank !== null ? `#${e.rank}` : "—"}</span>,
+        },
+        { id: "person", header: "Person", hideable: false, sortValue: (e) => e.display_name ?? "", csv: (e) => e.display_name ?? "", cell: (e) => <Person entry={e} /> },
+        {
+            id: "points",
+            header: isCompetition ? competition.score : "Points",
+            align: "right",
+            sortValue: (e) => e.points_scored,
+            cell: (e) => <span className="tabular-nums">{e.points_scored.toLocaleString("en-IN")}</span>,
+        },
+        ...(isRegion
+            ? [
+                  {
+                      id: "visited",
+                      header: "Places visited",
+                      align: "right" as const,
+                      sortValue: (e: CompetitionEntry) => e.markers_visited ?? 0,
+                      cell: (e: CompetitionEntry) => <span className="tabular-nums text-ink-muted">{e.markers_visited ?? "—"}</span>,
+                  },
+              ]
+            : []),
+        ...(isCompetition && board === "crowd-favorite"
+            ? [
+                  {
+                      id: "place",
+                      header: "Place",
+                      csv: (e: CompetitionEntry) => e.marker_name ?? e.marker_id ?? "",
+                      cell: (e: CompetitionEntry) => <IdLink kind="place" id={e.marker_id} label={e.marker_name ?? undefined} />,
+                  },
+              ]
+            : []),
+        {
+            id: "recorded",
+            header: "Recorded",
+            sortValue: (e) => e.recorded_at ?? "",
+            csv: (e) => formatDateTime(e.recorded_at),
+            cell: (e) => <span className="whitespace-nowrap text-ink-muted">{formatDateTime(e.recorded_at)}</span>,
+        },
+    ];
 
-    const handleLoadQuest = () => {
-        setQuestId(questIdInput.trim());
-        setQuestPage(1);
-    };
-
-    const handleLoadRegion = () => {
-        setRegionId(regionIdInput.trim());
-        setRegionPage(1);
-    };
+    const needsPick = (tab === "quest" && !state.quest) || (tab === "region" && !state.region);
 
     return (
-        <div className="animate-fade-in space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
-                    <ListOrdered className="w-6 h-6 text-yellow-600" />
-                    Leaderboards
-                </h1>
-                <p className="text-neutral-500 mt-1">Rankings across global, quest, and region boards</p>
-            </div>
+        <div className="space-y-5">
+            <PageHeader
+                icon={ListOrdered}
+                title="Leaderboards"
+                description="Rankings across global, quest and region boards, and the competitions"
+                actions={
+                    <>
+                        {tab === "global" && IS_SUPER && (
+                            <Button variant="secondary" icon={RefreshCw} onClick={() => setConfirm("global")} loading={recomputeGlobal.isPending}>
+                                Recompute global
+                            </Button>
+                        )}
+                        {tab === "region" && CAN_MANAGE && (
+                            <Button variant="secondary" icon={RefreshCw} onClick={() => setConfirm("region")} disabled={!state.region} loading={recomputeRegion.isPending}>
+                                Recompute region
+                            </Button>
+                        )}
+                        {CAN_MANAGE && (
+                            <Button variant="secondary" icon={Medal} onClick={() => setConfirm("competitions")} loading={recomputeCompetitions.isPending}>
+                                Recompute competitions
+                            </Button>
+                        )}
+                    </>
+                }
+            />
 
-            {/* Tabs */}
-            <div className="bg-neutral-100/70 p-1.5 rounded-xl inline-flex max-w-full scrollbar-hide ring-1 ring-neutral-200/50 shadow-inner">
-                {(["global", "quest", "region"] as Tab[]).map((t) => (
-                    <button
-                        key={t}
-                        onClick={() => {
-                            setTab(t);
-                            setPage(1);
-                        }}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap ${
-                            tab === t
-                                ? "bg-white text-indigo-700 shadow-md font-bold ring-1 ring-neutral-200/50"
-                                : "text-neutral-500 hover:text-neutral-800 font-bold"
-                        }`}
-                    >
-                        {t}
-                    </button>
-                ))}
-            </div>
+            <Tabs<Tab>
+                label="Leaderboards"
+                value={tab}
+                onChange={(t) => set({ tab: t })}
+                tabs={[
+                    { value: "global", label: "Global" },
+                    { value: "quest", label: "Quest" },
+                    { value: "region", label: "Region" },
+                    { value: "competitions", label: "Competitions" },
+                ]}
+            />
 
-            {/* Controls — hidden on global tab for non-super-admins */}
-            {(tab !== "global" || IS_SUPER) && (
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 space-y-3">
-                <div className="flex flex-wrap items-center gap-3">
-                    {tab === "quest" && (
-                        <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[260px]">
-                            <div className="relative flex-1 min-w-[260px]">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                                <input
-                                    type="text"
-                                    placeholder="Enter a Quest ID to load its leaderboard..."
-                                    className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                                    value={questIdInput}
-                                    onChange={(e) => setQuestIdInput(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter") handleLoadQuest();
-                                    }}
-                                />
-                            </div>
-                            <button
-                                onClick={handleLoadQuest}
-                                disabled={!questIdInput.trim()}
-                                className="px-4 py-2.5 bg-yellow-600 text-white rounded-xl text-sm font-medium hover:bg-yellow-700 transition-colors disabled:opacity-50"
-                            >
-                                Load
-                            </button>
-                        </div>
-                    )}
-
-                    {tab === "region" && (
-                        <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[260px]">
-                            <div className="relative flex-1 min-w-[260px]">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                                <input
-                                    type="text"
-                                    placeholder="Enter a Region ID to load its leaderboard..."
-                                    value={regionIdInput}
-                                    onChange={(e) => setRegionIdInput(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter") handleLoadRegion();
-                                    }}
-                                    className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                                />
-                            </div>
-                            <button
-                                onClick={handleLoadRegion}
-                                disabled={!regionIdInput.trim()}
-                                className="px-4 py-2.5 bg-yellow-600 text-white rounded-xl text-sm font-medium hover:bg-yellow-700 transition-colors disabled:opacity-50"
-                            >
-                                Load
-                            </button>
-                            {CAN_MANAGE && (
-                                <button
-                                    onClick={() => setConfirmRecompute("region")}
-                                    disabled={!regionId || recomputeRegionMutation.isPending}
-                                    className="flex items-center gap-2 px-4 py-2.5 bg-white border border-yellow-300 text-yellow-700 rounded-xl text-sm font-medium hover:bg-yellow-50 transition-colors disabled:opacity-50"
-                                >
-                                    {recomputeRegionMutation.isPending ? (
-                                        <RefreshCw className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                        <RefreshCw className="w-4 h-4" />
-                                    )}
-                                    Recompute region
-                                </button>
-                            )}
-                        </div>
-                    )}
-
-                    {tab === "global" && IS_SUPER && (
-                        <button
-                            onClick={() => setConfirmRecompute("global")}
-                            disabled={recomputeGlobalMutation.isPending}
-                            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-yellow-300 text-yellow-700 rounded-xl text-sm font-medium hover:bg-yellow-50 transition-colors disabled:opacity-50"
-                        >
-                            {recomputeGlobalMutation.isPending ? (
-                                <RefreshCw className="w-4 h-4 animate-spin" />
-                            ) : (
-                                <RefreshCw className="w-4 h-4" />
-                            )}
-                            Recompute global
-                        </button>
-                    )}
+            {tab === "quest" && (
+                <Panel>
+                    <Field label="Quest" htmlFor="leaderboard-quest" className="max-w-xl">
+                        <EntityPicker id="leaderboard-quest" type="quest" label="Quest" value={state.quest} onChange={(id) => set({ quest: id })} />
+                    </Field>
+                </Panel>
+            )}
+            {tab === "region" && (
+                <Panel>
+                    <Field label="Region" htmlFor="leaderboard-region" className="max-w-xl">
+                        <EntityPicker id="leaderboard-region" type="region" label="Region" value={state.region} onChange={(id) => set({ region: id })} />
+                    </Field>
+                </Panel>
+            )}
+            {isCompetition && (
+                <div className="space-y-1.5">
+                    <Tabs<CompetitionKind> label="Competition" variant="pill" value={board} onChange={(b) => set({ board: b })} tabs={COMPETITIONS.map((c) => ({ value: c.value, label: c.label }))} />
+                    <p className="text-sm text-ink-muted">{competition.help}.</p>
                 </div>
-            </div>
             )}
 
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-neutral-200 text-sm">
-                        <thead className="bg-neutral-50/60 border-b border-neutral-100">
-                                <tr className="text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">
-                                    <th className="px-4 py-3">Rank</th>
-                                    <th className="px-4 py-3">User</th>
-                                    <th className="px-4 py-3 text-right">Points</th>
-                                    {showRegionExtra && (
-                                        <th className="px-4 py-3 text-right">Markers Visited</th>
-                                    )}
-                                    <th className="px-4 py-3">Recorded</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-neutral-200">
-                                {needsId ? (
-                                    <tr>
-                                        <td colSpan={showRegionExtra ? 5 : 4} className="px-4 py-12 text-center text-neutral-500">
-                                            Enter a {tab === "quest" ? "quest" : "region"} ID and click Load.
-                                        </td>
-                                    </tr>
-                                ) : activeLoading ? (
-                                    <tr>
-                                        <td colSpan={showRegionExtra ? 5 : 4} className="px-4 py-12 text-center text-neutral-500">
-                                            Loading leaderboard...
-                                        </td>
-                                    </tr>
-                                ) : activeError ? (
-                                    <tr>
-                                        <td colSpan={showRegionExtra ? 5 : 4} className="px-4 py-12 text-center text-red-500">
-                                            Failed to load leaderboard.
-                                        </td>
-                                    </tr>
-                                ) : entries.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={showRegionExtra ? 5 : 4} className="px-4 py-12 text-center text-neutral-500">
-                                            <div className="flex flex-col items-center justify-center">
-                                                <ListOrdered className="w-12 h-12 text-neutral-300 mb-4" />
-                                                <p>No leaderboard entries yet.</p>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    entries.map((entry, idx) => (
-                                        <tr
-                                            key={entry.id ?? `${entry.user_id}-${idx}`}
-                                            className="divide-y divide-neutral-50 hover:bg-neutral-50/80 transition-colors group"
-                                        >
-                                            <td className="px-4 py-3 align-middle font-semibold text-neutral-700">
-                                                {entry.rank !== null ? `#${entry.rank}` : "—"}
-                                            </td>
-                                            <td className="px-4 py-3 align-middle">
-                                                <div className="flex items-center gap-3">
-                                                    {entry.avatar_url ? (
-                                                        <img
-                                                            src={entry.avatar_url}
-                                                            alt={entry.display_name ?? "User"}
-                                                            className="w-9 h-9 rounded-full object-cover bg-neutral-100 flex-shrink-0"
-                                                        />
-                                                    ) : (
-                                                        <div className="w-9 h-9 rounded-full bg-neutral-200 text-neutral-600 flex items-center justify-center text-xs font-semibold flex-shrink-0">
-                                                            {initials(entry.display_name)}
-                                                        </div>
-                                                    )}
-                                                    <span className="font-medium text-neutral-900">
-                                                        {entry.display_name ?? "Anonymous"}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3 align-middle text-right text-neutral-700">
-                                                {entry.points_scored}
-                                            </td>
-                                            {showRegionExtra && (
-                                                <td className="px-4 py-3 align-middle text-right text-neutral-600">
-                                                    {entry.markers_visited ?? "—"}
-                                                </td>
-                                            )}
-                                            <td className="px-4 py-3 align-middle text-neutral-500">
-                                                {fmtDate(entry.recorded_at)}
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+            {needsPick ? (
+                <Panel>
+                    <EmptyState icon={ListOrdered} title={`Pick a ${tab === "quest" ? "quest" : "region"} to see its leaderboard.`} />
+                </Panel>
+            ) : (
+                <DataTable
+                    label={isCompetition ? competition.label : `${tab} leaderboard`}
+                    rows={entries}
+                    columns={columns}
+                    rowKey={(e) => e.id ?? `${e.user_id ?? "row"}-${e.rank ?? ""}-${e.marker_id ?? ""}`}
+                    isLoading={boardQuery.isLoading && !data}
+                    isFetching={boardQuery.isFetching && !!data}
+                    error={boardQuery.error}
+                    onRetry={() => boardQuery.refetch()}
+                    empty={{ icon: ListOrdered, title: "No leaderboard entries yet." }}
+                    exportName={`leaderboard-${isCompetition ? board : tab}`}
+                    summary={data ? `${data.total.toLocaleString("en-IN")} ranked` : undefined}
+                    card={{
+                        title: (e) => <Person entry={e} />,
+                        subtitle: (e) => (e.rank !== null ? `#${e.rank}` : undefined),
+                        fields: ["points", isRegion ? "visited" : board === "crowd-favorite" && isCompetition ? "place" : "recorded"],
+                    }}
+                    footer={
+                        data && (
+                            <Pagination page={dataPage} totalPages={data.total_pages} total={data.total} pageSize={PER_PAGE} onPageChange={(p) => set({ page: p })} />
+                        )
+                    }
+                />
+            )}
 
-                    {totalPages > 1 && (
-                        <Pagination
-                            page={page}
-                            totalPages={totalPages}
-                            total={activeData?.total ?? 0}
-                            onPageChange={setPage}
-                        />
-                    )}
-                </div>
-
-            {/* Recompute Confirmation Modal */}
-            <ConfirmModal
-                open={!!confirmRecompute}
-                title={
-                    confirmRecompute === "global"
-                        ? "Recompute Global Leaderboard"
-                        : "Recompute Region Leaderboard"
-                }
-                message={
-                    confirmRecompute === "global"
-                        ? "This queues a background job to recompute the global leaderboard. Continue?"
-                        : "This queues a background job to recompute this region's leaderboard. Continue?"
+            <ConfirmDialog
+                open={!!confirm}
+                title={confirm === "global" ? "Recompute the global leaderboard?" : confirm === "region" ? "Recompute this region's leaderboard?" : "Recompute the competition leaderboards?"}
+                description={
+                    confirm === "competitions"
+                        ? "This rebuilds the explorer, creator and crowd favourite boards in the background. The boards update in a few minutes."
+                        : "This queues a background job; the board updates in a few minutes."
                 }
                 confirmLabel="Recompute"
-                confirmStyle="bg-yellow-600 hover:bg-yellow-700"
-                disabledConfirm={false}
-                isPending={recomputeGlobalMutation.isPending || recomputeRegionMutation.isPending}
+                tone="warning"
+                isPending={recomputePending}
                 onConfirm={() => {
-                    if (confirmRecompute === "global") {
-                        recomputeGlobalMutation.mutate();
-                    } else {
-                        recomputeRegionMutation.mutate();
-                    }
+                    if (confirm === "global") recomputeGlobal.mutate();
+                    else if (confirm === "region") recomputeRegion.mutate();
+                    else recomputeCompetitions.mutate();
                 }}
-                onCancel={() => setConfirmRecompute(null)}
-                theme="warning"
+                onCancel={() => setConfirm(null)}
             />
         </div>
     );

@@ -4,8 +4,10 @@ import { Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { regionsService } from "../services/regions.service";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
-import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { Panel } from "@/components/ui/Panel";
+import { Button } from "@/components/ui/Button";
+import { Checkbox } from "@/components/ui/Field";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface DangerZoneProps {
     regionId: string;
@@ -35,48 +37,45 @@ export function DangerZone({ regionId, regionName, canEdit, isSuper }: DangerZon
 
     if (!canEdit) return null;
 
-    return (
-        <Card padding="md" className="border-red-200">
-            <CardHeader className="border-b border-red-100 pb-4 mb-4">
-                <CardTitle className="text-red-600">Danger Zone</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className="space-y-4">
-                    <button
-                        onClick={() => setConfirmDelete(true)}
-                        className="py-2.5 px-4 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors text-red-600 bg-red-50 hover:bg-red-100 w-max"
-                    >
-                        <Trash2 className="w-5 h-5" />
-                        Delete Region
-                    </button>
-                </div>
-            </CardContent>
+    const close = () => {
+        setConfirmDelete(false);
+        setHardDelete(false);
+    };
 
-            <ConfirmModal
+    return (
+        <Panel title={<span className="text-bad">Danger zone</span>} className="border-bad-line">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-ink-muted">Remove this region from the app and the admin lists. Regions with quests attached can't be deleted.</p>
+                <Button variant="danger" icon={Trash2} onClick={() => setConfirmDelete(true)}>
+                    Delete region
+                </Button>
+            </div>
+
+            <ConfirmDialog
                 open={confirmDelete}
-                title="Delete Region"
-                message={`Are you sure you want to delete "${regionName}"? ${hardDelete ? "This will permanently remove the region and cannot be undone." : "This action cannot be undone."}`}
-                confirmLabel={hardDelete ? "Permanently Delete" : "Delete"}
-                confirmStyle="bg-red-600 hover:bg-red-700"
+                title={hardDelete ? "Permanently delete region?" : "Delete region?"}
+                description={
+                    hardDelete
+                        ? `“${regionName}” and its data are removed for good.`
+                        : `“${regionName}” is removed from the app and the admin lists.`
+                }
+                confirmLabel={hardDelete ? "Delete permanently" : "Delete"}
+                tone="danger"
+                level={hardDelete ? "type" : "simple"}
+                typeToConfirm={regionName.trim() || "DELETE"}
                 onConfirm={() => deleteMutation.mutate(hardDelete)}
-                onCancel={() => {
-                    setConfirmDelete(false);
-                    setHardDelete(false);
-                }}
+                onCancel={close}
                 isPending={deleteMutation.isPending}
             >
                 {isSuper && (
-                    <label className="flex items-center gap-2 mt-3 mb-1 px-1 cursor-pointer select-none">
-                        <input
-                            type="checkbox"
-                            checked={hardDelete}
-                            onChange={(e) => setHardDelete(e.target.checked)}
-                            className="w-4 h-4 rounded border-red-300 text-red-600 focus:ring-red-500 accent-red-600"
-                        />
-                        <span className="text-xs text-red-600 font-medium">Permanently delete (super-admin, irreversible)</span>
-                    </label>
+                    <Checkbox
+                        checked={hardDelete}
+                        onChange={setHardDelete}
+                        label="Delete permanently"
+                        hint="Super admins only. This can't be undone."
+                    />
                 )}
-            </ConfirmModal>
-        </Card>
+            </ConfirmDialog>
+        </Panel>
     );
 }

@@ -1,10 +1,15 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link2, ExternalLink, Loader2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link2, Unlink } from "lucide-react";
 import { toast } from "sonner";
 import { regionsService } from "../services/regions.service";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
+import { Panel } from "@/components/ui/Panel";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { EntityPicker } from "@/components/ui/EntityPicker";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { EmptyState } from "@/components/ui/States";
+import { IdLink } from "@/components/ui/IdLink";
 
 interface LinkedQuestsProps {
     regionId: string;
@@ -14,104 +19,83 @@ interface LinkedQuestsProps {
 
 export function LinkedQuests({ regionId, questIds, canEdit }: LinkedQuestsProps) {
     const queryClient = useQueryClient();
-    const [attachInput, setAttachInput] = useState("");
+    const [attachId, setAttachId] = useState("");
+    const [attachLabel, setAttachLabel] = useState<string | null>(null);
+    const [detachId, setDetachId] = useState<string | null>(null);
 
     const attachMutation = useMutation({
         mutationFn: (questId: string) => regionsService.attachQuest(regionId, questId),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["region-detail", regionId] });
-            toast.success("Quest attached");
-            setAttachInput("");
+            toast.success(attachLabel ? `“${attachLabel}” linked` : "Quest linked");
+            setAttachId("");
+            setAttachLabel(null);
         },
-        onError: (e: Error) => toast.error(e.message || "Failed to attach quest"),
+        onError: (e: Error) => toast.error(e.message || "Failed to link quest"),
     });
 
     const detachMutation = useMutation({
         mutationFn: (questId: string) => regionsService.detachQuest(regionId, questId),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["region-detail", regionId] });
-            toast.success("Quest detached");
+            toast.success("Quest unlinked");
+            setDetachId(null);
         },
-        onError: (e: Error) => toast.error(e.message || "Failed to detach quest"),
+        onError: (e: Error) => {
+            toast.error(e.message || "Failed to unlink quest");
+            setDetachId(null);
+        },
     });
 
     return (
-        <Card padding="md">
-            <CardHeader className="border-b border-neutral-100 pb-4 mb-4">
-                <div className="flex items-center gap-2">
-                    <Link2 className="w-5 h-5 text-cyan-600" />
-                    <CardTitle>Linked Quests</CardTitle>
-                </div>
-            </CardHeader>
-            <CardContent>
-                <div className="space-y-4">
-                    {questIds.length === 0 ? (
-                        <p className="text-sm text-neutral-500">No quests linked to this region yet.</p>
-                    ) : (
-                        <ul className="divide-y divide-neutral-100">
-                            {questIds.map((qid) => (
-                                <li key={qid} className="py-3 flex items-center justify-between gap-3">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        <span className="font-mono text-sm text-neutral-600 truncate">{qid}</span>
-                                        <Link
-                                            to={`/quests/${qid}`}
-                                            className="flex items-center gap-1 text-xs font-medium text-cyan-700 hover:text-cyan-900 whitespace-nowrap"
-                                        >
-                                            View
-                                            <ExternalLink className="w-3 h-3" />
-                                        </Link>
-                                    </div>
-                                    {canEdit && (
-                                        <button
-                                            onClick={() => detachMutation.mutate(qid)}
-                                            disabled={detachMutation.isPending}
-                                            className="py-1.5 px-3 rounded-lg font-medium flex items-center justify-center gap-1.5 transition-colors text-red-600 bg-red-50 hover:bg-red-100 text-xs disabled:opacity-50 whitespace-nowrap"
-                                        >
-                                            {detachMutation.isPending && detachMutation.variables === qid && (
-                                                <Loader2 className="w-3 h-3 animate-spin" />
-                                            )}
-                                            Detach
-                                        </button>
-                                    )}
-                                </li>
-                            ))}
-                        </ul>
-                    )}
+        <Panel title="Linked quests" icon={Link2} description={`${questIds.length} quest${questIds.length === 1 ? "" : "s"} in this region`}>
+            {questIds.length === 0 ? (
+                <EmptyState compact icon={Link2} title="No quests linked to this region yet." />
+            ) : (
+                <ul className="divide-y divide-line">
+                    {questIds.map((qid) => (
+                        <li key={qid} className="flex items-center justify-between gap-3 py-2.5">
+                            <IdLink kind="quest" id={qid} short={false} className="min-w-0 truncate" />
+                            {canEdit && (
+                                <Button size="sm" variant="ghost" icon={Unlink} onClick={() => setDetachId(qid)} className="hover:bg-bad-soft hover:text-bad">
+                                    Unlink
+                                </Button>
+                            )}
+                        </li>
+                    ))}
+                </ul>
+            )}
 
-                    {canEdit && (
-                        <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-neutral-100 pt-4">
-                            <div className="flex-1 min-w-[200px]">
-                                <label htmlFor="attach-quest" className="block text-xs font-medium text-neutral-500 mb-1">
-                                    Attach quest by ID
-                                </label>
-                                <input
-                                    id="attach-quest"
-                                    type="text"
-                                    value={attachInput}
-                                    onChange={(e) => setAttachInput(e.target.value)}
-                                    placeholder="quest id"
-                                    className="w-full rounded-xl py-2.5 px-4 border border-neutral-200 text-sm font-mono focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all"
-                                />
-                            </div>
-                            <button
-                                onClick={() => {
-                                    const value = attachInput.trim();
-                                    if (!value) {
-                                        toast.error("Enter a quest id");
-                                        return;
-                                    }
-                                    attachMutation.mutate(value);
-                                }}
-                                disabled={attachMutation.isPending || attachInput.trim() === ""}
-                                className="py-2.5 px-4 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors text-white bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50"
-                            >
-                                {attachMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                                Attach quest
-                            </button>
-                        </div>
-                    )}
+            {canEdit && (
+                <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-end">
+                    <Field label="Link a quest" htmlFor="region-attach-quest" className="min-w-0 flex-1">
+                        <EntityPicker
+                            id="region-attach-quest"
+                            type="quest"
+                            label="Quest"
+                            value={attachId}
+                            onChange={(id, hit) => {
+                                setAttachId(id);
+                                setAttachLabel(hit?.title ?? null);
+                            }}
+                        />
+                    </Field>
+                    <Button variant="primary" icon={Link2} onClick={() => attachMutation.mutate(attachId)} loading={attachMutation.isPending} disabled={!attachId}>
+                        Link quest
+                    </Button>
                 </div>
-            </CardContent>
-        </Card>
+            )}
+
+            <ConfirmDialog
+                open={!!detachId}
+                title="Unlink quest?"
+                description="The quest stays as it is; it is just no longer listed under this region."
+                confirmLabel="Unlink"
+                tone="warning"
+                onConfirm={() => detachId && detachMutation.mutate(detachId)}
+                onCancel={() => setDetachId(null)}
+                isPending={detachMutation.isPending}
+            />
+        </Panel>
     );
 }

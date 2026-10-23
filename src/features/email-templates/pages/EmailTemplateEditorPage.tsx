@@ -1,21 +1,26 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MutableRefObject } from "react";
+import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-    ArrowLeft, Mail, Save, RotateCcw, History, Send, Monitor, Smartphone, AlertTriangle, Info, Loader2, Braces, Truck, Clock,
-} from "lucide-react";
+import { Mail, Save, RotateCcw, History, Send, Monitor, Smartphone, AlertTriangle, Info, Loader2, Braces, Truck, Clock, Copy, CheckCircle2, XCircle } from "lucide-react";
 import { AccessDenied } from "@components/AccessDenied";
-import { LoadingFallback } from "@components/LoadingFallback";
-import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { Button, ButtonLink } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Panel, DetailList, DetailRow } from "@/components/ui/Panel";
+import { Tabs } from "@/components/ui/Tabs";
+import { Drawer } from "@/components/ui/Modal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Field, TextArea, TextInput } from "@/components/ui/Field";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/States";
+import { Tag } from "@/components/ui/StatusPill";
+import { IdLink } from "@/components/ui/IdLink";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { formatDateTime } from "@/utils/date";
+import { cx } from "@/utils/cx";
 import { useCollabAccess } from "@/features/collabs/roles";
-import {
-    Chip, CopyButton, Drawer, Field, LoadingButtonIcon, Modal, SectionCard, SegmentedTabs, btnPrimary, btnSecondary, btnSmNeutral, inputClass,
-} from "@/features/collabs/components/CollabsUi";
-import { fmtDateTime } from "@/features/collabs/utils";
+import { Notice } from "@/features/collabs/components/AdminBits";
 import { emailTemplatesService } from "../services/email-templates.service";
-import { CodeTextarea, DeliveryBanner } from "../components/EmailUi";
-import type { EmailProvider, EmailTemplateDetail, EmailTemplateDraft, EmailTemplateParts } from "../types";
+import type { EmailDeliveryStatus, EmailProvider, EmailTemplateDetail, EmailTemplateDraft, EmailTemplateParts } from "../types";
 
 type FieldName = keyof EmailTemplateParts;
 
@@ -43,6 +48,80 @@ function draftPayload(draft: EmailTemplateParts, isLayout: boolean): EmailTempla
     return isLayout ? { html: draft.html } : { subject: draft.subject, html: draft.html, text: draft.text };
 }
 
+/**
+ * Tab in the HTML box inserts two spaces (no heavy editor dependency). Press
+ * Esc first to let Tab move focus out of the field.
+ */
+function indentOnTab(e: KeyboardEvent<HTMLTextAreaElement>, escaped: MutableRefObject<boolean>, value: string, onValue: (v: string) => void) {
+    if (e.key === "Escape") {
+        escaped.current = true;
+        return;
+    }
+    if (e.key === "Tab" && !escaped.current && !e.shiftKey) {
+        e.preventDefault();
+        const el = e.currentTarget;
+        const { selectionStart: s, selectionEnd: end } = el;
+        onValue(`${value.slice(0, s)}  ${value.slice(end)}`);
+        requestAnimationFrame(() => {
+            el.selectionStart = el.selectionEnd = s + 2;
+        });
+        return;
+    }
+    escaped.current = false;
+}
+
+async function copyText(text: string) {
+    try {
+        await navigator.clipboard.writeText(text);
+        toast.success(`Copied ${text}`, { duration: 1200 });
+    } catch {
+        toast.error("Couldn't copy to clipboard");
+    }
+}
+
+// ── Sending status (transport) ─────────────────────────────
+
+function TransportPanel({ delivery }: { delivery: EmailDeliveryStatus }) {
+    const nothing = !delivery.smtp_configured && !delivery.zeptomail_configured;
+    const flag = (ok: boolean, label: string, detail?: string | null) => (
+        <span className={cx("inline-flex items-center gap-1.5", ok ? "text-good" : "text-ink-muted")}>
+            {ok ? <CheckCircle2 className="h-4 w-4" aria-hidden /> : <XCircle className="h-4 w-4 text-ink-faint" aria-hidden />}
+            {label}
+            {detail && <span className="font-mono text-xs text-ink-faint">{detail}</span>}
+        </span>
+    );
+    return (
+        <Panel title="Sending" icon={Send}>
+            <DetailList>
+                <DetailRow label="Sending via" value={delivery.transport === "zeptomail" ? "ZeptoMail API" : "SMTP (Zoho)"} />
+                <DetailRow
+                    label="From"
+                    value={
+                        <>
+                            {delivery.from?.name ? `${delivery.from.name} ` : ""}
+                            <span className="font-mono text-ink-muted">&lt;{delivery.from?.address ?? "—"}&gt;</span>
+                        </>
+                    }
+                />
+                <DetailRow
+                    label="Configured"
+                    value={
+                        <span className="flex flex-wrap gap-x-5 gap-y-1">
+                            {flag(delivery.smtp_configured, "Zoho SMTP", delivery.smtp_configured ? delivery.smtp_host : null)}
+                            {flag(delivery.zeptomail_configured, "ZeptoMail")}
+                        </span>
+                    }
+                />
+            </DetailList>
+            {nothing && (
+                <Notice tone="bad" icon={AlertTriangle} title="Emails won't send" className="mt-4">
+                    Neither Zoho SMTP nor ZeptoMail is configured on the server.
+                </Notice>
+            )}
+        </Panel>
+    );
+}
+
 // ── Preview ────────────────────────────────────────────────
 
 function PreviewPanel({ templateKey, draft, isLayout }: { templateKey: string; draft: EmailTemplateParts; isLayout: boolean }) {
@@ -60,56 +139,45 @@ function PreviewPanel({ templateKey, draft, isLayout }: { templateKey: string; d
     });
 
     return (
-        <SectionCard
+        <Panel
             title={
                 <span className="flex items-center gap-2">
-                    Live preview {isFetching && <Loader2 className="w-3.5 h-3.5 animate-spin text-teal-600" />}
+                    Live preview {isFetching && <Loader2 className="h-3.5 w-3.5 animate-spin text-accent-600" aria-label="Updating" />}
                 </span>
             }
             icon={Monitor}
-            bodyClassName="p-4 space-y-3"
+            bodyClassName="space-y-3 p-4"
             actions={
-                <div className="flex gap-1 bg-neutral-100 rounded-lg p-0.5">
-                    <button
-                        type="button"
-                        onClick={() => setDevice("desktop")}
-                        className={`p-1.5 rounded-md ${device === "desktop" ? "bg-white shadow-sm text-neutral-900" : "text-neutral-500"}`}
-                        aria-label="Desktop width"
-                        aria-pressed={device === "desktop"}
-                    >
-                        <Monitor className="w-4 h-4" />
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setDevice("mobile")}
-                        className={`p-1.5 rounded-md ${device === "mobile" ? "bg-white shadow-sm text-neutral-900" : "text-neutral-500"}`}
-                        aria-label="Mobile width"
-                        aria-pressed={device === "mobile"}
-                    >
-                        <Smartphone className="w-4 h-4" />
-                    </button>
-                </div>
+                <Tabs<"desktop" | "mobile">
+                    label="Preview width"
+                    variant="pill"
+                    value={device}
+                    onChange={setDevice}
+                    tabs={[
+                        { value: "desktop", label: <Monitor className="h-4 w-4" aria-label="Desktop width" /> },
+                        { value: "mobile", label: <Smartphone className="h-4 w-4" aria-label="Phone width" /> },
+                    ]}
+                />
             }
         >
-            {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-2">{(error as Error).message}</p>}
+            {error && <Notice tone="bad">{(error as Error).message}</Notice>}
             {data && (
                 <>
                     {!isLayout && (
                         <div className="text-sm">
-                            <span className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Subject</span>
-                            <p className="font-medium text-neutral-900 break-words">{data.subject || <span className="text-neutral-400">(empty)</span>}</p>
+                            <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Subject</span>
+                            <p className="break-words font-medium text-ink">{data.subject || <span className="text-ink-faint">(empty)</span>}</p>
                         </div>
                     )}
                     {data.unknown_placeholders.length > 0 && (
-                        <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-start gap-2">
-                            <AlertTriangle className="w-4 h-4 shrink-0" />
-                            <span>
-                                Unknown placeholders (sent literally): {data.unknown_placeholders.map((p) => `$${p}`).join(", ")}
-                            </span>
-                        </div>
+                        <Notice tone="warn" icon={AlertTriangle} title="Unknown placeholders (sent literally)">
+                            {data.unknown_placeholders.map((p) => `$${p}`).join(", ")}
+                        </Notice>
                     )}
                     {!isLayout && (
-                        <SegmentedTabs
+                        <Tabs<"html" | "text">
+                            label="Preview part"
+                            variant="pill"
                             value={tab}
                             onChange={setTab}
                             tabs={[
@@ -119,25 +187,25 @@ function PreviewPanel({ templateKey, draft, isLayout }: { templateKey: string; d
                         />
                     )}
                     {tab === "html" || isLayout ? (
-                        <div className="bg-neutral-100 rounded-xl p-3 flex justify-center overflow-x-auto">
+                        <div className="flex justify-center overflow-x-auto rounded-control bg-brand-50 p-3">
                             <iframe
                                 title="Email preview"
                                 sandbox=""
                                 srcDoc={data.html}
-                                className="bg-white rounded-lg border border-neutral-200 h-[640px] transition-all"
+                                className="h-[640px] rounded-lg border border-line bg-surface transition-all"
                                 style={{ width: device === "mobile" ? 375 : "100%", maxWidth: device === "mobile" ? 375 : 760 }}
                             />
                         </div>
                     ) : (
-                        <pre className="text-xs font-mono whitespace-pre-wrap bg-neutral-50 border border-neutral-200 rounded-xl p-4 max-h-[640px] overflow-auto text-neutral-800">
+                        <pre className="max-h-[640px] overflow-auto whitespace-pre-wrap rounded-control border border-line bg-surface-muted p-4 font-mono text-xs text-ink">
                             {data.text || "(no plain-text part)"}
                         </pre>
                     )}
-                    {isLayout && <p className="text-[11px] text-neutral-400">Layouts are previewed around the “Creator welcome” email.</p>}
+                    {isLayout && <p className="text-xs text-ink-faint">Layouts are previewed around the “Creator welcome” email.</p>}
                 </>
             )}
-            {!data && !error && <LoadingFallback message="Rendering preview..." />}
-        </SectionCard>
+            {!data && !error && <LoadingState label="Rendering preview…" />}
+        </Panel>
     );
 }
 
@@ -169,27 +237,30 @@ function DeliveryPanel({ template, draft }: { template: EmailTemplateDetail; dra
     const dirty = provider !== template.delivery.provider || (provider === "zeptomail" && zeptoKey.trim() !== (template.delivery.zepto_template_key ?? ""));
     const keyMissing = provider === "zeptomail" && !zeptoKey.trim();
 
+    const options: { value: EmailProvider; label: string; help: string }[] = [
+        { value: "seekkrr", label: "SeekKrr design (edited here)", help: "The subject/HTML/text on this page, wrapped in the shared header and footer." },
+        {
+            value: "zeptomail",
+            label: "ZeptoMail template (designed in Zoho)",
+            help: zeptoAvailable ? "Zoho renders the email from a template you design in ZeptoMail." : "ZeptoMail isn't configured on this server (ZEPTOMAIL_TOKEN).",
+        },
+    ];
+
     return (
-        <SectionCard title="Delivery" icon={Truck}>
+        <Panel title="Delivery" icon={Truck}>
             <div className="space-y-4">
-                <div className="space-y-2">
-                    {(
-                        [
-                            { value: "seekkrr", label: "SeekKrr design (edited here)", help: "The subject/HTML/text on this page, wrapped in the shared header and footer." },
-                            {
-                                value: "zeptomail",
-                                label: "ZeptoMail template (designed in Zoho)",
-                                help: zeptoAvailable ? "Zoho renders the email from a template you design in ZeptoMail." : "ZeptoMail isn't configured on this server (ZEPTOMAIL_TOKEN).",
-                            },
-                        ] as { value: EmailProvider; label: string; help: string }[]
-                    ).map((opt) => {
+                <fieldset className="space-y-2">
+                    <legend className="sr-only">How this email is sent</legend>
+                    {options.map((opt) => {
                         const disabled = opt.value === "zeptomail" && !zeptoAvailable;
                         return (
                             <label
                                 key={opt.value}
-                                className={`flex items-start gap-3 p-3 rounded-xl border transition-colors ${
-                                    provider === opt.value ? "border-teal-300 bg-teal-50/50" : "border-neutral-200"
-                                } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-50"}`}
+                                className={cx(
+                                    "flex items-start gap-3 rounded-control border p-3 transition-colors",
+                                    provider === opt.value ? "border-accent-300 bg-accent-50" : "border-line",
+                                    disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-surface-muted"
+                                )}
                             >
                                 <input
                                     type="radio"
@@ -197,57 +268,50 @@ function DeliveryPanel({ template, draft }: { template: EmailTemplateDetail; dra
                                     checked={provider === opt.value}
                                     disabled={disabled}
                                     onChange={() => setProvider(opt.value)}
-                                    className="mt-0.5 accent-teal-600"
+                                    className="mt-0.5 accent-accent-600"
                                 />
                                 <span>
-                                    <span className="block text-sm font-medium text-neutral-800">{opt.label}</span>
-                                    <span className="block text-xs text-neutral-500">{opt.help}</span>
+                                    <span className="block text-sm font-medium text-ink">{opt.label}</span>
+                                    <span className="block text-xs text-ink-muted">{opt.help}</span>
                                 </span>
                             </label>
                         );
                     })}
-                </div>
+                </fieldset>
 
                 {provider === "zeptomail" && (
                     <>
-                        <Field label="ZeptoMail template key" htmlFor="zepto-key" required>
-                            <input
-                                id="zepto-key"
-                                type="text"
-                                maxLength={200}
-                                value={zeptoKey}
-                                onChange={(e) => setZeptoKey(e.target.value)}
-                                className={`${inputClass} font-mono`}
-                                placeholder="2d6f.…"
-                            />
+                        <Field label="ZeptoMail template key" required>
+                            <TextInput type="text" maxLength={200} value={zeptoKey} onChange={(e) => setZeptoKey(e.target.value)} className="font-mono" placeholder="2d6f.…" />
                         </Field>
                         <div>
-                            <p className="text-sm font-medium text-neutral-700 mb-1">Merge fields for the ZeptoMail editor</p>
-                            <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto">
+                            <p className="mb-1 text-sm font-medium text-ink">Merge fields for the ZeptoMail editor</p>
+                            <div className="flex max-h-48 flex-wrap gap-1.5 overflow-y-auto">
                                 {template.zeptomail_merge_fields.map((f) => (
-                                    <CopyButton key={f} value={`{{${f}}}`} label={`{{${f}}}`} className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-mono border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-700" />
+                                    <Button key={f} size="sm" variant="secondary" icon={Copy} className="font-mono text-[11px]" onClick={() => copyText(`{{${f}}}`)}>
+                                        {`{{${f}}}`}
+                                    </Button>
                                 ))}
                             </div>
                         </div>
-                        <p className="text-xs text-neutral-600 bg-neutral-50 border border-neutral-200 rounded-lg p-2 flex items-start gap-2">
-                            <Info className="w-4 h-4 shrink-0 text-teal-600" />
+                        <Notice tone="neutral" icon={Info}>
                             If the ZeptoMail template fails, we send the SeekKrr design so nothing is lost.
-                        </p>
+                        </Notice>
                     </>
                 )}
 
                 <div className="flex flex-wrap justify-end gap-2">
                     {provider === "zeptomail" && (
-                        <button type="button" onClick={() => testZepto.mutate()} disabled={keyMissing || !zeptoAvailable || testZepto.isPending} className={btnSecondary}>
-                            <LoadingButtonIcon loading={testZepto.isPending} icon={Send} /> Send test via ZeptoMail
-                        </button>
+                        <Button variant="secondary" icon={Send} onClick={() => testZepto.mutate()} disabled={keyMissing || !zeptoAvailable} loading={testZepto.isPending}>
+                            Send test via ZeptoMail
+                        </Button>
                     )}
-                    <button type="button" onClick={() => save.mutate()} disabled={!dirty || keyMissing || save.isPending} className={btnPrimary}>
-                        <LoadingButtonIcon loading={save.isPending} icon={Save} /> Save delivery
-                    </button>
+                    <Button variant="primary" icon={Save} onClick={() => save.mutate()} disabled={!dirty || keyMissing} loading={save.isPending}>
+                        Save delivery
+                    </Button>
                 </div>
             </div>
-        </SectionCard>
+        </Panel>
     );
 }
 
@@ -266,6 +330,7 @@ function TemplateEditor({ template }: { template: EmailTemplateDetail }) {
     const htmlRef = useRef<HTMLTextAreaElement>(null);
     const textRef = useRef<HTMLTextAreaElement>(null);
     const lastFocused = useRef<FieldName>("html");
+    const htmlEscaped = useRef(false);
 
     const changes = changedFields(draft, template.current, isLayout);
     const dirty = Object.keys(changes).length > 0;
@@ -362,73 +427,70 @@ function TemplateEditor({ template }: { template: EmailTemplateDetail }) {
     ];
 
     return (
-        <div className="space-y-4">
-            {/* Header */}
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-                <Link
-                    to="/email-templates"
-                    className="flex items-center gap-2 text-sm font-medium text-neutral-600 hover:text-neutral-900 transition-colors bg-white border border-neutral-200 py-2 px-3 rounded-xl shadow-sm hover:bg-neutral-50"
-                >
-                    <ArrowLeft className="w-4 h-4" /> All templates
-                </Link>
-                <div className="flex items-center gap-2 flex-wrap">
-                    <button type="button" onClick={() => setVersionsOpen(true)} className={btnSecondary}>
-                        <History className="w-4 h-4" /> Versions ({template.versions.length})
-                    </button>
-                    <button type="button" onClick={() => test.mutate()} disabled={test.isPending} className={btnSecondary}>
-                        <LoadingButtonIcon loading={test.isPending} icon={Send} /> Send test to me
-                    </button>
-                    <button type="button" onClick={() => setConfirmReset(true)} disabled={!template.has_override || reset.isPending} className={btnSecondary}>
-                        <RotateCcw className="w-4 h-4" /> Reset to default
-                    </button>
-                    <button type="button" onClick={() => save.mutate()} disabled={!dirty || save.isPending} className={btnPrimary}>
-                        <LoadingButtonIcon loading={save.isPending} icon={Save} /> Save
-                    </button>
-                </div>
-            </div>
-
-            <div>
-                <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2 flex-wrap">
-                    {template.name}
-                    {template.has_override && <Chip tone="teal">Customized</Chip>}
-                    {template.delivery.provider === "zeptomail" && <Chip tone="violet">ZeptoMail template</Chip>}
-                    {dirty && <Chip tone="amber">Unsaved changes</Chip>}
-                </h1>
-                <p className="text-sm text-neutral-500">
-                    {template.description} · <span className="font-mono text-xs">{template.key}</span>
-                    {template.updated_at ? ` · updated ${fmtDateTime(template.updated_at)}` : ""}
-                </p>
-            </div>
+        <div className="space-y-5">
+            <PageHeader
+                icon={Mail}
+                title={template.name}
+                badge={
+                    <span className="flex flex-wrap items-center gap-1.5">
+                        {template.has_override && <Tag tone="brand">Customized</Tag>}
+                        {template.delivery.provider === "zeptomail" && <Tag tone="info">ZeptoMail template</Tag>}
+                        {dirty && <Tag tone="warn">Unsaved changes</Tag>}
+                    </span>
+                }
+                description={
+                    <>
+                        {template.description} · <span className="font-mono text-xs">{template.key}</span>
+                        {template.updated_at ? ` · updated ${formatDateTime(template.updated_at)}` : ""}
+                    </>
+                }
+                actions={
+                    <>
+                        <Button variant="secondary" icon={History} onClick={() => setVersionsOpen(true)}>
+                            Versions ({template.versions.length})
+                        </Button>
+                        <Button variant="secondary" icon={Send} onClick={() => test.mutate()} loading={test.isPending}>
+                            Send test to me
+                        </Button>
+                        <Button variant="secondary" icon={RotateCcw} onClick={() => setConfirmReset(true)} disabled={!template.has_override || reset.isPending}>
+                            Reset to default
+                        </Button>
+                    </>
+                }
+                primaryAction={
+                    <Button variant="primary" icon={Save} onClick={() => save.mutate()} disabled={!dirty} loading={save.isPending}>
+                        Save
+                    </Button>
+                }
+            />
 
             <div className="flex flex-col gap-2">
-                <p className="text-xs text-neutral-600 bg-teal-50/60 border border-teal-100 rounded-lg px-3 py-2 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-teal-600 shrink-0" /> Changes reach sending within about a minute.
-                </p>
+                <Notice tone="brand" icon={Clock} title="Changes reach sending within about a minute." />
                 {template.source === "v1" && (
-                    <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 shrink-0" /> Sent by the legacy V1 service — design overrides apply; ZeptoMail templates aren't available.
-                    </p>
+                    <Notice tone="warn" icon={AlertTriangle} title="Sent by the legacy V1 service">
+                        Design overrides apply; ZeptoMail templates aren&apos;t available.
+                    </Notice>
                 )}
                 {template.delivery.provider === "zeptomail" && (
-                    <p className="text-xs text-violet-800 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2 flex items-center gap-2">
-                        <Info className="w-4 h-4 shrink-0" /> This email currently sends the ZeptoMail template. The design below is the fallback.
-                    </p>
+                    <Notice tone="info" icon={Info} title="This email currently sends the ZeptoMail template.">
+                        The design below is the fallback.
+                    </Notice>
                 )}
                 {warnings.length > 0 && (
-                    <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 shrink-0" /> Last save: unknown placeholders {warnings.map((p) => `$${p}`).join(", ")} — they'll be sent literally.
-                    </p>
+                    <Notice tone="warn" icon={AlertTriangle} title="Last save: unknown placeholders">
+                        {warnings.map((p) => `$${p}`).join(", ")} — they&apos;ll be sent literally.
+                    </Notice>
                 )}
             </div>
 
-            <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4 items-start">
+            <div className="grid grid-cols-1 items-start gap-4 2xl:grid-cols-2">
                 <div className="space-y-4">
-                    <SectionCard title="Content" icon={Mail} bodyClassName="p-5 space-y-4">
+                    <Panel title="Content" icon={Mail} bodyClassName="space-y-4 p-4 sm:p-5">
                         {variables.length > 0 && (
                             <div>
-                                <p className="text-sm font-medium text-neutral-700 mb-1.5 flex items-center gap-1.5">
-                                    <Braces className="w-4 h-4 text-teal-600" /> Variables
-                                    <span className="text-xs font-normal text-neutral-500">— click to insert at the cursor{isLayout ? "" : " of the focused field"}</span>
+                                <p className="mb-1.5 flex flex-wrap items-center gap-1.5 text-sm font-medium text-ink">
+                                    <Braces className="h-4 w-4 text-accent-600" aria-hidden /> Variables
+                                    <span className="text-xs font-normal text-ink-muted">— click to insert at the cursor{isLayout ? "" : " of the focused field"}</span>
                                 </p>
                                 <div className="flex flex-wrap gap-1.5">
                                     {variables.map((v) => (
@@ -439,67 +501,70 @@ function TemplateEditor({ template }: { template: EmailTemplateDetail }) {
                                             aria-label={`Insert $${v.name}`}
                                             onMouseDown={(e) => e.preventDefault()}
                                             onClick={() => insertVariable(v.name)}
-                                            className={`px-2 py-1 rounded-md text-[11px] font-mono border transition-colors ${
-                                                v.brand ? "bg-neutral-50 border-neutral-200 text-neutral-600 hover:bg-neutral-100" : "bg-teal-50 border-teal-200 text-teal-800 hover:bg-teal-100"
-                                            }`}
+                                            className={cx(
+                                                "rounded-md border px-2 py-1 font-mono text-[11px] transition-colors",
+                                                v.brand ? "border-line bg-surface-muted text-ink-muted hover:bg-brand-50" : "border-accent-200 bg-accent-50 text-accent-700 hover:bg-accent-100"
+                                            )}
                                         >
                                             ${v.name}
                                         </button>
                                     ))}
                                 </div>
-                                <p className="mt-1.5 text-[11px] text-neutral-500">
-                                    Values are inserted as text (HTML-escaped). <span className="font-mono">$cta_button</span> and <span className="font-mono">$reason_html</span> are
-                                    pre-built HTML snippets — place them where a block element can go.
+                                <p className="mt-1.5 text-xs text-ink-muted">
+                                    Values are inserted as text (HTML-escaped). <span className="font-mono">$cta_button</span> and <span className="font-mono">$reason_html</span>{" "}
+                                    are pre-built HTML snippets — place them where a block element can go.
                                 </p>
                             </div>
                         )}
 
                         {!isLayout && (
-                            <Field label="Subject" htmlFor="tpl-subject">
-                                <input
-                                    id="tpl-subject"
+                            <Field label="Subject">
+                                <TextInput
                                     ref={subjectRef}
                                     type="text"
                                     maxLength={300}
                                     value={draft.subject}
                                     onFocus={() => (lastFocused.current = "subject")}
                                     onChange={(e) => setDraft({ ...draft, subject: e.target.value })}
-                                    className={inputClass}
                                 />
                             </Field>
                         )}
 
-                        <Field label={isLayout ? "Layout HTML" : "HTML body"} htmlFor="tpl-html" hint="No scripts, iframes, forms, inline event handlers or javascript: links. Max 200 KB. Tab indents; Esc then Tab leaves the editor.">
-                            <CodeTextarea
-                                id="tpl-html"
+                        <Field
+                            label={isLayout ? "Layout HTML" : "HTML body"}
+                            hint="No scripts, iframes, forms, inline event handlers or javascript: links. Max 200 KB. Tab indents; Esc then Tab leaves the editor."
+                        >
+                            <TextArea
                                 ref={htmlRef}
                                 value={draft.html}
-                                onValueChange={(html) => setDraft((d) => ({ ...d, html }))}
-                                onFocus={() => (lastFocused.current = "html")}
+                                spellCheck={false}
                                 rows={22}
+                                onChange={(e) => setDraft((d) => ({ ...d, html: e.target.value }))}
+                                onKeyDown={(e) => indentOnTab(e, htmlEscaped, draft.html, (html) => setDraft((d) => ({ ...d, html })))}
+                                onFocus={() => (lastFocused.current = "html")}
+                                className="resize-y font-mono text-[12.5px]"
                             />
                         </Field>
 
                         {!isLayout && (
-                            <Field label="Plain text" htmlFor="tpl-text" hint="Shown by email clients that don't render HTML.">
-                                <textarea
-                                    id="tpl-text"
+                            <Field label="Plain text" hint="Shown by email clients that don't render HTML.">
+                                <TextArea
                                     ref={textRef}
                                     value={draft.text}
                                     onFocus={() => (lastFocused.current = "text")}
                                     onChange={(e) => setDraft({ ...draft, text: e.target.value })}
-                                    className={`${inputClass} font-mono text-xs min-h-[160px] resize-y`}
+                                    className="min-h-[160px] resize-y font-mono text-xs"
                                 />
                             </Field>
                         )}
-                    </SectionCard>
+                    </Panel>
 
                     {template.supports_zeptomail && <DeliveryPanel key={`${template.delivery.provider}-${template.delivery.zepto_template_key ?? ""}`} template={template} draft={draft} />}
 
-                    <DeliveryBanner delivery={template.transport} compact />
+                    <TransportPanel delivery={template.transport} />
                 </div>
 
-                <div className="2xl:sticky 2xl:top-0">
+                <div className="2xl:sticky 2xl:top-[calc(var(--app-header-h)+1rem)]">
                     <PreviewPanel templateKey={template.key} draft={draft} isLayout={isLayout} />
                 </div>
             </div>
@@ -507,59 +572,55 @@ function TemplateEditor({ template }: { template: EmailTemplateDetail }) {
             {/* Versions */}
             <Drawer open={versionsOpen} onClose={() => setVersionsOpen(false)} title="Saved versions" subtitle={`${template.name} · last 20 kept`}>
                 {template.versions.length === 0 ? (
-                    <p className="text-sm text-neutral-400 text-center py-10">No saved versions — this email uses the built-in design.</p>
+                    <EmptyState icon={History} title="No saved versions" description="This email uses the built-in design." />
                 ) : (
-                    <ul className="divide-y divide-neutral-100 border border-neutral-200 rounded-xl overflow-hidden">
+                    <ul className="divide-y divide-line overflow-hidden rounded-card border border-line">
                         {template.versions.map((v, i) => (
                             <li key={v.version} className="flex items-center justify-between gap-3 px-4 py-3">
                                 <div>
-                                    <p className="text-sm font-medium text-neutral-900">
-                                        Version {v.version} {i === 0 && template.has_override && <Chip tone="teal">Latest</Chip>}
+                                    <p className="flex items-center gap-2 text-sm font-medium text-ink">
+                                        Version {v.version} {i === 0 && template.has_override && <Tag tone="brand">Latest</Tag>}
                                     </p>
-                                    <p className="text-xs text-neutral-500">
-                                        {fmtDateTime(v.saved_at)}
-                                        {v.saved_by ? <> · by <span className="font-mono">{v.saved_by.slice(-6)}</span></> : null}
+                                    <p className="text-xs text-ink-muted">
+                                        {formatDateTime(v.saved_at)}
+                                        {v.saved_by ? (
+                                            <>
+                                                {" "}
+                                                · by <IdLink kind="user" id={v.saved_by} />
+                                            </>
+                                        ) : null}
                                     </p>
                                 </div>
-                                <button type="button" onClick={() => setRestoreVersion(v.version)} className={btnSmNeutral}>
-                                    <RotateCcw className="w-3.5 h-3.5" /> Restore
-                                </button>
+                                <Button size="sm" variant="secondary" icon={RotateCcw} onClick={() => setRestoreVersion(v.version)}>
+                                    Restore
+                                </Button>
                             </li>
                         ))}
                     </ul>
                 )}
             </Drawer>
 
-            <Modal
+            <ConfirmDialog
                 open={restoreVersion !== null}
-                onClose={() => !restore.isPending && setRestoreVersion(null)}
-                title={`Restore version ${restoreVersion ?? ""}`}
-                icon={History}
-                size="md"
-                footer={
+                title={`Restore version ${restoreVersion ?? ""}?`}
+                description={
                     <>
-                        <button type="button" onClick={() => setRestoreVersion(null)} disabled={restore.isPending} className={btnSecondary}>
-                            Cancel
-                        </button>
-                        <button type="button" onClick={() => restoreVersion !== null && restore.mutate(restoreVersion)} disabled={restore.isPending} className={btnPrimary}>
-                            <LoadingButtonIcon loading={restore.isPending} icon={RotateCcw} /> Restore
-                        </button>
+                        The version&apos;s subject, HTML and text become live again (saved as a new version).
+                        {dirty && <strong className="mt-2 block text-warn">Your unsaved edits on this page will be replaced.</strong>}
                     </>
                 }
-            >
-                <p className="text-sm text-neutral-600">
-                    The version's subject, HTML and text become live again (saved as a new version).
-                    {dirty && <strong className="block mt-2 text-amber-700">Your unsaved edits on this page will be replaced.</strong>}
-                </p>
-            </Modal>
+                confirmLabel="Restore"
+                isPending={restore.isPending}
+                onConfirm={() => restoreVersion !== null && restore.mutate(restoreVersion)}
+                onCancel={() => setRestoreVersion(null)}
+            />
 
-            <ConfirmModal
+            <ConfirmDialog
                 open={confirmReset}
-                theme="warning"
-                title="Reset to default"
-                message="Removes your customized subject, HTML and text so this email uses the built-in SeekKrr design again. The delivery choice is kept, and saved versions stay available to restore."
+                tone="warning"
+                title="Reset to default?"
+                description="Removes your customized subject, HTML and text so this email uses the built-in SeekKrr design again. The delivery choice is kept, and saved versions stay available to restore."
                 confirmLabel="Reset"
-                confirmStyle="bg-amber-600 hover:bg-amber-700"
                 onConfirm={() => reset.mutate()}
                 onCancel={() => setConfirmReset(false)}
                 isPending={reset.isPending}
@@ -579,29 +640,33 @@ export function EmailTemplateEditorPage() {
     }, [rawKey]);
     const { isAdmin } = useCollabAccess();
 
-    const { data: template, isLoading, error } = useQuery({
+    const { data: template, isLoading, error, refetch } = useQuery({
         queryKey: ["email-template", templateKey],
         queryFn: () => emailTemplatesService.get(templateKey),
         enabled: isAdmin && !!templateKey,
         staleTime: Infinity,
     });
 
+    usePageTitle(template?.name ?? templateKey);
+
     if (!isAdmin) return <AccessDenied message="Only admins can edit email templates." />;
-    if (isLoading) return <LoadingFallback message="Loading template..." />;
+    if (isLoading) return <LoadingState label="Loading template…" />;
     if (error || !template) {
         return (
-            <div className="p-6 text-center">
-                <p className="text-red-500 mb-4">{error instanceof Error ? error.message : "Template not found."}</p>
-                <Link to="/email-templates" className="text-teal-600 hover:underline">
-                    Back to Email Templates
-                </Link>
+            <div className="rounded-card border border-line bg-surface shadow-card">
+                <ErrorState
+                    title="Couldn't open this template"
+                    error={error ?? new Error("Template not found.")}
+                    onRetry={error ? () => refetch() : undefined}
+                />
+                <div className="flex justify-center pb-8">
+                    <ButtonLink to="/email-templates" size="sm" variant="secondary">
+                        Back to email templates
+                    </ButtonLink>
+                </div>
             </div>
         );
     }
 
-    return (
-        <div className="p-6 max-w-[1600px] mx-auto animate-fade-in">
-            <TemplateEditor key={template.key} template={template} />
-        </div>
-    );
+    return <TemplateEditor key={template.key} template={template} />;
 }

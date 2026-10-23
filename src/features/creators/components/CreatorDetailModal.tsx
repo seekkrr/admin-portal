@@ -1,20 +1,24 @@
-import { type ReactNode, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-    X, RefreshCw, TrendingUp,
-    DollarSign, Award, CheckCircle2, Shield, ExternalLink,
-} from "lucide-react";
+import { Award, Banknote, CheckCircle2, ExternalLink, IndianRupee, Shield, Star, Users } from "lucide-react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/Badge";
+import { Drawer } from "@/components/ui/Modal";
+import { Button, ButtonLink } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { StatusPill, Tag } from "@/components/ui/StatusPill";
+import { StatGrid, StatTile } from "@/components/ui/Stat";
+import { SectionHeading } from "@/components/ui/PageHeader";
+import { DetailList, DetailRow } from "@/components/ui/Panel";
+import { IdLink } from "@/components/ui/IdLink";
+import { PanelState } from "@/components/ui/States";
+import { formatCurrency } from "@/utils/format";
+import { formatDate } from "@/utils/date";
+import { humanizeStatus } from "@/components/ui/status";
 import { creatorsService } from "../services/creators.service";
 
-// ---- Status/Verification styles ----
-const creatorStatusConfig: Record<string, { label: string; dot: string; bg: string }> = {
-    active: { label: "Active", dot: "bg-emerald-500", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-    rejected: { label: "Rejected", dot: "bg-red-500", bg: "bg-red-50 text-red-700 border-red-200" },
-    suspended: { label: "Suspended", dot: "bg-neutral-500", bg: "bg-neutral-100 text-neutral-700 border-neutral-300" },
-};
+const CREATOR_STATUSES = ["active", "suspended", "rejected"] as const;
+type CreatorStatus = (typeof CREATOR_STATUSES)[number];
 
 interface CreatorDetailModalProps {
     open: boolean;
@@ -23,183 +27,143 @@ interface CreatorDetailModalProps {
     onClose: () => void;
 }
 
-export function CreatorDetailModal({
-    open, creatorId, displayName, onClose,
-}: CreatorDetailModalProps) {
+/** Quick view of a creator (side panel): stats, tagline, status and verification. */
+export function CreatorDetailModal({ open, creatorId, displayName, onClose }: CreatorDetailModalProps) {
     const queryClient = useQueryClient();
     const navigate = useNavigate();
+    const [confirmStatus, setConfirmStatus] = useState<CreatorStatus | null>(null);
 
-    // Close on Escape key
-    useEffect(() => {
-        if (!open) return;
-        const handleEsc = (e: KeyboardEvent) => {
-            if (e.key === "Escape") onClose();
-        };
-        window.addEventListener("keydown", handleEsc);
-        return () => window.removeEventListener("keydown", handleEsc);
-    }, [open, onClose]);
-
-    const { data: creator, isLoading, error } = useQuery({
+    const { data: creator, isLoading, error, refetch } = useQuery({
         queryKey: ["creator-detail", creatorId],
         queryFn: () => creatorsService.getCreator(creatorId ?? ""),
         enabled: open && !!creatorId,
     });
 
     const updateMutation = useMutation({
-        mutationFn: ({ status, is_verified }: { status?: string; is_verified?: boolean }) =>
-            creatorsService.updateCreator(creatorId ?? "", { status, is_verified }),
+        mutationFn: ({ status, is_verified }: { status?: string; is_verified?: boolean }) => creatorsService.updateCreator(creatorId ?? "", { status, is_verified }),
         onSuccess: () => {
             toast.success("Creator updated");
             queryClient.invalidateQueries({ queryKey: ["creator-detail", creatorId] });
             queryClient.invalidateQueries({ queryKey: ["admin-creators"] });
+            setConfirmStatus(null);
         },
-        onError: (err: Error) => toast.error(err.message),
+        onError: (err: Error) => {
+            toast.error(err.message);
+            setConfirmStatus(null);
+        },
     });
 
-    if (!open || !creatorId) return null;
-
-    const sc = creator ? creatorStatusConfig[creator.status] ?? creatorStatusConfig.active : null;
-
     return (
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in"
-            onClick={onClose}
-        >
-            <div
-                className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 animate-slide-up overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-            >
-                {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 bg-gradient-to-r from-teal-50/50 to-white">
-                    <div>
-                        <h3 className="text-lg font-bold text-neutral-900">{displayName}</h3>
-                        {creator && sc && (
-                            <div className="flex items-center gap-2 mt-1">
-                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${sc.bg}`}>
-                                    <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
-                                    {sc.label}
-                                </span>
-                                {creator.is_verified && (
-                                    <Badge label="Verified" styles="bg-emerald-50 text-emerald-700 border-emerald-200" />
-                                )}
-                            </div>
+        <>
+            <Drawer
+                open={open && !!creatorId}
+                onClose={onClose}
+                title={displayName || "Creator"}
+                subtitle={
+                    creator && (
+                        <span className="flex flex-wrap items-center gap-2">
+                            <StatusPill status={creator.status} />
+                            {creator.is_verified && (
+                                <Tag tone="good">
+                                    <CheckCircle2 className="h-3 w-3" aria-hidden /> Verified
+                                </Tag>
+                            )}
+                        </span>
+                    )
+                }
+                footer={
+                    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                        <Button variant="secondary" onClick={onClose}>
+                            Close
+                        </Button>
+                        {creatorId && (
+                            <ButtonLink to={`/creators/${creatorId}`} variant="primary" icon={ExternalLink} onClick={onClose}>
+                                Open creator page
+                            </ButtonLink>
                         )}
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="p-2 rounded-lg text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-colors"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
-
-                {/* Body */}
-                <div className="px-6 py-5 space-y-5 max-h-[60vh] overflow-y-auto">
-                    {isLoading ? (
-                        <div className="flex items-center justify-center py-12">
-                            <RefreshCw className="w-6 h-6 text-teal-600 animate-spin" />
-                        </div>
-                    ) : error ? (
-                        <div className="text-center py-8 text-red-500 text-sm">Failed to load creator details</div>
-                    ) : creator ? (
+                }
+            >
+                <PanelState isLoading={isLoading} error={error} isEmpty={!creator} emptyText="Creator not found." onRetry={() => refetch()}>
+                    {creator && (
                         <>
-                            {/* Stats */}
-                            <div>
-                                <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                    <TrendingUp className="w-4 h-4" /> Stats
-                                </h4>
-                                <div className="grid grid-cols-3 gap-3">
-                                    <StatCard icon={<Award className="w-4 h-4 text-indigo-500" />} label="Quests" value={creator.total_quests ?? 0} />
-                                    <StatCard icon={<DollarSign className="w-4 h-4 text-emerald-500" />} label="Earnings" value={`₹${(creator.total_earnings ?? 0).toLocaleString("en-IN")}`} />
-                                    <StatCard icon={<Award className="w-4 h-4 text-violet-500" />} label="Rating" value={creator.rating ?? "—"} />
-                                </div>
-                                <div className="grid grid-cols-2 gap-3 mt-3">
-                                    {/* Pending Payout — actionable: navigate to Payouts with pre-filled query params */}
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            onClose();
-                                            // /payouts consumes these params to open the Initiate Payout modal prefilled.
-                                            navigate(`/payouts?createForCreator=${creatorId}&amount=${creator.pending_payouts ?? 0}`);
-                                        }}
-                                        className="bg-white rounded-xl border border-orange-200 p-3 text-center hover:bg-orange-50 hover:border-orange-300 transition-colors group cursor-pointer"
-                                        title="Create payout for this creator"
-                                    >
-                                        <div className="flex items-center justify-center mb-1.5 relative">
-                                            <DollarSign className="w-4 h-4 text-orange-500" />
-                                            <ExternalLink className="w-2.5 h-2.5 text-orange-400 absolute -top-0.5 -right-2 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                        </div>
-                                        <div className="text-lg font-bold text-neutral-900">{`₹${(creator.pending_payouts ?? 0).toLocaleString("en-IN")}`}</div>
-                                        <div className="text-[11px] text-orange-600 uppercase tracking-wider font-medium">Pending Payout</div>
-                                    </button>
-                                    <StatCard icon={<Award className="w-4 h-4 text-teal-500" />} label="Travelers" value={creator.travelers_served ?? 0} />
-                                </div>
-                            </div>
+                            <section className="space-y-3">
+                                <SectionHeading>Stats</SectionHeading>
+                                <StatGrid cols={3}>
+                                    <StatTile icon={Award} label="Quests" value={(creator.total_quests ?? 0).toLocaleString("en-IN")} />
+                                    <StatTile icon={IndianRupee} label="Earnings" value={formatCurrency(creator.total_earnings ?? 0)} />
+                                    <StatTile icon={Star} label="Rating" value={creator.rating ?? "—"} />
+                                    <StatTile icon={Users} label="Travelers" value={(creator.travelers_served ?? 0).toLocaleString("en-IN")} />
+                                    <StatTile icon={Banknote} label="Pending payout" value={formatCurrency(creator.pending_payouts ?? 0)} />
+                                </StatGrid>
+                                <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    icon={Banknote}
+                                    onClick={() => {
+                                        onClose();
+                                        // /payouts consumes these params to open the Initiate Payout modal prefilled.
+                                        navigate(`/payouts?createForCreator=${creatorId}&amount=${creator.pending_payouts ?? 0}`);
+                                    }}
+                                >
+                                    Create payout
+                                </Button>
+                            </section>
 
-                            {/* Bio */}
-                            {creator.tagline && (
-                                <div>
-                                    <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider mb-2">Tagline</h4>
-                                    <p className="text-sm text-neutral-700 italic">"{creator.tagline}"</p>
-                                </div>
-                            )}
+                            <section className="space-y-3">
+                                <SectionHeading>Profile</SectionHeading>
+                                <DetailList>
+                                    <DetailRow label="User" value={<IdLink kind="user" id={creator.user_id} label={creator.name ?? undefined} />} />
+                                    {creator.tagline && <DetailRow label="Tagline" value={<span className="italic">“{creator.tagline}”</span>} />}
+                                    <DetailRow label="Joined" value={formatDate(creator.created_at)} />
+                                </DetailList>
+                            </section>
 
-                            {/* Admin Actions */}
-                            <div>
-                                <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                    <Shield className="w-4 h-4" /> Admin Actions
-                                </h4>
+                            <section className="space-y-3">
+                                <SectionHeading>
+                                    <span className="flex items-center gap-2">
+                                        <Shield className="h-4 w-4 text-accent-600" aria-hidden /> Admin actions
+                                    </span>
+                                </SectionHeading>
                                 <div className="flex flex-wrap gap-2">
-                                    {(["active", "suspended", "rejected"] as const).map((s) => (
-                                        <button
+                                    {CREATOR_STATUSES.map((s) => (
+                                        <Button
                                             key={s}
+                                            size="sm"
+                                            variant={creator.status === s ? "primary" : "secondary"}
                                             disabled={creator.status === s || updateMutation.isPending}
-                                            onClick={() => updateMutation.mutate({ status: s })}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-40 ${
-                                                creator.status === s
-                                                    ? (creatorStatusConfig[s]?.bg ?? "") + " cursor-default"
-                                                    : "border-neutral-200 text-neutral-600 hover:bg-neutral-50"
-                                            }`}
+                                            onClick={() => setConfirmStatus(s)}
                                         >
-                                            {creator.status === s ? `✓ ${creatorStatusConfig[s]?.label ?? s}` : `Set ${creatorStatusConfig[s]?.label ?? s}`}
-                                        </button>
+                                            {creator.status === s ? `${humanizeStatus(s)} now` : `Set ${humanizeStatus(s).toLowerCase()}`}
+                                        </Button>
                                     ))}
-                                    <button
+                                    <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        icon={CheckCircle2}
+                                        loading={updateMutation.isPending && !confirmStatus}
                                         disabled={updateMutation.isPending}
                                         onClick={() => updateMutation.mutate({ is_verified: !creator.is_verified })}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-neutral-200 text-neutral-600 hover:bg-neutral-50 transition-colors disabled:opacity-40"
                                     >
-                                        <CheckCircle2 className="w-3.5 h-3.5" />
                                         {creator.is_verified ? "Unverify" : "Verify"}
-                                    </button>
+                                    </Button>
                                 </div>
-                            </div>
+                            </section>
                         </>
-                    ) : null}
-                </div>
+                    )}
+                </PanelState>
+            </Drawer>
 
-                {/* Footer */}
-                <div className="flex gap-2 px-6 py-4 border-t border-neutral-100 bg-neutral-50/50">
-                    <button
-                        onClick={onClose}
-                        className="flex-1 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-600 hover:bg-neutral-100 transition-colors"
-                    >
-                        Close
-                    </button>
-                </div>
-            </div>
-        </div>
+            <ConfirmDialog
+                open={!!confirmStatus}
+                title="Change creator status?"
+                description={`${displayName || "This creator"} becomes "${confirmStatus ? humanizeStatus(confirmStatus) : ""}".`}
+                confirmLabel="Change status"
+                tone={confirmStatus === "active" ? "primary" : "warning"}
+                onConfirm={() => confirmStatus && updateMutation.mutate({ status: confirmStatus })}
+                onCancel={() => setConfirmStatus(null)}
+                isPending={updateMutation.isPending}
+            />
+        </>
     );
 }
-
-// ---- Small Stat Card ----
-function StatCard({ icon, label, value }: { icon: ReactNode; label: string; value: string | number }) {
-    return (
-        <div className="bg-white rounded-xl border border-neutral-200 p-3 text-center">
-            <div className="flex items-center justify-center mb-1.5">{icon}</div>
-            <div className="text-lg font-bold text-neutral-900">{value}</div>
-            <div className="text-[11px] text-neutral-500 uppercase tracking-wider">{label}</div>
-        </div>
-    );
-}
-

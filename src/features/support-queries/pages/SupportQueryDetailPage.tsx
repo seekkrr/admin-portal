@@ -1,11 +1,19 @@
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supportQueriesService } from "../services/support-queries.service";
-import { Card, CardHeader, CardTitle, CardContent } from "@components/ui";
-import { ArrowLeft, User, Clock, Trash2, Mail, Phone } from "lucide-react";
-import { useAuthStore } from "@store/auth.store";
 import { toast } from "sonner";
-import { LoadingFallback } from "@components/LoadingFallback";
+import { Mail, MessageSquare, Phone, Trash2 } from "lucide-react";
+import { useAuthStore } from "@store/auth.store";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { supportQueriesService } from "../services/support-queries.service";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Button, ButtonLink } from "@/components/ui/Button";
+import { buttonClass } from "@/components/ui/buttonStyles";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Panel, DetailList, DetailRow } from "@/components/ui/Panel";
+import { CopyText } from "@/components/ui/CopyText";
+import { ErrorState, LoadingState } from "@/components/ui/States";
+import { formatDateTime, formatRelative } from "@/utils/date";
 
 export function SupportQueryDetailPage() {
     const { queryId: queryIdParam } = useParams<{ queryId: string }>();
@@ -13,15 +21,17 @@ export function SupportQueryDetailPage() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { user } = useAuthStore();
-    
-    const CAN_DELETE = user?.role?.some(r => ["admin", "super_admin"].includes(r));
+    const CAN_DELETE = !!user?.role?.some((r) => ["admin", "super_admin"].includes(r));
+    const [confirmDelete, setConfirmDelete] = useState(false);
 
-    const { data: query, isLoading, error } = useQuery({
+    const { data: query, isLoading, error, refetch } = useQuery({
         queryKey: ["support-query-detail", queryId],
         queryFn: () => supportQueriesService.getById(queryId),
         enabled: !!queryId,
         staleTime: 5 * 60 * 1000,
     });
+
+    usePageTitle(query ? `Message from ${query.name || "Anonymous"}` : null);
 
     const deleteMutation = useMutation({
         mutationFn: () => supportQueriesService.deleteQuery(queryId),
@@ -32,102 +42,102 @@ export function SupportQueryDetailPage() {
         },
         onError: () => {
             toast.error("Failed to delete query");
-        }
+            setConfirmDelete(false);
+        },
     });
 
-    if (isLoading) return <LoadingFallback message="Loading query details..." />;
+    if (isLoading) return <LoadingState label="Loading query details…" />;
 
     if (error || !query) {
         return (
-            <div className="p-6 text-center">
-                <p className="text-red-500 mb-4">Failed to load support query or it does not exist.</p>
-                <Link to="/support-queries" className="text-indigo-600 hover:underline">
-                    Back to Support Queries
-                </Link>
+            <div className="rounded-card border border-line bg-surface shadow-card">
+                <ErrorState
+                    error={error ?? new Error("This support query doesn't exist.")}
+                    title="Couldn't load this support query"
+                    onRetry={error ? () => refetch() : undefined}
+                />
+                <div className="flex justify-center pb-8">
+                    <ButtonLink to="/support-queries" size="sm" variant="ghost">
+                        Back to support queries
+                    </ButtonLink>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="animate-fade-in max-w-4xl mx-auto space-y-6">
-            {/* Header & Back */}
-            <div className="flex items-center justify-between">
-                <Link 
-                    to="/support-queries" 
-                    className="flex items-center gap-2 text-sm font-medium text-neutral-500 hover:text-neutral-900 transition-colors"
-                >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back to Queries
-                </Link>
-                
-                {CAN_DELETE && (
-                    <button
-                        onClick={() => {
-                            if (window.confirm("Are you sure you want to delete this query?")) {
-                                deleteMutation.mutate();
-                            }
-                        }}
-                        disabled={deleteMutation.isPending}
-                        className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors disabled:opacity-50"
-                    >
-                        <Trash2 className="w-4 h-4" />
-                        Delete Query
-                    </button>
-                )}
-            </div>
+        <div className="space-y-5">
+            <PageHeader
+                icon={MessageSquare}
+                title={query.name || "Anonymous"}
+                description={query.created_at ? `Sent ${formatRelative(query.created_at)}` : undefined}
+                actions={
+                    <>
+                        {query.email && (
+                            <a href={`mailto:${query.email}`} className={buttonClass("secondary", "md")}>
+                                <Mail className="h-4 w-4" aria-hidden />
+                                Reply by email
+                            </a>
+                        )}
+                        {CAN_DELETE && (
+                            <Button variant="danger" icon={Trash2} onClick={() => setConfirmDelete(true)} disabled={deleteMutation.isPending}>
+                                Delete
+                            </Button>
+                        )}
+                    </>
+                }
+            />
 
-            {/* Title Card */}
-            <Card>
-                <CardContent className="p-6 sm:p-8">
-                    <div className="flex flex-col md:flex-row justify-between gap-6">
-                        <div className="flex-1">
-                            <h1 className="text-2xl font-bold text-neutral-900 mt-2">
-                                Support Query
-                            </h1>
-                            <div className="mt-4 flex flex-col gap-2 text-sm text-neutral-500">
-                                <div className="flex items-center gap-1.5">
-                                    <User className="w-4 h-4 text-neutral-400" />
-                                    <span className="font-medium text-neutral-900">{query.name || "Anonymous User"}</span>
-                                </div>
-                                {query.email && (
-                                    <div className="flex items-center gap-1.5">
-                                        <Mail className="w-4 h-4 text-neutral-400" />
-                                        <a href={`mailto:${query.email}`} className="text-indigo-600 hover:underline">{query.email}</a>
-                                    </div>
-                                )}
-                                {query.phone && (
-                                    <div className="flex items-center gap-1.5">
-                                        <Phone className="w-4 h-4 text-neutral-400" />
-                                        <a href={`tel:${query.phone}`} className="text-indigo-600 hover:underline">{query.phone}</a>
-                                    </div>
-                                )}
-                                <div className="flex items-center gap-1.5 mt-2">
-                                    <Clock className="w-4 h-4 text-neutral-400" />
-                                    Submitted {query.created_at ? new Date(query.created_at).toLocaleString() : "Unknown date"}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+            <Panel title="Message">
+                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-ink">{query.message || "No message provided."}</p>
+            </Panel>
 
-            {/* Message Content Layout */}
-            <div className="grid grid-cols-1 gap-6">
-                <div className="space-y-6">
-                    <Card>
-                        <CardHeader className="bg-neutral-50/50 border-b border-neutral-100 pb-4">
-                            <CardTitle className="text-base flex items-center gap-2">
-                                Message Content
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-6">
-                            <div className="prose prose-sm prose-neutral max-w-none whitespace-pre-wrap text-neutral-700">
-                                {query.message || "No message provided."}
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            </div>
+            <Panel title="Contact">
+                <DetailList>
+                    <DetailRow label="Name" value={query.name || "Anonymous"} />
+                    <DetailRow
+                        label="Email"
+                        value={
+                            query.email ? (
+                                <a href={`mailto:${query.email}`} className="inline-flex items-center gap-1.5 text-accent-700 hover:underline">
+                                    <Mail className="h-3.5 w-3.5" aria-hidden />
+                                    {query.email}
+                                </a>
+                            ) : (
+                                "—"
+                            )
+                        }
+                    />
+                    <DetailRow
+                        label="Phone"
+                        value={
+                            query.phone ? (
+                                <a href={`tel:${query.phone}`} className="inline-flex items-center gap-1.5 text-accent-700 hover:underline">
+                                    <Phone className="h-3.5 w-3.5" aria-hidden />
+                                    {query.phone}
+                                </a>
+                            ) : (
+                                "—"
+                            )
+                        }
+                    />
+                    <DetailRow label="Received" value={formatDateTime(query.created_at)} />
+                    <DetailRow label="Query ID" value={<CopyText value={query.id} mono truncate={false} />} />
+                </DetailList>
+            </Panel>
+
+            <ConfirmDialog
+                open={confirmDelete}
+                title="Delete support query?"
+                description={`The message from ${query.name || query.email || "Anonymous"} is removed for good.`}
+                confirmLabel="Delete"
+                tone="danger"
+                level="type"
+                typeToConfirm="DELETE"
+                isPending={deleteMutation.isPending}
+                onConfirm={() => deleteMutation.mutate()}
+                onCancel={() => setConfirmDelete(false)}
+            />
         </div>
     );
 }

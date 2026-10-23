@@ -4,8 +4,11 @@ import { analyticsService } from "../services/analytics.service";
 import { PeriodSelector } from "../components/PeriodSelector";
 import { AnalyticsCard } from "../components/AnalyticsCard";
 import { SimpleLineChart, SimpleBarChart, SimpleDoughnutChart } from "../components/SimpleChart";
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@components/ui";
-import { Users, DollarSign, Map, Video, Globe, MessageSquare, Activity, Star, Award, MapPin, Megaphone, Link2 } from "lucide-react";
+import { Panel } from "@/components/ui/Panel";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Tabs } from "@/components/ui/Tabs";
+import { useUrlState } from "@/hooks/useUrlState";
+import { BarChart3, Users, DollarSign, Map, Video, Globe, MessageSquare, Activity, Star, Award, MapPin, Megaphone, Link2 } from "lucide-react";
 import { useAuthStore } from "@store/auth.store";
 import { Navigate } from "react-router-dom";
 import type { AnalyticsPeriod } from "@/types";
@@ -25,8 +28,12 @@ export function AnalyticsPage() {
     const { user } = useAuthStore();
     const isAdmin = user?.role?.some((r) => ["admin", "super_admin", "finance"].includes(r));
     
-    const [activeTab, setActiveTab] = useState<typeof TABS[number]["id"]>("users");
-    const [period, setPeriod] = useState<AnalyticsPeriod>("30d");
+    // Tab and period live in the address, so a reload or a shared link keeps them.
+    const { state: urlState, set: setUrl } = useUrlState({ tab: "users", period: "30d" });
+    const activeTab: typeof TABS[number]["id"] = TABS.some((t) => t.id === urlState.tab) ? (urlState.tab as typeof TABS[number]["id"]) : "users";
+    const setActiveTab = (tab: typeof TABS[number]["id"]) => setUrl({ tab });
+    const period: AnalyticsPeriod = (["7d", "30d", "60d", "90d"] as const).find((p) => p === urlState.period) ?? "30d";
+    const setPeriod = (p: AnalyticsPeriod) => setUrl({ period: p });
     const [markerStatusToggle, setMarkerStatusToggle] = useState<"approved" | "rejected">("approved");
     
     const getDates = () => {
@@ -76,46 +83,41 @@ export function AnalyticsPage() {
         return <Navigate to="/access-denied" replace />;
     }
 
-    const colors = ["#4f46e5", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#f97316"];
+    // Chart palette: brand teal first, then distinct hues that read on white.
+    const colors = ["#00a49e", "#003634", "#fecd36", "#1d5fa8", "#b45309", "#5f9f9b", "#b91c1c", "#15803d"];
 
     // --- Shared Render Helpers ---
 
     const renderSectionHeader = (title: string, description: string, actions?: ReactNode) => (
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+        <div className="mb-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
             <div>
-                <h2 className="text-xl font-bold text-neutral-900 tracking-tight">{title}</h2>
-                <p className="text-sm text-neutral-500 mt-0.5">{description}</p>
+                <h2 className="text-base font-semibold text-ink">{title}</h2>
+                <p className="mt-0.5 text-sm text-ink-muted">{description}</p>
             </div>
-            {actions && <div className="shrink-0">{actions}</div>}
+            {actions && <div className="max-w-full shrink-0">{actions}</div>}
         </div>
     );
 
     const renderChartCard = (title: string, description: string, children: ReactNode, extraClass = "") => (
-        <Card className={`shadow-sm border-neutral-100 hover:shadow-md transition-shadow duration-300 overflow-hidden ${extraClass}`}>
-            <CardHeader className="border-b border-neutral-100/60 pb-3 pt-5 px-6">
-                <CardTitle className="text-base font-bold tracking-tight">{title}</CardTitle>
-                <CardDescription className="text-neutral-500 mt-0.5 text-sm">{description}</CardDescription>
-            </CardHeader>
-            <CardContent className="p-5">
-                {children}
-            </CardContent>
-        </Card>
+        <Panel title={title} description={description} className={extraClass}>
+            {children}
+        </Panel>
     );
 
     const renderTable = (headers: string[], rows: ReactNode, emptyMsg: string, isEmpty: boolean, maxH?: string) => (
         <div className={`overflow-x-auto ${maxH ? `max-h-[${maxH}] overflow-y-auto` : ''}`} style={maxH ? { maxHeight: maxH } : undefined}>
             <table className="min-w-full text-sm">
-                <thead className="text-xs text-neutral-500 bg-neutral-50/80 uppercase tracking-wider sticky top-0 z-10">
+                <thead className="sticky top-0 z-10 bg-surface-muted text-xs uppercase tracking-wide text-ink-muted">
                     <tr>
                         {headers.map((h, i) => (
-                            <th key={i} className={`px-5 py-3 font-bold ${i === 0 ? 'text-left' : 'text-right'}`}>{h}</th>
+                            <th key={i} scope="col" className={`px-5 py-3 font-semibold ${i === 0 ? 'text-left' : 'text-right'}`}>{h}</th>
                         ))}
                     </tr>
                 </thead>
-                <tbody className="divide-y divide-neutral-100">
+                <tbody className="divide-y divide-line">
                     {rows}
                     {isEmpty && (
-                        <tr><td colSpan={headers.length} className="px-5 py-8 text-center text-neutral-400">{emptyMsg}</td></tr>
+                        <tr><td colSpan={headers.length} className="px-5 py-8 text-center text-ink-faint">{emptyMsg}</td></tr>
                     )}
                 </tbody>
             </table>
@@ -137,7 +139,6 @@ export function AnalyticsPage() {
                     title={`Active Users (${period})`}
                     value={activeUsers?.data?.active_users || 0}
                     icon={Activity}
-                    colorClass="ring-indigo-100 text-indigo-600"
                     isLoading={loadAU}
                 />
             </div>
@@ -146,7 +147,7 @@ export function AnalyticsPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                 {renderChartCard("User Growth", "New registrations over time", (
                     loadUG
-                        ? <div className="h-[240px] bg-neutral-100 animate-pulse rounded-lg" />
+                        ? <div className="h-[240px] bg-brand-50 animate-pulse rounded-lg" />
                         : <SimpleLineChart data={(userGrowth?.data || []).map((d: { period: string; count: number }) => ({ label: d.period, value: d.count }))} color="#4f46e5" height={240} />
                 ), "lg:col-span-2")}
 
@@ -165,9 +166,9 @@ export function AnalyticsPage() {
                 renderTable(
                     ["Cohort Month", "Signups"],
                     (retention?.data || []).map((c: { cohort_month: string; user_count: number }, i: number) => (
-                        <tr key={i} className="hover:bg-neutral-50/60 transition-colors">
-                            <td className="px-5 py-3.5 font-semibold text-neutral-800">{c.cohort_month}</td>
-                            <td className="px-5 py-3.5 text-indigo-600 font-bold text-right">{c.user_count}</td>
+                        <tr key={i} className="hover:bg-surface-muted transition-colors">
+                            <td className="px-5 py-3.5 font-semibold text-ink">{c.cohort_month}</td>
+                            <td className="px-5 py-3.5 text-accent-700 font-bold text-right">{c.user_count}</td>
                         </tr>
                     )),
                     "No cohort data available",
@@ -192,7 +193,6 @@ export function AnalyticsPage() {
                     title={`Link Clicks (${period})`}
                     value={linkClicks?.data?.total_clicks || 0}
                     icon={Link2}
-                    colorClass="ring-fuchsia-100 text-fuchsia-600"
                     isLoading={loadLC}
                 />
             </div>
@@ -201,7 +201,7 @@ export function AnalyticsPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                 {renderChartCard("Clicks Over Time", "Tracked marketing link clicks", (
                     loadLC
-                        ? <div className="h-[240px] bg-neutral-100 animate-pulse rounded-lg" />
+                        ? <div className="h-[240px] bg-brand-50 animate-pulse rounded-lg" />
                         : <SimpleLineChart data={(linkClicks?.data?.series || []).map((d: { period: string; clicks: number }) => ({ label: d.period, value: d.clicks }))} color="#c026d3" height={240} />
                 ), "lg:col-span-2")}
 
@@ -211,8 +211,8 @@ export function AnalyticsPage() {
                         (linkClicks?.data?.by_src || []).map((r: { src: string; clicks: number }, index: number) => {
                             const campaignName = r.src || "Direct / Organic";
                             return (
-                                <tr key={r.src || "unknown-" + index} className="hover:bg-neutral-50/60 transition-colors">
-                                    <td className="px-5 py-3.5 font-semibold text-neutral-800 font-mono text-xs">{campaignName}</td>
+                                <tr key={r.src || "unknown-" + index} className="hover:bg-surface-muted transition-colors">
+                                    <td className="px-5 py-3.5 font-semibold text-ink font-mono text-xs">{campaignName}</td>
                                     <td className="px-5 py-3.5 text-fuchsia-600 font-bold text-right">{r.clicks}</td>
                                 </tr>
                             );
@@ -241,7 +241,6 @@ export function AnalyticsPage() {
                     title={`Total Revenue (${period})`}
                     value={formatCurrency(revTotal?.data?.total_revenue ?? 0)}
                     icon={DollarSign}
-                    colorClass="ring-emerald-100 text-emerald-600"
                     isLoading={loadRT}
                 />
 
@@ -251,15 +250,15 @@ export function AnalyticsPage() {
                             const val = revFunnel?.data?.transactions?.[stage] || revFunnel?.data?.refunds?.[stage] || 0;
                             const total = Math.max(revFunnel?.data?.transactions?.captured || 1, 1);
                             const percent = Math.min((val / total) * 100, 100);
-                            const barColor = stage === 'captured' ? 'bg-emerald-500' : stage === 'failed' ? 'bg-rose-500' : 'bg-amber-500';
-                            const badgeCls = stage === 'captured' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : stage === 'failed' ? 'bg-rose-50 text-rose-700 ring-rose-200' : 'bg-amber-50 text-amber-700 ring-amber-200';
+                            const barColor = stage === 'captured' ? 'bg-good' : stage === 'failed' ? 'bg-bad' : 'bg-warn';
+                            const badgeCls = stage === 'captured' ? 'bg-good-soft text-good ring-good-line' : stage === 'failed' ? 'bg-bad-soft text-bad ring-bad-line' : 'bg-warn-soft text-warn ring-warn-line';
                             return (
                                 <div key={stage}>
                                     <div className="flex justify-between items-center text-sm mb-1.5">
-                                        <span className="font-semibold capitalize text-neutral-700">{stage}</span>
+                                        <span className="font-semibold capitalize text-ink">{stage}</span>
                                         <span className={`px-2 py-0.5 rounded text-xs font-bold ring-1 ${badgeCls}`}>{val} txns</span>
                                     </div>
-                                    <div className="w-full bg-neutral-100 rounded-full h-2.5 overflow-hidden ring-1 ring-neutral-200/50">
+                                    <div className="w-full bg-brand-50 rounded-full h-2.5 overflow-hidden ring-1 ring-line">
                                         <div className={`${barColor} h-full rounded-full transition-all duration-700 ease-out`} style={{ width: `${Math.max(2, percent)}%` }} />
                                     </div>
                                 </div>
@@ -283,10 +282,10 @@ export function AnalyticsPage() {
                     renderTable(
                         ["Quest Title", "Revenue", "Sales"],
                         (revByQuest?.data || []).map((q: { quest_id: string; quest_title: string; revenue: number; count: number }) => (
-                            <tr key={q.quest_id} className="hover:bg-neutral-50/60 transition-colors">
-                                <td className="px-5 py-3.5 font-semibold text-neutral-800">{q.quest_title}</td>
-                                <td className="px-5 py-3.5 text-emerald-600 font-bold text-right">{formatCurrency(q.revenue)}</td>
-                                <td className="px-5 py-3.5 text-neutral-500 text-right">{q.count}</td>
+                            <tr key={q.quest_id} className="hover:bg-surface-muted transition-colors">
+                                <td className="px-5 py-3.5 font-semibold text-ink">{q.quest_title}</td>
+                                <td className="px-5 py-3.5 text-good font-bold text-right">{formatCurrency(q.revenue)}</td>
+                                <td className="px-5 py-3.5 text-ink-muted text-right">{q.count}</td>
                             </tr>
                         )),
                         "No revenue data available",
@@ -309,8 +308,8 @@ export function AnalyticsPage() {
 
             {/* KPI row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <AnalyticsCard title={`Completion Rate (${period})`} value={`${questCompletion?.data?.completion_rate || 0}%`} icon={Activity} colorClass="ring-blue-100 text-blue-600" isLoading={loadQC} />
-                <AnalyticsCard title="Average Quest Rating" value={`${questReviewSentiment?.data?.average_rating || 0} / 5`} icon={Star} colorClass="ring-amber-100 text-amber-600" isLoading={loadQRS} />
+                <AnalyticsCard title={`Completion Rate (${period})`} value={`${questCompletion?.data?.completion_rate || 0}%`} icon={Activity} isLoading={loadQC} />
+                <AnalyticsCard title="Average Quest Rating" value={`${questReviewSentiment?.data?.average_rating || 0} / 5`} icon={Star} isLoading={loadQRS} />
             </div>
 
             {/* Charts row */}
@@ -339,9 +338,9 @@ export function AnalyticsPage() {
                 renderTable(
                     ["Quest Title", "Completions"],
                     (topQuests?.data || []).map((q: { quest_id: string; title: string; completions: number }) => (
-                        <tr key={q.quest_id} className="hover:bg-neutral-50/60 transition-colors">
-                            <td className="px-5 py-3.5 font-semibold text-neutral-800">{q.title}</td>
-                            <td className="px-5 py-3.5 text-blue-600 font-bold text-right">{q.completions}</td>
+                        <tr key={q.quest_id} className="hover:bg-surface-muted transition-colors">
+                            <td className="px-5 py-3.5 font-semibold text-ink">{q.title}</td>
+                            <td className="px-5 py-3.5 text-info font-bold text-right">{q.completions}</td>
                         </tr>
                     )),
                     "No quest data available",
@@ -358,7 +357,7 @@ export function AnalyticsPage() {
 
             {/* KPI + Funnel */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
-                <AnalyticsCard title="Active Creators" value={activeCreators?.data?.active_creators || 0} icon={Video} colorClass="ring-indigo-100 text-indigo-600" isLoading={loadAC} />
+                <AnalyticsCard title="Active Creators" value={activeCreators?.data?.active_creators || 0} icon={Video} isLoading={loadAC} />
 
                 {renderChartCard("Application Funnel", "Application pipeline status", (
                     <SimpleDoughnutChart
@@ -375,17 +374,17 @@ export function AnalyticsPage() {
                 renderTable(
                     ["Creator Name", "Total Quests", "Total Earnings"],
                     (topCreators?.data || []).map((c: { creator_id: string; name: string; total_quests: number; total_earnings: number }) => (
-                        <tr key={c.creator_id} className="hover:bg-neutral-50/60 transition-colors">
-                            <td className="px-5 py-3.5 font-semibold text-neutral-800">
+                        <tr key={c.creator_id} className="hover:bg-surface-muted transition-colors">
+                            <td className="px-5 py-3.5 font-semibold text-ink">
                                 <div className="flex items-center gap-2.5">
-                                    <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs ring-1 ring-indigo-200 shrink-0">
+                                    <div className="w-7 h-7 rounded-full bg-accent-50 text-accent-700 flex items-center justify-center font-bold text-xs ring-1 ring-accent-200 shrink-0">
                                         {c.name.charAt(0).toUpperCase()}
                                     </div>
                                     {c.name}
                                 </div>
                             </td>
-                            <td className="px-5 py-3.5 text-neutral-600 text-right">{c.total_quests}</td>
-                            <td className="px-5 py-3.5 text-emerald-600 font-bold text-right">{formatCurrency(c.total_earnings)}</td>
+                            <td className="px-5 py-3.5 text-ink-muted text-right">{c.total_quests}</td>
+                            <td className="px-5 py-3.5 text-good font-bold text-right">{formatCurrency(c.total_earnings)}</td>
                         </tr>
                     )),
                     "No creator data available",
@@ -427,10 +426,10 @@ export function AnalyticsPage() {
                     renderTable(
                         ["Region Name", "Marker Count"],
                         (topRegionsByMarkers?.data || []).map((r: { region_id: string; name: string; markers: number }) => (
-                            <tr key={r.region_id} className="hover:bg-neutral-50/60 transition-colors">
-                                <td className="px-5 py-3.5 font-semibold text-neutral-800">
+                            <tr key={r.region_id} className="hover:bg-surface-muted transition-colors">
+                                <td className="px-5 py-3.5 font-semibold text-ink">
                                     <div className="flex items-center gap-2">
-                                        <MapPin className="w-4 h-4 text-neutral-400 shrink-0" />
+                                        <MapPin className="w-4 h-4 text-ink-faint shrink-0" />
                                         {r.name}
                                     </div>
                                 </td>
@@ -482,14 +481,14 @@ export function AnalyticsPage() {
                     renderTable(
                         ["Achievement", "Unlocks"],
                         (achievementUnlockRates?.data || []).map((a: { achievement_id: string; name: string; unlocks: number }) => (
-                            <tr key={a.achievement_id} className="hover:bg-neutral-50/60 transition-colors">
-                                <td className="px-5 py-3.5 font-semibold text-neutral-800">
+                            <tr key={a.achievement_id} className="hover:bg-surface-muted transition-colors">
+                                <td className="px-5 py-3.5 font-semibold text-ink">
                                     <div className="flex items-center gap-2">
-                                        <Award className="w-4 h-4 text-amber-500 shrink-0" />
+                                        <Award className="w-4 h-4 text-warn shrink-0" />
                                         {a.name}
                                     </div>
                                 </td>
-                                <td className="px-5 py-3.5 text-indigo-600 font-bold text-right">{a.unlocks?.toLocaleString()}</td>
+                                <td className="px-5 py-3.5 text-accent-700 font-bold text-right">{a.unlocks?.toLocaleString()}</td>
                             </tr>
                         )),
                         "No achievement data available",
@@ -503,13 +502,13 @@ export function AnalyticsPage() {
                         <div className="flex gap-2 mb-4 justify-end">
                             <button
                                 onClick={() => setMarkerStatusToggle("approved")}
-                                className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${markerStatusToggle === "approved" ? "bg-indigo-100 text-indigo-700" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"}`}
+                                className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${markerStatusToggle === "approved" ? "bg-accent-50 text-accent-700" : "bg-brand-50 text-ink-muted hover:bg-brand-50"}`}
                             >
                                 Approved
                             </button>
                             <button
                                 onClick={() => setMarkerStatusToggle("rejected")}
-                                className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${markerStatusToggle === "rejected" ? "bg-pink-100 text-pink-700" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"}`}
+                                className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${markerStatusToggle === "rejected" ? "bg-bad-soft text-bad" : "bg-brand-50 text-ink-muted hover:bg-brand-50"}`}
                             >
                                 Rejected
                             </button>
@@ -528,40 +527,23 @@ export function AnalyticsPage() {
     );
 
     return (
-        <div className="animate-fade-in space-y-6 pb-12">
-            {/* Page header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                <div>
-                    <h1 className="text-2xl font-extrabold text-neutral-900 tracking-tight">Analytics Suite</h1>
-                    <p className="text-neutral-500 mt-1">Comprehensive data and insights across the platform</p>
-                </div>
-                <div className="text-sm font-medium text-neutral-500 bg-white px-4 py-2 rounded-full shadow-sm ring-1 ring-neutral-200/50 flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    Live Data
-                </div>
-            </div>
+        <div className="space-y-5">
+            <PageHeader icon={BarChart3} title="Analytics" description="Growth, revenue and content trends across the platform" />
 
-            {/* Tab navigation */}
-            <div className="bg-neutral-100/70 p-1.5 rounded-xl inline-flex overflow-x-auto max-w-full scrollbar-hide ring-1 ring-neutral-200/50 shadow-inner">
-                {TABS.map(tab => {
-                    const Icon = tab.icon;
-                    const isActive = activeTab === tab.id;
-                    return (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-lg transition-all duration-200 whitespace-nowrap ${
-                                isActive
-                                    ? "bg-white text-indigo-700 shadow-md ring-1 ring-neutral-200/50"
-                                    : "text-neutral-500 hover:text-neutral-800 hover:bg-white/50"
-                            }`}
-                        >
-                            <Icon className={`w-4 h-4 ${isActive ? 'text-indigo-600' : 'text-neutral-400'}`} />
+            <Tabs
+                label="Analytics sections"
+                value={activeTab}
+                onChange={setActiveTab}
+                tabs={TABS.map((tab) => ({
+                    value: tab.id,
+                    label: (
+                        <span className="inline-flex items-center gap-2">
+                            <tab.icon className="h-4 w-4" aria-hidden />
                             {tab.label}
-                        </button>
-                    );
-                })}
-            </div>
+                        </span>
+                    ),
+                }))}
+            />
 
             {/* Tab content */}
             <div>

@@ -19,33 +19,22 @@ import {
 } from "lucide-react";
 import { AccessDenied } from "@components/AccessDenied";
 import { useCollabAccess } from "@/features/collabs/roles";
-import { Chip, LoadingButtonIcon, PageHeader, PanelState, SectionCard, btnPrimary, btnSecondary, btnSmNeutral } from "@/features/collabs/components/CollabsUi";
+import { Button, ButtonLink } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Panel } from "@/components/ui/Panel";
+import { PanelState } from "@/components/ui/States";
+import { Tag } from "@/components/ui/StatusPill";
+import { Switch } from "@/components/ui/Field";
+import { cx } from "@/utils/cx";
 import { EXPLORE_REGIONS_QUERY_KEY, exploreMapService, patchRegionInCache, replaceRegionInCache } from "../services/explore-map.service";
 import { RegionSettingsDrawer } from "../components/RegionSettingsDrawer";
 import type { ExploreRegion } from "../types";
 
 const sameOrder = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
-const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString("en-IN")} ${n === 1 ? one : many}`;
 
 /** The app's default is the first region it actually shows. */
 const isShown = (r: ExploreRegion) => r.visible && r.is_active;
-
-function VisibleSwitch({ on, label, disabled, onToggle }: { on: boolean; label: string; disabled?: boolean; onToggle: () => void }) {
-    return (
-        <button
-            type="button"
-            role="switch"
-            aria-checked={on}
-            aria-label={label}
-            title={label}
-            disabled={disabled}
-            onClick={onToggle}
-            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 disabled:opacity-50 ${on ? "bg-emerald-500" : "bg-neutral-300"}`}
-        >
-            <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${on ? "translate-x-4" : "translate-x-0.5"}`} />
-        </button>
-    );
-}
 
 /** Keyboard/touch alternative to dragging. Bigger, bordered targets when the list is narrow. */
 const MoveButton = forwardRef<HTMLButtonElement, { direction: "up" | "down"; name: string; disabled: boolean; onClick: () => void }>(function MoveButton(
@@ -61,9 +50,9 @@ const MoveButton = forwardRef<HTMLButtonElement, { direction: "up" | "down"; nam
             disabled={disabled}
             aria-label={`Move ${name} ${direction}`}
             title={`Move ${direction}`}
-            className="p-1.5 @2xl:p-0.5 rounded-lg @2xl:rounded border border-neutral-200 @2xl:border-0 text-neutral-500 @2xl:text-neutral-400 hover:text-neutral-800 hover:bg-neutral-100 disabled:opacity-30 disabled:hover:bg-transparent"
+            className="rounded-lg border border-line p-1.5 text-ink-muted transition-colors hover:bg-brand-50 hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent @2xl:rounded @2xl:border-0 @2xl:p-0.5 @2xl:text-ink-faint"
         >
-            <Icon className="w-4 h-4" />
+            <Icon className="h-4 w-4" aria-hidden />
         </button>
     );
 });
@@ -129,75 +118,91 @@ function RegionRow({
     return (
         <li
             {...dragProps}
-            className={`group flex flex-wrap @2xl:flex-nowrap items-center gap-3 px-3 @lg:px-4 py-3 rounded-xl border transition-colors ${
+            className={cx(
+                "group flex flex-wrap items-center gap-3 rounded-card border px-3 py-3 transition-colors @lg:px-4 @2xl:flex-nowrap",
                 isDragging
-                    ? "opacity-50 border-dashed border-teal-400 bg-teal-50/60"
+                    ? "border-dashed border-accent-400 bg-accent-50/60 opacity-50"
                     : muted
-                      ? "border-neutral-200 bg-neutral-50/80"
-                      : "border-neutral-200 bg-white hover:border-neutral-300"
-            }`}
+                      ? "border-line bg-surface-muted"
+                      : "border-line bg-surface hover:border-line-strong"
+            )}
         >
             <span
-                className={`hidden @lg:flex text-neutral-300 group-hover:text-neutral-500 ${locked ? "cursor-not-allowed" : "cursor-grab active:cursor-grabbing"}`}
+                className={cx("hidden text-ink-faint group-hover:text-ink-muted @lg:flex", locked ? "cursor-not-allowed" : "cursor-grab active:cursor-grabbing")}
                 title="Drag to reorder"
                 aria-hidden="true"
             >
-                <GripVertical className="w-4 h-4" />
+                <GripVertical className="h-4 w-4" />
             </span>
-            <span className="w-6 text-center text-xs font-semibold tabular-nums text-neutral-400 shrink-0">{position + 1}</span>
+            <span className="w-6 shrink-0 text-center text-xs font-semibold tabular-nums text-ink-faint">{position + 1}</span>
 
-            <div className={`w-12 h-9 @lg:w-16 @lg:h-11 rounded-lg overflow-hidden shrink-0 bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center ${muted ? "opacity-60" : ""}`}>
+            <div className={cx("flex h-9 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-700 @lg:h-11 @lg:w-16", muted && "opacity-60")}>
                 {region.cover_image && !thumbFailed ? (
                     <img src={region.cover_image} alt="" draggable={false} className="w-full h-full object-cover" onError={() => setThumbFailed(true)} />
                 ) : (
-                    <Globe className="w-5 h-5 text-white/80" />
+                    <Globe className="h-5 w-5 text-white/80" aria-hidden />
                 )}
             </div>
 
             <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className={`font-semibold truncate ${muted ? "text-neutral-500" : "text-neutral-900"}`}>{region.name}</span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                    <Link to={`/regions/${region.id}`} className={cx("truncate font-semibold hover:text-accent-700 hover:underline", muted ? "text-ink-muted" : "text-ink")}>
+                        {region.name}
+                    </Link>
                     {isDefault && (
-                        <Chip tone="teal" title="New users and guests open the explore map on this region">
-                            <Star className="w-3 h-3" /> Default
-                        </Chip>
+                        <Tag tone="brand" title="New users and guests open the explore map on this region">
+                            <Star className="h-3 w-3" aria-hidden /> Default
+                        </Tag>
                     )}
-                    {region.badge && <Chip tone="violet">{region.badge}</Chip>}
+                    {region.badge && <Tag tone="info">{region.badge}</Tag>}
                     {!region.is_active && (
-                        <Chip tone="amber" title="Turned off on the Regions page. Hidden in the app regardless of the explore switch.">
-                            <AlertTriangle className="w-3 h-3" /> Inactive region
-                        </Chip>
+                        <Tag tone="warn" title="Turned off on the Regions page. Hidden in the app regardless of the explore switch.">
+                            <AlertTriangle className="h-3 w-3" aria-hidden /> Inactive region
+                        </Tag>
                     )}
                 </div>
                 {!region.is_active ? (
-                    <p className="text-xs text-amber-700 mt-0.5">
-                        Inactive on the Regions page, so it's hidden in the app whatever this switch says.{" "}
-                        <Link to={`/regions/${region.id}`} className="font-medium underline hover:text-amber-900">Open region</Link>
+                    <p className="mt-0.5 text-xs text-warn">
+                        Inactive on the Regions page, so it&apos;s hidden in the app whatever this switch says.{" "}
+                        <Link to={`/regions/${region.id}`} className="font-medium underline">
+                            Open region
+                        </Link>
                     </p>
                 ) : (
-                    region.tagline && <p className="text-xs text-neutral-500 truncate mt-0.5">{region.tagline}</p>
+                    region.tagline && <p className="mt-0.5 truncate text-xs text-ink-muted">{region.tagline}</p>
                 )}
-                <div className="flex items-center gap-3 text-xs text-neutral-500 mt-1 flex-wrap">
-                    <span className="inline-flex items-center gap-1" title="Approved places"><MapPin className="w-3 h-3" />{plural(region.counts.places, "place")}</span>
-                    <span className="inline-flex items-center gap-1" title="Linked quests"><MapIcon className="w-3 h-3" />{plural(region.counts.quests, "quest")}</span>
-                    <span className="inline-flex items-center gap-1" title="Open collabs"><Handshake className="w-3 h-3" />{plural(region.counts.open_collabs, "open collab")}</span>
+                <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-ink-muted">
+                    <span className="inline-flex items-center gap-1" title="Approved places">
+                        <MapPin className="h-3 w-3" aria-hidden />
+                        {plural(region.counts.places, "place")}
+                    </span>
+                    <span className="inline-flex items-center gap-1" title="Linked quests">
+                        <MapIcon className="h-3 w-3" aria-hidden />
+                        {plural(region.counts.quests, "quest")}
+                    </span>
+                    <span className="inline-flex items-center gap-1" title="Open collabs">
+                        <Handshake className="h-3 w-3" aria-hidden />
+                        {plural(region.counts.open_collabs, "open collab")}
+                    </span>
                 </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between @2xl:justify-end gap-2 w-full @2xl:w-auto @2xl:ml-auto shrink-0">
-                <label className="flex items-center gap-2 text-xs font-medium text-neutral-600 cursor-pointer select-none">
-                    <VisibleSwitch
-                        on={region.visible}
+            <div className="flex w-full shrink-0 flex-wrap items-center justify-between gap-2 @2xl:ml-auto @2xl:w-auto @2xl:justify-end">
+                <div className="flex items-center gap-2 text-xs font-medium text-ink-muted">
+                    <Switch
+                        size="sm"
+                        hideLabel
+                        checked={region.visible}
                         label={region.visible ? `Hide ${region.name} from the explore map` : `Show ${region.name} on the explore map`}
                         disabled={setVisible.isPending}
-                        onToggle={() => setVisible.mutate(!region.visible)}
+                        onChange={(v) => setVisible.mutate(v)}
                     />
                     <span className="@2xl:w-12">{region.visible ? "Visible" : "Hidden"}</span>
-                </label>
+                </div>
                 <div className="flex items-center gap-2">
-                    <button type="button" onClick={onEdit} className={btnSmNeutral} aria-label={`Edit ${region.name}`} title="Edit">
-                        <Pencil className="w-3.5 h-3.5" /> <span className="hidden @md:inline">Edit</span>
-                    </button>
+                    <Button size="sm" variant="secondary" icon={Pencil} onClick={onEdit} aria-label={`Edit ${region.name}`} title="Edit">
+                        <span className="hidden @md:inline">Edit</span>
+                    </Button>
                     <div className="flex @2xl:flex-col gap-1 @2xl:gap-0">
                         <MoveButton ref={upRef} direction="up" name={region.name} disabled={locked || position === 0} onClick={() => moveKeepingFocus(-1)} />
                         <MoveButton ref={downRef} direction="down" name={region.name} disabled={locked || position === total - 1} onClick={() => moveKeepingFocus(1)} />
@@ -292,19 +297,23 @@ function RegionOrderEditor({ regions }: { regions: ExploreRegion[] }) {
 
     return (
         <>
-            <SectionCard
+            <Panel
                 title="Region order"
                 icon={Globe}
-                actions={<span className="text-xs text-neutral-500">{shownCount} of {rows.length} shown in the app</span>}
-                bodyClassName="p-3 sm:p-4 space-y-3"
+                actions={
+                    <span className="text-xs text-ink-muted">
+                        {shownCount} of {rows.length} shown in the app
+                    </span>
+                }
+                bodyClassName="space-y-3 p-3 sm:p-4"
             >
-                <p className="text-sm text-neutral-500 px-1">
+                <p className="px-1 text-sm text-ink-muted">
                     Drag rows or use the arrows to set the order the app lists regions in. The first visible, active region is the default for new users and
                     guests. The app picks up changes within about a minute.
                 </p>
                 {!defaultRegion && (
-                    <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                    <div role="alert" className="flex items-start gap-2 rounded-control border border-warn-line bg-warn-soft px-3 py-2 text-sm text-warn">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                         No region is visible and active, so the explore map has nothing to show. Turn at least one region on.
                     </div>
                 )}
@@ -335,25 +344,29 @@ function RegionOrderEditor({ regions }: { regions: ExploreRegion[] }) {
                         />
                     ))}
                 </ol>
-            </SectionCard>
+            </Panel>
 
             {/* Pinned to the viewport: the dashboard scrolls the window, so `sticky` inside <main> never engages. */}
             {dirty && (
                 <>
                     <div className="h-20" aria-hidden="true" />
-                    <div className="fixed z-40 bottom-4 left-4 right-4 md:left-auto md:right-8 md:max-w-xl animate-slide-up" role="region" aria-label="Unsaved order">
-                        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-teal-200 bg-white/95 backdrop-blur px-4 py-3 shadow-[0_12px_40px_-8px_rgba(0,0,0,0.25)]">
-                            <p className="text-sm text-neutral-700">
+                    <div
+                        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-4 right-4 z-40 animate-slide-up md:bottom-4 md:left-auto md:right-8 md:max-w-xl"
+                        role="region"
+                        aria-label="Unsaved order"
+                    >
+                        <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-accent-200 bg-surface px-4 py-3 shadow-pop">
+                            <p className="text-sm text-ink">
                                 <span className="font-semibold">Unsaved order.</span>{" "}
                                 {defaultRegion ? `${defaultRegion.name} will be the default region.` : "No region is shown, so there will be no default."}
                             </p>
                             <div className="flex gap-2">
-                                <button type="button" onClick={() => setDraft(null)} disabled={locked} className={btnSecondary}>
-                                    <Undo2 className="w-4 h-4" /> Discard
-                                </button>
-                                <button type="button" onClick={() => saveOrder.mutate(order)} disabled={locked} className={btnPrimary}>
-                                    <LoadingButtonIcon loading={locked} icon={Save} /> Save order
-                                </button>
+                                <Button variant="secondary" icon={Undo2} onClick={() => setDraft(null)} disabled={locked}>
+                                    Discard
+                                </Button>
+                                <Button variant="primary" icon={Save} onClick={() => saveOrder.mutate(order)} loading={locked}>
+                                    Save order
+                                </Button>
                             </div>
                         </div>
                     </div>
@@ -378,16 +391,15 @@ export function ExploreMapPage() {
     const regions = regionsQuery.data ?? [];
 
     return (
-        <div className="p-6 max-w-[1100px] mx-auto space-y-5 animate-fade-in">
+        <div className="max-w-5xl space-y-5">
             <PageHeader
                 icon={Compass}
                 title="Explore map"
-                gradient="from-sky-500 to-teal-600"
-                subtitle="Choose which regions the app's explore map shows, and in what order"
+                description="Choose which regions the app's explore map shows, and in what order"
                 actions={
-                    <Link to="/regions" className={btnSecondary}>
-                        <Globe className="w-4 h-4" /> Manage regions
-                    </Link>
+                    <ButtonLink to="/regions" variant="secondary" icon={Globe}>
+                        Manage regions
+                    </ButtonLink>
                 }
             />
             <PanelState

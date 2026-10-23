@@ -42,21 +42,21 @@ export function FeaturesPanel({ business, canEdit }: { business: AdminBusiness; 
 
     return (
         <SectionCard title="Features" icon={ToggleRight}>
-            <p className="text-xs text-neutral-500 mb-4">What this business can use. Changes apply right away and are audit-logged.</p>
+            <p className="text-xs text-ink-muted mb-4">What this business can use. Changes apply right away and are audit-logged.</p>
             <ul className="space-y-3">
                 {FEATURES.map((f) => {
                     const on = current[f.key];
                     return (
-                        <li key={f.key} className="flex items-start justify-between gap-4 p-3 rounded-xl border border-neutral-100 bg-neutral-50/60">
+                        <li key={f.key} className="flex items-start justify-between gap-4 p-3 rounded-control border border-line bg-surface-muted">
                             <div className="min-w-0">
-                                <p className="text-sm font-medium text-neutral-900">
+                                <p className="text-sm font-medium text-ink">
                                     {f.label}
-                                    <span className={`ml-2 text-xs font-semibold ${on ? "text-teal-700" : "text-neutral-400"}`}>{on ? "On" : "Off"}</span>
+                                    <span className={`ml-2 text-xs font-semibold ${on ? "text-accent-700" : "text-ink-faint"}`}>{on ? "On" : "Off"}</span>
                                 </p>
-                                <p className="text-xs text-neutral-500 mt-0.5">{f.hint}</p>
+                                <p className="text-xs text-ink-muted mt-0.5">{f.hint}</p>
                             </div>
                             {pending === f.key ? (
-                                <Loader2 className="w-5 h-5 animate-spin text-teal-600 shrink-0 mt-0.5" />
+                                <Loader2 className="w-5 h-5 animate-spin text-accent-600 shrink-0 mt-0.5" />
                             ) : (
                                 <Switch
                                     on={on}
@@ -75,12 +75,12 @@ export function FeaturesPanel({ business, canEdit }: { business: AdminBusiness; 
             {current.experiences && (
                 <Link
                     to={`/collabs/experiences?business_id=${business.id}`}
-                    className="inline-block mt-4 text-xs font-medium text-teal-700 hover:underline"
+                    className="inline-block mt-4 text-xs font-medium text-accent-700 hover:underline"
                 >
                     View this business's experiences
                 </Link>
             )}
-            {!canEdit && <p className="text-xs text-neutral-400 mt-3">View only.</p>}
+            {!canEdit && <p className="text-xs text-ink-faint mt-3">View only.</p>}
         </SectionCard>
     );
 }

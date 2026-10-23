@@ -1,41 +1,51 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-    Inbox, CheckCircle, XCircle, ExternalLink, Mail, Phone, MapPin, Store, Link as LinkIcon, MessageSquare, ArrowRight,
-} from "lucide-react";
+import { Inbox, CheckCircle, XCircle, ExternalLink, Mail, Phone, MapPin, Store, Link as LinkIcon, MessageSquare, ArrowRight } from "lucide-react";
 import { AccessDenied } from "@components/AccessDenied";
+import { Button, ButtonLink } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Tabs } from "@/components/ui/Tabs";
+import { FilterBar } from "@/components/ui/FilterBar";
+import { DataTable, type DataColumn } from "@/components/ui/DataTable";
 import { Pagination } from "@/components/ui/Pagination";
+import { Drawer } from "@/components/ui/Modal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { DetailList, DetailRow } from "@/components/ui/Panel";
+import { CountBadge, StatusPill, Tag } from "@/components/ui/StatusPill";
+import { IdLink } from "@/components/ui/IdLink";
+import { useDebouncedUrlInput, useUrlState } from "@/hooks/useUrlState";
+import { formatDate, formatDateTime } from "@/utils/date";
 import { businessesService } from "../services/businesses.service";
 import { useCollabAccess } from "../roles";
-import { useDebouncedValue } from "../hooks";
-import {
-    Chip, CountBadge, DetailRow, Drawer, LoadingButtonIcon, PageHeader, PanelState, ReasonModal, SearchBox,
-    SegmentedTabs, StatusPill, Toolbar, btnDanger, btnPrimary, thClass,
-} from "../components/CollabsUi";
 import { MarkerLink, RegionName } from "../components/CollabPickers";
-import { fmtDate, fmtDateTime, humanize } from "../utils";
+import { DrawerSection, Notice } from "../components/AdminBits";
+import { humanize } from "../utils";
 import type { AdminBusiness, AdminBusinessApplication, BusinessApplicationStatus } from "../types";
 
 const PAGE_SIZE = 20;
 type TabValue = BusinessApplicationStatus | "all";
+const TABS: TabValue[] = ["pending", "approved", "rejected", "all"];
+
+function socialHref(link: string): string {
+    const bare = link.replace(/^https?:\/\//, "");
+    if (/^[^/\s]+@[^/\s]+\.[^/\s]+$/.test(bare)) return `mailto:${bare}`;
+    return link.startsWith("http") ? link : `https://${link}`;
+}
 
 export function BusinessApplicationsPage() {
     const { isStaff } = useCollabAccess();
     const queryClient = useQueryClient();
-    const [tab, setTab] = useState<TabValue>("pending");
-    const [searchInput, setSearchInput] = useState("");
-    const search = useDebouncedValue(searchInput);
-    const [page, setPage] = useState(1);
+    const { state, set } = useUrlState({ tab: "pending", q: "", page: 1 });
+    const tab: TabValue = TABS.includes(state.tab as TabValue) ? (state.tab as TabValue) : "pending";
+    const page = Math.max(1, state.page);
+    const [searchInput, setSearchInput] = useDebouncedUrlInput(state.q, (q) => set({ q }, { replace: true }));
     const [selected, setSelected] = useState<AdminBusinessApplication | null>(null);
     const [approvedBusiness, setApprovedBusiness] = useState<AdminBusiness | null>(null);
     const [rejecting, setRejecting] = useState(false);
 
-    useEffect(() => setPage(1), [search, tab]);
-
-    const params = { status: tab === "all" ? undefined : tab, search: search || undefined, page, page_size: PAGE_SIZE };
-    const { data, isLoading, error, refetch } = useQuery({
+    const params = { status: tab === "all" ? undefined : tab, search: state.q || undefined, page, page_size: PAGE_SIZE };
+    const { data, isLoading, isFetching, error, refetch } = useQuery({
         queryKey: ["collabs-business-applications", params],
         queryFn: () => businessesService.listApplications(params),
         enabled: isStaff,
@@ -75,90 +85,114 @@ export function BusinessApplicationsPage() {
     const apps = data?.applications ?? [];
     const busy = approve.isPending || reject.isPending;
 
+    const columns: DataColumn<AdminBusinessApplication>[] = [
+        {
+            id: "business",
+            header: "Business",
+            hideable: false,
+            sortValue: (a) => a.business_name,
+            cell: (a) => (
+                <div className="min-w-0">
+                    <div className="font-medium text-ink">{a.business_name}</div>
+                    <div className="mt-0.5 text-xs text-ink-faint">
+                        {a.categories.length ? [...a.categories, ...(a.sub_categories ?? [])].join(", ") : "No categories"} · via {a.source}
+                    </div>
+                </div>
+            ),
+        },
+        {
+            id: "contact",
+            header: "Contact",
+            sortValue: (a) => a.contact_name,
+            csv: (a) => `${a.contact_name} <${a.email}>`,
+            cell: (a) => (
+                <div className="min-w-0">
+                    <div className="text-ink">{a.contact_name}</div>
+                    <div className="mt-0.5 max-w-[220px] truncate text-xs text-ink-faint">{a.email}</div>
+                </div>
+            ),
+        },
+        {
+            id: "place",
+            header: "Place",
+            csv: (a) => (a.claimed_marker_id ? "Existing place" : a.maps_url ? "Maps link" : ""),
+            cell: (a) =>
+                a.claimed_marker_id ? (
+                    <Tag tone="brand">
+                        <MapPin className="h-3 w-3" aria-hidden /> Existing place
+                    </Tag>
+                ) : a.maps_url ? (
+                    <Tag tone="warn">
+                        <LinkIcon className="h-3 w-3" aria-hidden /> Maps link
+                    </Tag>
+                ) : (
+                    <span className="text-ink-faint">—</span>
+                ),
+        },
+        {
+            id: "plan",
+            header: "Plan",
+            sortValue: (a) => a.requested_plan ?? "",
+            csv: (a) => (a.requested_plan ? humanize(a.requested_plan) : ""),
+            cell: (a) => <span className="text-ink-muted">{a.requested_plan ? humanize(a.requested_plan) : "—"}</span>,
+        },
+        { id: "status", header: "Status", sortValue: (a) => a.status, cell: (a) => <StatusPill status={a.status} /> },
+        {
+            id: "applied",
+            header: "Applied",
+            sortValue: (a) => a.applied_at ?? "",
+            csv: (a) => formatDate(a.applied_at),
+            cell: (a) => <span className="whitespace-nowrap text-ink-muted">{formatDate(a.applied_at)}</span>,
+        },
+    ];
+
     return (
-        <div className="p-6 max-w-[1400px] mx-auto space-y-5 animate-fade-in">
+        <div className="space-y-5">
             <PageHeader
                 icon={Inbox}
-                title="Business Applications"
-                gradient="from-indigo-500 to-indigo-600"
-                badge={<CountBadge count={data?.pending_count ?? 0} label="Pending" />}
-                subtitle={data ? `${data.total} applications` : "Loading..."}
+                title="Business applications"
+                badge={data?.pending_count ? <CountBadge count={data.pending_count} /> : undefined}
+                description={data ? `${data.total.toLocaleString("en-IN")} applications` : "Businesses asking to join"}
             />
 
-            <Toolbar>
-                <SegmentedTabs<TabValue>
-                    value={tab}
-                    onChange={setTab}
-                    tabs={[
-                        { value: "pending", label: "Pending", count: data?.pending_count },
-                        { value: "approved", label: "Approved" },
-                        { value: "rejected", label: "Rejected" },
-                        { value: "all", label: "All" },
-                    ]}
-                />
-                <SearchBox value={searchInput} onChange={setSearchInput} placeholder="Search business, contact or email..." />
-            </Toolbar>
+            <Tabs<TabValue>
+                label="Application status"
+                value={tab}
+                onChange={(v) => set({ tab: v })}
+                tabs={[
+                    { value: "pending", label: "Pending", count: data?.pending_count },
+                    { value: "approved", label: "Approved" },
+                    { value: "rejected", label: "Rejected" },
+                    { value: "all", label: "All" },
+                ]}
+            />
 
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-                <PanelState
-                    isLoading={isLoading && !data}
-                    error={error}
-                    isEmpty={apps.length === 0}
-                    emptyIcon={Inbox}
-                    emptyText={tab === "pending" ? "No pending applications — queue is clear" : "No applications found"}
-                    onRetry={() => refetch()}
-                >
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-neutral-100 bg-neutral-50/60">
-                                    <th className={thClass}>Business</th>
-                                    <th className={thClass}>Contact</th>
-                                    <th className={thClass}>Place</th>
-                                    <th className={thClass}>Plan</th>
-                                    <th className={thClass}>Status</th>
-                                    <th className={thClass}>Applied</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-neutral-50">
-                                {apps.map((a) => (
-                                    <tr key={a.id} onClick={() => openDrawer(a)} className="transition-colors hover:bg-neutral-50/80 cursor-pointer">
-                                        <td className="px-4 py-3">
-                                            <div className="font-medium text-neutral-900">{a.business_name}</div>
-                                            <div className="text-[11px] text-neutral-400 mt-0.5">
-                                                {a.categories.length ? [...a.categories, ...(a.sub_categories ?? [])].join(", ") : "No categories"} · via {a.source}
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <div className="text-neutral-700">{a.contact_name}</div>
-                                            <div className="text-[11px] text-neutral-400 mt-0.5 truncate max-w-[220px]">{a.email}</div>
-                                        </td>
-                                        <td className="px-4 py-3 text-xs">
-                                            {a.claimed_marker_id ? (
-                                                <Chip tone="teal">
-                                                    <MapPin className="w-3 h-3" /> Existing place
-                                                </Chip>
-                                            ) : a.maps_url ? (
-                                                <Chip tone="amber">
-                                                    <LinkIcon className="w-3 h-3" /> Maps link
-                                                </Chip>
-                                            ) : (
-                                                <span className="text-neutral-400">—</span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3 text-neutral-600">{a.requested_plan ? humanize(a.requested_plan) : "—"}</td>
-                                        <td className="px-4 py-3">
-                                            <StatusPill status={a.status} />
-                                        </td>
-                                        <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">{fmtDate(a.applied_at)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </PanelState>
-                {data && <Pagination page={page} totalPages={data.total_pages || 1} total={data.total} onPageChange={setPage} theme="indigo" />}
-            </div>
+            <FilterBar
+                search={{ value: searchInput, onChange: setSearchInput, placeholder: "Search business, contact or email…" }}
+                onReset={() => setSearchInput("")}
+            />
+
+            <DataTable
+                label="Business applications"
+                rows={apps}
+                columns={columns}
+                rowKey={(a) => a.id}
+                isLoading={isLoading && !data}
+                isFetching={isFetching && !!data}
+                error={error}
+                onRetry={() => refetch()}
+                empty={{
+                    icon: Inbox,
+                    title: tab === "pending" && !state.q ? "No pending applications. The queue is clear." : "No applications found",
+                    description: state.q ? "Try a different search." : undefined,
+                }}
+                onRowClick={openDrawer}
+                storageKey="business-applications"
+                exportName="business-applications"
+                summary={data ? `${apps.length} of ${data.total.toLocaleString("en-IN")}` : undefined}
+                card={{ title: (a) => a.business_name, subtitle: (a) => `${a.contact_name} · ${a.email}`, fields: ["status", "place", "plan", "applied"] }}
+                footer={data && <Pagination page={page} totalPages={data.total_pages || 1} total={data.total} pageSize={PAGE_SIZE} onPageChange={(p) => set({ page: p })} />}
+            />
 
             <Drawer
                 open={!!selected}
@@ -168,12 +202,12 @@ export function BusinessApplicationsPage() {
                 footer={
                     selected?.status === "pending" && (
                         <div className="flex gap-3">
-                            <button type="button" onClick={() => setRejecting(true)} disabled={busy} className={`${btnDanger} flex-1`}>
-                                <XCircle className="w-4 h-4" /> Reject
-                            </button>
-                            <button type="button" onClick={() => approve.mutate(selected.id)} disabled={busy} className={`${btnPrimary} flex-1`}>
-                                <LoadingButtonIcon loading={approve.isPending} icon={CheckCircle} /> Approve
-                            </button>
+                            <Button variant="danger" icon={XCircle} onClick={() => setRejecting(true)} disabled={busy} className="flex-1">
+                                Reject
+                            </Button>
+                            <Button variant="primary" icon={CheckCircle} onClick={() => approve.mutate(selected.id)} disabled={busy} loading={approve.isPending} className="flex-1">
+                                Approve
+                            </Button>
                         </div>
                     )
                 }
@@ -181,148 +215,127 @@ export function BusinessApplicationsPage() {
                 {selected && (
                     <>
                         {approvedBusiness && (
-                            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 space-y-2">
-                                <p className="flex items-center gap-2 text-sm font-semibold text-emerald-800">
-                                    <CheckCircle className="w-4 h-4" /> Business profile created
-                                </p>
-                                <p className="text-xs text-emerald-700">
-                                    {approvedBusiness.name} · <StatusPill status={approvedBusiness.status} /> · plan {approvedBusiness.plan_code}
+                            <Notice tone="good" icon={CheckCircle} title="Business profile created">
+                                <p>
+                                    {approvedBusiness.name} · plan {approvedBusiness.plan_code}
                                     {approvedBusiness.owner_user_id
                                         ? " · owner attached (they now set their redeem code in the app)"
                                         : " · no SeekKrr account matched the applicant yet — assign an owner from the business page"}
                                 </p>
-                                <Link
-                                    to={`/collabs/businesses/${approvedBusiness.id}`}
-                                    className="inline-flex items-center gap-1 text-sm font-medium text-emerald-800 hover:underline"
-                                >
-                                    Open business <ArrowRight className="w-4 h-4" />
-                                </Link>
-                            </div>
+                                <ButtonLink to={`/collabs/businesses/${approvedBusiness.id}`} size="sm" variant="secondary" className="mt-2" icon={ArrowRight}>
+                                    Open business
+                                </ButtonLink>
+                            </Notice>
                         )}
 
                         {selected.status === "rejected" && (
-                            <div className="p-3 bg-red-50 text-red-700 border border-red-200 rounded-xl text-sm">
-                                <p className="font-medium flex items-center gap-2">
-                                    <XCircle className="w-4 h-4" /> Rejected {selected.actioned_at ? `on ${fmtDate(selected.actioned_at)}` : ""}
-                                </p>
-                                {selected.rejection_reason && <p className="text-xs mt-1 pl-6">Reason: {selected.rejection_reason}</p>}
-                            </div>
+                            <Notice tone="bad" icon={XCircle} title={`Rejected${selected.actioned_at ? ` on ${formatDate(selected.actioned_at)}` : ""}`}>
+                                {selected.rejection_reason && <>Reason: {selected.rejection_reason}</>}
+                            </Notice>
                         )}
 
                         {selected.status === "approved" && !approvedBusiness && (
-                            <div className="p-3 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-sm flex flex-wrap items-center gap-2">
-                                <CheckCircle className="w-4 h-4" /> Approved {selected.actioned_at ? `on ${fmtDate(selected.actioned_at)}` : ""}
-                                {selected.business_id && (
-                                    <Link to={`/collabs/businesses/${selected.business_id}`} className="font-medium hover:underline ml-auto">
-                                        Open business →
-                                    </Link>
-                                )}
-                            </div>
+                            <Notice tone="good" icon={CheckCircle} title={`Approved${selected.actioned_at ? ` on ${formatDate(selected.actioned_at)}` : ""}`}>
+                                {selected.business_id && <IdLink kind="business" id={selected.business_id} label="Open business →" />}
+                            </Notice>
                         )}
 
-                        <section className="space-y-3">
-                            <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-2 border-b border-neutral-100 pb-2">
-                                <Store className="w-4 h-4" /> Business
-                            </h4>
-                            <DetailRow label="Status" value={<StatusPill status={selected.status} />} />
-                            <DetailRow label="Categories" value={selected.categories.length ? selected.categories.join(", ") : "—"} />
-                            <DetailRow label="Type" value={selected.sub_categories?.length ? selected.sub_categories.join(", ") : "—"} />
-                            <DetailRow label="Region" value={<RegionName id={selected.region_id} />} />
-                            <DetailRow label="Requested plan" value={selected.requested_plan ? humanize(selected.requested_plan) : "—"} />
-                            <DetailRow label="GSTIN" value={selected.gstin ? <span className="font-mono">{selected.gstin}</span> : "—"} />
-                            <DetailRow label="Source" value={humanize(selected.source)} />
-                            <DetailRow label="Applied" value={fmtDateTime(selected.applied_at)} />
-                        </section>
+                        <DrawerSection title="Business" icon={Store}>
+                            <DetailList>
+                                <DetailRow label="Status" value={<StatusPill status={selected.status} />} />
+                                <DetailRow label="Categories" value={selected.categories.length ? selected.categories.join(", ") : "—"} />
+                                <DetailRow label="Type" value={selected.sub_categories?.length ? selected.sub_categories.join(", ") : "—"} />
+                                <DetailRow label="Region" value={selected.region_id ? <IdLink kind="region" id={selected.region_id} label={<RegionName id={selected.region_id} />} /> : "—"} />
+                                <DetailRow label="Requested plan" value={selected.requested_plan ? humanize(selected.requested_plan) : "—"} />
+                                <DetailRow label="GSTIN" value={selected.gstin ? <span className="font-mono">{selected.gstin}</span> : "—"} />
+                                <DetailRow label="Source" value={humanize(selected.source)} />
+                                <DetailRow label="Applied" value={formatDateTime(selected.applied_at)} />
+                            </DetailList>
+                        </DrawerSection>
 
-                        <section className="space-y-3">
-                            <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-2 border-b border-neutral-100 pb-2">
-                                <Phone className="w-4 h-4" /> Contact
-                            </h4>
-                            <DetailRow label="Name" value={selected.contact_name} />
-                            <DetailRow
-                                label="Email"
-                                value={
-                                    <a href={`mailto:${selected.email}`} className="inline-flex items-center gap-1 text-teal-700 hover:underline">
-                                        <Mail className="w-3.5 h-3.5" /> {selected.email}
-                                    </a>
-                                }
-                            />
-                            <DetailRow
-                                label="Phone"
-                                value={
-                                    <a href={`tel:${selected.phone}`} className="inline-flex items-center gap-1 text-teal-700 hover:underline">
-                                        <Phone className="w-3.5 h-3.5" /> {selected.phone}
-                                    </a>
-                                }
-                            />
-                        </section>
-
-                        <section className="space-y-3">
-                            <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-2 border-b border-neutral-100 pb-2">
-                                <MapPin className="w-4 h-4" /> Place
-                            </h4>
-                            <DetailRow label="Claimed place" value={selected.claimed_marker_id ? <MarkerLink id={selected.claimed_marker_id} /> : "Not an existing SeekKrr place"} />
-                            <DetailRow
-                                label="Maps link"
-                                value={
-                                    selected.maps_url ? (
-                                        <a href={selected.maps_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-teal-700 hover:underline break-all">
-                                            <ExternalLink className="w-3.5 h-3.5 shrink-0" /> Open in Maps
+                        <DrawerSection title="Contact" icon={Phone}>
+                            <DetailList>
+                                <DetailRow label="Name" value={selected.contact_name} />
+                                <DetailRow
+                                    label="Email"
+                                    value={
+                                        <a href={`mailto:${selected.email}`} className="inline-flex items-center gap-1 text-accent-700 hover:underline">
+                                            <Mail className="h-3.5 w-3.5" aria-hidden /> {selected.email}
                                         </a>
-                                    ) : (
-                                        "—"
-                                    )
-                                }
-                            />
+                                    }
+                                />
+                                <DetailRow
+                                    label="Phone"
+                                    value={
+                                        <a href={`tel:${selected.phone}`} className="inline-flex items-center gap-1 text-accent-700 hover:underline">
+                                            <Phone className="h-3.5 w-3.5" aria-hidden /> {selected.phone}
+                                        </a>
+                                    }
+                                />
+                            </DetailList>
+                        </DrawerSection>
+
+                        <DrawerSection title="Place" icon={MapPin}>
+                            <DetailList>
+                                <DetailRow label="Claimed place" value={selected.claimed_marker_id ? <MarkerLink id={selected.claimed_marker_id} /> : "Not an existing SeekKrr place"} />
+                                <DetailRow
+                                    label="Maps link"
+                                    value={
+                                        selected.maps_url ? (
+                                            <a href={selected.maps_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 break-all text-accent-700 hover:underline">
+                                                <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden /> Open in Maps
+                                            </a>
+                                        ) : (
+                                            "—"
+                                        )
+                                    }
+                                />
+                            </DetailList>
                             {!selected.claimed_marker_id && selected.status === "pending" && (
-                                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
-                                    No existing marker claimed — check the Maps link, and create or link a marker on the business page after approval.
-                                </p>
+                                <Notice tone="warn">No existing place claimed — check the Maps link, and create or link a place on the business page after approval.</Notice>
                             )}
-                        </section>
+                        </DrawerSection>
 
                         {selected.social_links.length > 0 && (
-                            <section className="space-y-2">
-                                <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-2 border-b border-neutral-100 pb-2">
-                                    <LinkIcon className="w-4 h-4" /> Socials ({selected.social_links.length})
-                                </h4>
-                                {selected.social_links.map((link) => (
-                                    <a
-                                        key={link}
-                                        href={/^[^/\s]+@[^/\s]+\.[^/\s]+$/.test(link.replace(/^https?:\/\//, "")) ? `mailto:${link.replace(/^https?:\/\//, "")}` : link.startsWith("http") ? link : `https://${link}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-2 p-2.5 bg-neutral-50 border border-neutral-200 rounded-xl hover:bg-neutral-100 transition-colors text-sm text-neutral-700"
-                                    >
-                                        <ExternalLink className="w-4 h-4 text-neutral-400 shrink-0" />
-                                        <span className="truncate">{link.replace(/^https?:\/\/(www\.)?/, "")}</span>
-                                    </a>
-                                ))}
-                            </section>
+                            <DrawerSection title={`Socials (${selected.social_links.length})`} icon={LinkIcon}>
+                                <div className="space-y-2">
+                                    {selected.social_links.map((link) => (
+                                        <a
+                                            key={link}
+                                            href={socialHref(link)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-2 rounded-control border border-line bg-surface-muted p-2.5 text-sm text-ink transition-colors hover:border-accent-300"
+                                        >
+                                            <ExternalLink className="h-4 w-4 shrink-0 text-ink-faint" aria-hidden />
+                                            <span className="truncate">{link.replace(/^https?:\/\/(www\.)?/, "")}</span>
+                                        </a>
+                                    ))}
+                                </div>
+                            </DrawerSection>
                         )}
 
                         {selected.message && (
-                            <section className="space-y-2">
-                                <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-2 border-b border-neutral-100 pb-2">
-                                    <MessageSquare className="w-4 h-4" /> Message
-                                </h4>
-                                <p className="text-sm text-neutral-700 whitespace-pre-wrap">{selected.message}</p>
-                            </section>
+                            <DrawerSection title="Message" icon={MessageSquare}>
+                                <p className="whitespace-pre-wrap text-sm text-ink">{selected.message}</p>
+                            </DrawerSection>
                         )}
                     </>
                 )}
             </Drawer>
 
-            <ReasonModal
+            <ConfirmDialog
                 open={rejecting && !!selected}
-                title="Reject application"
+                title="Reject application?"
                 description={selected ? `Reject ${selected.business_name}? The applicant can apply again later.` : undefined}
-                placeholder="e.g. Couldn't verify the business location"
-                maxLength={1000}
+                level="reason"
+                reasonPlaceholder="e.g. Couldn't verify the business location"
+                reasonMaxLength={1000}
                 confirmLabel="Reject"
+                tone="danger"
                 isPending={reject.isPending}
                 onCancel={() => setRejecting(false)}
-                onConfirm={(reason) => selected && reject.mutate({ id: selected.id, reason })}
+                onConfirm={(reason) => selected && reject.mutate({ id: selected.id, reason: reason ?? "" })}
             />
         </div>
     );

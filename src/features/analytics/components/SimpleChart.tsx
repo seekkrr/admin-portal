@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { formatDayMonth, formatMonth } from "@/utils/date";
 
 /**
  * Compute clean integer y-axis ticks with no duplicates.
@@ -14,7 +15,7 @@ function computeYTicks(dataMax: number, maxTicks = 5): { ticks: number[]; topVal
     return { ticks, topVal };
 }
 
-export function SimpleLineChart({ data, color = "#4f46e5", height = 250, className = "" }: { data: {label: string, value: number}[]; color?: string; height?: number; className?: string }) {
+export function SimpleLineChart({ data, color = "#00a49e", height = 250, className = "" }: { data: {label: string, value: number}[]; color?: string; height?: number; className?: string }) {
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [size, setSize] = useState({ width: 0, height: 0 });
@@ -64,7 +65,7 @@ export function SimpleLineChart({ data, color = "#4f46e5", height = 250, classNa
         const stepX = chartWidth / Math.max(values.length - 1, 1);
 
         // Draw grid + y-axis labels using clean integer ticks
-        ctx.strokeStyle = "#f5f5f5";
+        ctx.strokeStyle = "#e2e8e7";
         ctx.lineWidth = 1;
         ticks.forEach(tickVal => {
             const y = paddingTop + ((max - tickVal) / max) * chartHeight;
@@ -73,7 +74,7 @@ export function SimpleLineChart({ data, color = "#4f46e5", height = 250, classNa
             ctx.lineTo(drawW - paddingSides, y);
             ctx.stroke();
 
-            ctx.fillStyle = "#a3a3a3";
+            ctx.fillStyle = "#879695";
             ctx.font = "10px sans-serif";
             ctx.textAlign = "right";
             ctx.textBaseline = "middle";
@@ -95,7 +96,7 @@ export function SimpleLineChart({ data, color = "#4f46e5", height = 250, classNa
 
             // X-axis label (only draw a few to avoid clutter)
             if (data.length <= 10 || (i % Math.ceil(data.length / 5) === 0 && i < data.length - 3) || i === data.length - 1) {
-                ctx.fillStyle = "#a3a3a3";
+                ctx.fillStyle = "#879695";
                 ctx.font = "10px sans-serif";
                 ctx.textAlign = "center";
                 ctx.textBaseline = "top";
@@ -105,12 +106,9 @@ export function SimpleLineChart({ data, color = "#4f46e5", height = 250, classNa
                     const dateStr = match[1] ?? "";
                     const rest = match[2] ?? "";
                     if (dateStr.length === 10) {
-                        const d = new Date(dateStr);
-                        lbl = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + rest;
+                        lbl = formatDayMonth(dateStr) + rest;
                     } else if (dateStr.length === 7) {
-                        const [y, m] = dateStr.split('-') as [string, string];
-                        const d = new Date(parseInt(y), parseInt(m) - 1, 1);
-                        lbl = d.toLocaleDateString(undefined, { month: 'short' }) + rest;
+                        lbl = formatMonth(`${dateStr}-01`) + rest;
                     }
                 }
                 if (lbl.length > 15) {
@@ -152,7 +150,7 @@ export function SimpleLineChart({ data, color = "#4f46e5", height = 250, classNa
         <div ref={containerRef} className={`w-full relative ${className}`} style={{ height }}>
             <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} width={size.width * 2} height={size.height * 2} />
             {data.length === 0 && (
-                <div className="absolute inset-0 flex items-center justify-center text-neutral-400 text-sm bg-white/80">
+                <div className="absolute inset-0 flex items-center justify-center text-ink-faint text-sm bg-white/80">
                     No data available
                 </div>
             )}
@@ -208,7 +206,7 @@ export function SimpleBarChart({ data, height = 250, className = "" }: { data: {
         const stepX = chartWidth / data.length;
 
         // Draw grid + y-axis labels using clean integer ticks
-        ctx.strokeStyle = "#f5f5f5";
+        ctx.strokeStyle = "#e2e8e7";
         ctx.lineWidth = 1;
         ticks.forEach(tickVal => {
             const y = paddingTop + ((max - tickVal) / max) * chartHeight;
@@ -217,7 +215,7 @@ export function SimpleBarChart({ data, height = 250, className = "" }: { data: {
             ctx.lineTo(drawW - paddingSides, y);
             ctx.stroke();
 
-            ctx.fillStyle = "#a3a3a3";
+            ctx.fillStyle = "#879695";
             ctx.font = "10px sans-serif";
             ctx.textAlign = "right";
             ctx.textBaseline = "middle";
@@ -229,7 +227,7 @@ export function SimpleBarChart({ data, height = 250, className = "" }: { data: {
             const barHeight = (d.value / max) * chartHeight;
             const y = drawH - paddingBottom - barHeight;
 
-            ctx.fillStyle = d.color || "#4f46e5";
+            ctx.fillStyle = d.color || "#00a49e";
             // Draw bar with rounded top
             const r = Math.min(barWidth / 2, barHeight / 2, 4);
             ctx.beginPath();
@@ -242,7 +240,7 @@ export function SimpleBarChart({ data, height = 250, className = "" }: { data: {
             ctx.fill();
 
             // X-axis Label
-            ctx.fillStyle = "#737373";
+            ctx.fillStyle = "#526664";
             ctx.font = "10px sans-serif";
             ctx.textAlign = "center";
             if (data.length <= 15 || i % Math.ceil(data.length / 10) === 0) {
@@ -252,12 +250,9 @@ export function SimpleBarChart({ data, height = 250, className = "" }: { data: {
                     const dateStr = match[1] ?? "";
                     const rest = match[2] ?? "";
                     if (dateStr.length === 10) {
-                        const dt = new Date(dateStr);
-                        lbl = dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + rest;
+                        lbl = formatDayMonth(dateStr) + rest;
                     } else if (dateStr.length === 7) {
-                        const [y, m] = dateStr.split('-') as [string, string];
-                        const dt = new Date(parseInt(y), parseInt(m) - 1, 1);
-                        lbl = dt.toLocaleDateString(undefined, { month: 'short' }) + rest;
+                        lbl = formatMonth(`${dateStr}-01`) + rest;
                     }
                 }
                 if (lbl.length > 15) {
@@ -275,7 +270,7 @@ export function SimpleBarChart({ data, height = 250, className = "" }: { data: {
         <div ref={containerRef} className={`w-full relative ${className}`} style={{ height }}>
             <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} width={size.width * 2} height={size.height * 2} />
             {data.length === 0 && (
-                <div className="absolute inset-0 flex items-center justify-center text-neutral-400 text-sm bg-white/80">
+                <div className="absolute inset-0 flex items-center justify-center text-ink-faint text-sm bg-white/80">
                     No data available
                 </div>
             )}
@@ -345,7 +340,7 @@ export function SimpleDoughnutChart({ data, height = 200, className = "" }: { da
             <div ref={canvasContainerRef} className="w-full relative" style={{ height }}>
                 <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} width={dim.width * 2} height={dim.height * 2} />
                 {data.length === 0 && (
-                    <div className="absolute inset-0 flex items-center justify-center text-neutral-400 text-sm bg-white/80 rounded-lg">
+                    <div className="absolute inset-0 flex items-center justify-center text-ink-faint text-sm bg-white/80 rounded-lg">
                         No data available
                     </div>
                 )}
@@ -354,8 +349,8 @@ export function SimpleDoughnutChart({ data, height = 200, className = "" }: { da
                 {data.map((d, i) => (
                     <div key={i} className="flex items-center gap-1.5 text-sm">
                         <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
-                        <span className="text-neutral-500">{d.label}</span>
-                        <span className="font-semibold text-neutral-800">{d.value}</span>
+                        <span className="text-ink-muted">{d.label}</span>
+                        <span className="font-semibold text-ink">{d.value}</span>
                     </div>
                 ))}
             </div>

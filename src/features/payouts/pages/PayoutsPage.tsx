@@ -1,22 +1,29 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useSearchParams } from "react-router-dom";
-import { Banknote, Plus, Search, Lock } from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Banknote, Eye, Plus } from "lucide-react";
+import { useAuthStore } from "@/store/auth.store";
+import { AccessDenied } from "@components/AccessDenied";
+import { Button, IconButton } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { FilterBar, FilterSelect, type FilterChip, type FilterOption } from "@/components/ui/FilterBar";
+import { chipLabel } from "@/components/ui/filters";
+import { DataTable, type DataColumn } from "@/components/ui/DataTable";
+import { Pagination } from "@/components/ui/Pagination";
+import { IdLink } from "@/components/ui/IdLink";
+import { useUrlState } from "@/hooks/useUrlState";
 import { payoutsService } from "../services/payouts.service";
 import { PayoutStatusBadge } from "../components/PayoutAccountStatusBadge";
 import { InitiatePayoutModal } from "../components/InitiatePayoutModal";
-import { FilterDropdown } from "@/components/FilterDropdown";
-import { Pagination } from "@/components/ui/Pagination";
-import { LoadingFallback } from "@components/LoadingFallback";
-import { useAuthStore } from "@/store/auth.store";
-import { shortId, formatCurrency, formatDateTime } from "@/utils/format";
-import type { PayoutStatus } from "@/types";
+import { CreatorPicker } from "../components/CreatorPicker";
+import { FINANCE_ROLES, MANAGE_ROLES, hasRole, methodLabel } from "../components/accountDisplay";
+import { formatCurrency, shortId } from "@/utils/format";
+import { formatDateTime } from "@/utils/date";
+import type { Payout, PayoutStatus } from "@/types";
 
-const CAN_FINANCE = ["admin", "super_admin", "finance"];
-const CAN_MANAGE = ["admin", "super_admin"];
+const PER_PAGE = 20;
 
-const STATUS_OPTIONS: { value: "" | PayoutStatus; label: string }[] = [
-    { value: "", label: "All statuses" },
+const STATUS_OPTIONS: FilterOption[] = [
     { value: "pending", label: "Pending" },
     { value: "processing", label: "Processing" },
     { value: "completed", label: "Completed" },
@@ -24,211 +31,168 @@ const STATUS_OPTIONS: { value: "" | PayoutStatus; label: string }[] = [
     { value: "cancelled", label: "Cancelled" },
 ];
 
-const PER_PAGE = 20;
-
 export function PayoutsPage() {
     const roles = useAuthStore((s) => s.user?.role);
-    const canView = roles?.some((r) => CAN_FINANCE.includes(r));
-    const canManage = roles?.some((r) => CAN_MANAGE.includes(r));
+    const navigate = useNavigate();
+    const canView = hasRole(roles, FINANCE_ROLES);
+    const canManage = hasRole(roles, MANAGE_ROLES);
 
-    const [status, setStatus] = useState<"" | PayoutStatus>("");
-    const [creatorId, setCreatorId] = useState("");
-    const [debouncedCreatorId, setDebouncedCreatorId] = useState("");
-    const [page, setPage] = useState(1);
+    // Filters and page live in the address.
+    const { state, set, reset } = useUrlState({ creator: "", status: "", page: 1 });
+    const status = (STATUS_OPTIONS.some((o) => o.value === state.status) ? state.status : "") as "" | PayoutStatus;
+    const creatorId = state.creator.trim();
+    const page = Math.max(1, state.page);
+
     const [showInitiate, setShowInitiate] = useState(false);
-    const [prefillAmount, setPrefillAmount] = useState<string>("");
+    const [prefill, setPrefill] = useState<{ creator?: string; amount?: string }>({});
 
-    // Deep-link from the Creators "Pending Payout" card:
-    // /payouts?createForCreator=<id>&amount=<n> opens the Initiate Payout modal prefilled.
+    // Deep link from the Creators "Pending payout" card:
+    // /payouts?createForCreator=<id>&amount=<n> opens Initiate payout prefilled.
     const [searchParams, setSearchParams] = useSearchParams();
     useEffect(() => {
         const forCreator = searchParams.get("createForCreator");
-        if (forCreator) {
-            setCreatorId(forCreator);
-            setDebouncedCreatorId(forCreator);
-            setPrefillAmount(searchParams.get("amount") ?? "");
-            setShowInitiate(true);
-            searchParams.delete("createForCreator");
-            searchParams.delete("amount");
-            setSearchParams(searchParams, { replace: true });
-        }
+        if (!forCreator) return;
+        setPrefill({ creator: forCreator, amount: searchParams.get("amount") ?? undefined });
+        setShowInitiate(true);
+        setSearchParams(
+            (prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete("createForCreator");
+                next.delete("amount");
+                next.set("creator", forCreator);
+                return next;
+            },
+            { replace: true }
+        );
         // run once on mount
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setDebouncedCreatorId(creatorId.trim());
-            setPage(1);
-        }, 400);
-        return () => clearTimeout(timer);
-    }, [creatorId]);
-
-    const { data, isLoading, error } = useQuery({
-        queryKey: ["admin-payouts", { creator_id: debouncedCreatorId, status, page }],
+    const { data, isLoading, isFetching, error, refetch } = useQuery({
+        queryKey: ["admin-payouts", { creator_id: creatorId, status, page }],
         queryFn: () =>
             payoutsService.list({
-                creator_id: debouncedCreatorId || undefined,
+                creator_id: creatorId || undefined,
                 status: status || undefined,
                 page,
                 page_size: PER_PAGE,
             }),
-        enabled: !!canView,
+        enabled: canView,
         staleTime: 5 * 60 * 1000,
+        placeholderData: (prev) => prev,
     });
 
-    if (!canView) {
-        return (
-            <div className="animate-fade-in max-w-md mx-auto mt-16">
-                <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-8 text-center">
-                    <Lock className="w-10 h-10 text-neutral-300 mx-auto mb-4" />
-                    <h2 className="text-lg font-bold text-neutral-900">Access denied</h2>
-                    <p className="text-sm text-neutral-500 mt-1">
-                        You need a finance, admin, or super-admin role to view payouts.
-                    </p>
-                </div>
-            </div>
-        );
-    }
-
-    if (isLoading) return <LoadingFallback message="Loading payouts..." />;
-    if (error) {
-        return <div className="p-6 text-center text-red-500">Failed to load payouts.</div>;
-    }
+    if (!canView) return <AccessDenied message="You need a finance, admin, or super-admin role to view payouts." />;
 
     const payouts = data?.payouts ?? [];
 
+    const columns: DataColumn<Payout>[] = [
+        {
+            id: "reference",
+            header: "Reference",
+            hideable: false,
+            sortValue: (p) => p.payout_reference || p._id,
+            cell: (p) => (
+                <Link to={`/payouts/${p._id}`} className="font-mono text-xs font-medium text-ink hover:text-accent-700 hover:underline" title={p.payout_reference || p._id}>
+                    {shortId(p.payout_reference || p._id)}
+                </Link>
+            ),
+        },
+        { id: "creator", header: "Creator", csv: (p) => p.creator_id, cell: (p) => <IdLink kind="creator" id={p.creator_id} /> },
+        {
+            id: "amount",
+            header: "Amount",
+            align: "right",
+            sortValue: (p) => p.amount,
+            csv: (p) => p.amount,
+            cell: (p) => <span className="whitespace-nowrap font-medium tabular-nums">{formatCurrency(p.amount, p.currency)}</span>,
+        },
+        { id: "status", header: "Status", sortValue: (p) => p.status, cell: (p) => <PayoutStatusBadge status={p.status} /> },
+        {
+            id: "method",
+            header: "Method",
+            sortValue: (p) => p.payout_method ?? "",
+            csv: (p) => methodLabel(p.payout_method),
+            cell: (p) => <span className="text-ink-muted">{methodLabel(p.payout_method)}</span>,
+        },
+        {
+            id: "created",
+            header: "Created",
+            sortValue: (p) => p.created_at,
+            csv: (p) => formatDateTime(p.created_at),
+            cell: (p) => <span className="whitespace-nowrap text-ink-muted">{formatDateTime(p.created_at)}</span>,
+        },
+        {
+            id: "processed",
+            header: "Processed",
+            sortValue: (p) => p.processed_at ?? "",
+            csv: (p) => (p.processed_at ? formatDateTime(p.processed_at) : ""),
+            cell: (p) => <span className="whitespace-nowrap text-ink-muted">{formatDateTime(p.processed_at)}</span>,
+        },
+    ];
+
+    const chips: FilterChip[] = [];
+    if (creatorId) chips.push({ key: "creator", label: "Creator selected", onRemove: () => set({ creator: "" }) });
+    if (status) chips.push({ key: "status", label: chipLabel("Status", status, STATUS_OPTIONS), onRemove: () => set({ status: "" }) });
+
     return (
-        <div className="animate-fade-in space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-sm">
-                        <Banknote className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold text-neutral-900">Payouts</h1>
-                        <p className="text-sm text-neutral-500">
-                            Admin-initiated creator disbursements
-                            {data && (
-                                <span className="ml-2 text-neutral-400">· {data.total} total</span>
-                            )}
-                        </p>
-                    </div>
-                </div>
-                {canManage && (
-                    <button
-                        onClick={() => setShowInitiate(true)}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition-colors"
-                    >
-                        <Plus className="w-4 h-4" />
-                        Initiate Payout
-                    </button>
-                )}
-            </div>
-
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4">
-                <div className="flex flex-wrap items-center gap-3">
-                    <div className="relative flex-1 min-w-[240px]">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                        <input
-                            type="text"
-                            placeholder="Filter by creator ID..."
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                            value={creatorId}
-                            onChange={(e) => setCreatorId(e.target.value)}
-                        />
-                    </div>
-                    <FilterDropdown
-                        value={status}
-                        onChange={(val) => {
-                            setStatus(val as "" | PayoutStatus);
-                            setPage(1);
-                        }}
-                        options={STATUS_OPTIONS}
-                        theme="emerald"
-                        placeholder="All Statuses"
-                    />
-                </div>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-neutral-200 text-sm">
-                        <thead className="border-b border-neutral-200/60 bg-neutral-50/80">
-                            <tr className="text-[11px] font-bold text-neutral-600 uppercase tracking-widest">
-                                <th className="px-4 py-4 text-left">Reference</th>
-                                <th className="px-4 py-4 text-left">Creator</th>
-                                <th className="px-4 py-4 text-right">Amount</th>
-                                <th className="px-4 py-4 text-left">Status</th>
-                                <th className="px-4 py-4 text-left">Method</th>
-                                <th className="px-4 py-4 text-left">Created</th>
-                                <th className="px-4 py-4 text-left">Processed</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-neutral-200">
-                            {payouts.map((p) => (
-                                <tr
-                                    key={p._id}
-                                    className="group hover:bg-neutral-50/80 transition-all duration-200"
-                                >
-                                    <td className="px-4 py-4">
-                                        <Link
-                                            to={`/payouts/${p._id}`}
-                                            className="font-medium text-neutral-900 hover:text-emerald-600 font-mono text-xs"
-                                        >
-                                            {shortId(p.payout_reference || p._id)}
-                                        </Link>
-                                    </td>
-                                    <td className="px-4 py-4 font-mono text-xs text-neutral-500">
-                                        {shortId(p.creator_id)}
-                                    </td>
-                                    <td className="px-4 py-4 text-right font-medium text-neutral-800 whitespace-nowrap">
-                                        {formatCurrency(p.amount, p.currency)}
-                                    </td>
-                                    <td className="px-4 py-4">
-                                        <PayoutStatusBadge status={p.status} />
-                                    </td>
-                                    <td className="px-4 py-4 text-neutral-700 capitalize">
-                                        {(p.payout_method || "—").toString().replace(/_/g, " ")}
-                                    </td>
-                                    <td className="px-4 py-4 whitespace-nowrap text-neutral-500">
-                                        {formatDateTime(p.created_at)}
-                                    </td>
-                                    <td className="px-4 py-4 whitespace-nowrap text-neutral-500">
-                                        {formatDateTime(p.processed_at)}
-                                    </td>
-                                </tr>
-                            ))}
-                            {payouts.length === 0 && (
-                                <tr>
-                                    <td
-                                        colSpan={7}
-                                        className="px-4 py-12 text-center text-neutral-500"
-                                    >
-                                        <div className="flex flex-col items-center justify-center">
-                                            <Banknote className="w-12 h-12 text-neutral-300 mb-4" />
-                                            <p>No payouts found matching your criteria.</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-                <Pagination
-                    page={data?.page ?? page}
-                    totalPages={data?.total_pages ?? 1}
-                    total={data?.total ?? 0}
-                    onPageChange={setPage}
-                />
-            </div>
-
-            <InitiatePayoutModal
-                open={showInitiate}
-                onClose={() => setShowInitiate(false)}
-                defaultCreatorId={creatorId || undefined}
-                defaultAmount={prefillAmount || undefined}
+        <div className="space-y-5">
+            <PageHeader
+                icon={Banknote}
+                title="Payouts"
+                description={
+                    <>
+                        Admin-initiated creator disbursements
+                        {data && <span className="text-ink-faint"> · {data.total.toLocaleString("en-IN")} total</span>}
+                    </>
+                }
+                primaryAction={
+                    canManage && (
+                        <Button
+                            variant="primary"
+                            icon={Plus}
+                            onClick={() => {
+                                setPrefill({ creator: creatorId || undefined });
+                                setShowInitiate(true);
+                            }}
+                        >
+                            Initiate payout
+                        </Button>
+                    )
+                }
             />
+
+            <FilterBar chips={chips} onReset={reset}>
+                <CreatorPicker variant="filter" label="Creator" placeholder="Filter by creator…" value={creatorId} onChange={(id) => set({ creator: id })} />
+                <FilterSelect label="Status" value={status} onChange={(v) => set({ status: v })} options={STATUS_OPTIONS} allLabel="All statuses" />
+            </FilterBar>
+
+            <DataTable
+                label="Payouts"
+                rows={payouts}
+                columns={columns}
+                rowKey={(p) => p._id}
+                isLoading={isLoading && !data}
+                isFetching={isFetching && !!data}
+                error={error}
+                onRetry={() => refetch()}
+                empty={{ icon: Banknote, title: "No payouts match these filters.", description: chips.length ? "Try clearing a filter." : undefined }}
+                onRowClick={(p) => navigate(`/payouts/${p._id}`)}
+                rowActions={(p) => <IconButton icon={Eye} size="sm" label="View details" onClick={() => navigate(`/payouts/${p._id}`)} />}
+                storageKey="payouts"
+                exportName="payouts"
+                summary={data ? `${payouts.length} of ${data.total.toLocaleString("en-IN")}` : undefined}
+                card={{
+                    title: (p) => formatCurrency(p.amount, p.currency),
+                    subtitle: (p) => `${shortId(p.payout_reference || p._id)} · ${formatDateTime(p.created_at)}`,
+                    fields: ["status", "method", "creator", "processed"],
+                }}
+                footer={
+                    data && <Pagination page={data.page} totalPages={data.total_pages} total={data.total} pageSize={PER_PAGE} onPageChange={(p) => set({ page: p })} />
+                }
+            />
+
+            <InitiatePayoutModal open={showInitiate} onClose={() => setShowInitiate(false)} defaultCreatorId={prefill.creator} defaultAmount={prefill.amount} />
         </div>
     );
 }

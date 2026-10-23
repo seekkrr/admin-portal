@@ -279,11 +279,11 @@ export function BboxDrawMap({ value, onChange, center = null, referenceBoxes = [
         <div className="relative">
             <div
                 ref={containerRef}
-                className="rounded-xl overflow-hidden shadow-sm border border-neutral-200"
+                className="rounded-card overflow-hidden shadow-sm border border-line"
                 style={{ height }}
                 aria-label="Bounding box editor"
             />
-            <div className="absolute top-3 left-3 z-10 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-sm border border-neutral-200/60 text-[11px] font-medium text-neutral-600">
+            <div className="absolute top-3 left-3 z-10 bg-surface/90 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-sm border border-line text-[11px] font-medium text-ink-muted">
                 {mode === "draw"
                     ? drawFirstRef.current
                         ? "Click the opposite corner"
@@ -294,13 +294,13 @@ export function BboxDrawMap({ value, onChange, center = null, referenceBoxes = [
                 <button
                     type="button"
                     onClick={startRedraw}
-                    className="absolute top-3 right-12 z-10 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-sm border border-neutral-200/60 text-[11px] font-medium text-cyan-700 hover:bg-white"
+                    className="absolute top-3 right-12 z-10 bg-surface/90 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-sm border border-line text-[11px] font-medium text-accent-700 hover:bg-surface"
                 >
                     Redraw box
                 </button>
             )}
             {referenceBoxes.length > 0 && (
-                <div className="absolute bottom-3 left-3 z-10 flex items-center gap-1.5 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-sm border border-neutral-200/60 text-[11px] font-medium text-neutral-600">
+                <div className="absolute bottom-3 left-3 z-10 flex items-center gap-1.5 bg-surface/90 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-sm border border-line text-[11px] font-medium text-ink-muted">
                     <span className="inline-block w-3 h-2.5 rounded-sm border border-dashed" style={{ borderColor: "#b45309", background: "rgba(245,158,11,0.12)" }} />
                     Nearby regions ({referenceBoxes.length}) — avoid overlap
                 </div>

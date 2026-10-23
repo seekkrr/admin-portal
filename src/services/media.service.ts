@@ -27,12 +27,12 @@ const MAX_INPUT_BYTES = 25 * 1024 * 1024;
 
 /** Backend media categories (mirror of v2 settings.MEDIA_FOLDERS). */
 const VALID_CATEGORIES = new Set([
-    "icons", "logo", "marker", "narrative", "onboarding", "profile", "quest", "region", "website",
+    "event", "experience", "icons", "logo", "marker", "narrative", "onboarding", "profile", "quest", "region", "website",
 ]);
 /** Human-facing folder names → canonical backend category. */
 const CATEGORY_ALIASES: Record<string, string> = {
     markers: "marker", quests: "quest", narratives: "narrative", regions: "region",
-    avatars: "profile", avatar: "profile", profiles: "profile", logos: "logo",
+    avatars: "profile", avatar: "profile", profiles: "profile", logos: "logo", events: "event", experiences: "experience",
     "things-to-do": "marker",
 };
 

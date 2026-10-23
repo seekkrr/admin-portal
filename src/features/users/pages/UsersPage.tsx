@@ -1,44 +1,59 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-    Search, Users, Trash2, Ban, Shield, RefreshCw, AlertTriangle, CheckCircle2, X, Filter, Coins, Star, TrendingUp
-} from "lucide-react";
+import { Users, Trash2, Ban, Shield, Coins, Star, TrendingUp, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore } from "@store/auth.store";
 import { AccessDenied } from "@components/AccessDenied";
-import { LoadingFallback } from "@components/LoadingFallback";
 import { usersService } from "../services/users.service";
 import { isRedundantRoleChange, effectiveRole } from "../roles";
-import { Badge } from "@/components/ui/Badge";
 import { CopyText } from "@/components/ui/CopyText";
-import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { Button, IconButton } from "@/components/ui/Button";
+import { Menu } from "@/components/ui/Menu";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { FilterBar, FilterSelect, type FilterChip, type FilterOption } from "@/components/ui/FilterBar";
+import { chipLabel } from "@/components/ui/filters";
+import { DataTable, type DataColumn } from "@/components/ui/DataTable";
 import { Pagination } from "@/components/ui/Pagination";
-import { FilterDropdown } from "@/components/FilterDropdown";
-import type { DropdownOption } from "@/components/FilterDropdown";
+import { Modal } from "@/components/ui/Modal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { StatusPill, Tag } from "@/components/ui/StatusPill";
+import { Checkbox, Field, Switch, TextInput } from "@/components/ui/Field";
+import { StatGrid, StatTile } from "@/components/ui/Stat";
+import { useDebouncedUrlInput, useUrlState } from "@/hooks/useUrlState";
+import { formatDate } from "@/utils/date";
+import { cx } from "@/utils/cx";
 import type { User } from "@/types";
 
 // ---- Constants ----
 const ADMIN_ROLES = ["admin", "super_admin"];
 const PROMOTABLE_ROLES = ["moderator", "finance", "admin"] as const;
 const PER_PAGE = 10;
-const SEARCH_DEBOUNCE_MS = 400;
 const SESSION_KEY = "admin_users_selected";
 
-// ---- Badge Styles ----
-const statusConfig: Record<string, { label: string; dot: string; bg: string }> = {
-    active: { label: "Active", dot: "bg-emerald-500", bg: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-    suspended: { label: "Suspended", dot: "bg-amber-500", bg: "bg-amber-50 text-amber-700 border-amber-200" },
-    deleted: { label: "Deleted", dot: "bg-red-500", bg: "bg-red-50 text-red-700 border-red-200" },
+const ROLE_LABELS: Record<string, string> = {
+    user: "User",
+    creator: "Creator",
+    moderator: "Moderator",
+    finance: "Finance",
+    admin: "Admin",
+    super_admin: "Super admin",
+    business: "Business",
 };
+const ROLE_PRIORITY = ["super_admin", "admin", "finance", "moderator", "creator", "user"];
 
-const roleConfig: Record<string, { label: string; bg: string }> = {
-    user: { label: "User", bg: "bg-neutral-50 text-neutral-600 border-neutral-200" },
-    creator: { label: "Creator", bg: "bg-teal-50 text-teal-700 border-teal-200" },
-    moderator: { label: "Moderator", bg: "bg-blue-50 text-blue-700 border-blue-200" },
-    finance: { label: "Finance", bg: "bg-violet-50 text-violet-700 border-violet-200" },
-    admin: { label: "Admin", bg: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-    super_admin: { label: "Super Admin", bg: "bg-rose-50 text-rose-700 border-rose-200" },
-};
+function primaryRole(u: User): string {
+    return ROLE_PRIORITY.find((r) => (u.role as readonly string[] | undefined)?.includes(r)) || u.role?.[0] || "user";
+}
+
+function fullName(u: Pick<User, "first_name" | "last_name">): string {
+    return `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim();
+}
+
+function RoleTag({ role }: { role: string }) {
+    const staff = ["super_admin", "admin", "finance", "moderator"].includes(role);
+    return <Tag tone={staff ? "brand" : role === "creator" ? "info" : "neutral"}>{ROLE_LABELS[role] ?? role.replace(/_/g, " ")}</Tag>;
+}
 
 // ---- Session Helpers ----
 function loadSessionSelections(): Set<string> {
@@ -51,36 +66,22 @@ function loadSessionSelections(): Set<string> {
 }
 
 function saveSessionSelections(ids: Set<string>) {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify([...ids]));
+    try {
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify([...ids]));
+    } catch {
+        /* storage unavailable */
+    }
 }
 
 // ---- Discriminated Union for Confirm Actions ----
 type ConfirmAction =
     | { type: "suspend"; payload: { ids: string[] } }
     | { type: "bulk-delete"; payload: { ids: string[] } }
-    | { type: "single-delete"; payload: { userId: string } }
+    | { type: "single-delete"; payload: { userId: string; name: string } }
     | { type: "promote"; payload: { userId: string; role: string; current: string[] } }
     | { type: "access"; payload: { userId: string; name: string; kind: AccessKind; enabled: boolean } };
 
 type AccessKind = "creator" | "business";
-
-/** On/off switch for creator or business access. */
-function AccessSwitch({ on, label, onToggle, disabled }: { on: boolean; label: string; onToggle: () => void; disabled?: boolean }) {
-    return (
-        <button
-            type="button"
-            role="switch"
-            aria-checked={on}
-            aria-label={label}
-            title={label}
-            disabled={disabled}
-            onClick={onToggle}
-            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:opacity-50 ${on ? "bg-emerald-500" : "bg-neutral-300"}`}
-        >
-            <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${on ? "translate-x-4" : "translate-x-0.5"}`} />
-        </button>
-    );
-}
 
 const ACCESS_COPY: Record<AccessKind, { on: (n: string) => string; off: (n: string) => string; label: string }> = {
     creator: {
@@ -95,27 +96,24 @@ const ACCESS_COPY: Record<AccessKind, { on: (n: string) => string; off: (n: stri
     },
 };
 
-// ---- Filter Dropdown Options ----
-const STATUS_OPTIONS: DropdownOption[] = [
-    { value: "", label: "All Statuses" },
-    { value: "active", label: "Active", dot: "bg-emerald-500" },
-    { value: "suspended", label: "Suspended", dot: "bg-amber-500" },
+// ---- Filter Options ----
+const STATUS_OPTIONS: FilterOption[] = [
+    { value: "active", label: "Active" },
+    { value: "suspended", label: "Suspended" },
 ];
 
-const ROLE_OPTIONS: DropdownOption[] = [
-    { value: "", label: "All Roles" },
+const ROLE_OPTIONS: FilterOption[] = [
     { value: "user", label: "User" },
     { value: "moderator", label: "Moderator" },
     { value: "finance", label: "Finance" },
     { value: "admin", label: "Admin" },
-    { value: "super_admin", label: "Super Admin" },
+    { value: "super_admin", label: "Super admin" },
     { value: "business", label: "Business" },
 ];
 
-const CREATOR_OPTIONS: DropdownOption[] = [
-    { value: "", label: "All Users" },
-    { value: "true", label: "Creators Only", dot: "bg-teal-500" },
-    { value: "false", label: "Non-Creators", dot: "bg-neutral-400" },
+const CREATOR_OPTIONS: FilterOption[] = [
+    { value: "true", label: "Creators only" },
+    { value: "false", label: "Non-creators" },
 ];
 
 // ---- Points Modal ----
@@ -167,74 +165,92 @@ function PointsModal({ userId, userName, currentPoints, onClose }: PointsModalPr
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in" onClick={onClose}>
-            <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4 animate-slide-up" onClick={(e) => e.stopPropagation()}>
-                <h3 className="text-lg font-bold text-neutral-900 mb-1 flex items-center gap-2">
-                    <Coins className="w-5 h-5 text-amber-500" /> Manage Points
-                </h3>
-                <div className="flex items-center justify-between mb-5">
-                    <p className="text-sm text-neutral-500">{userName}</p>
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-xs font-semibold text-amber-700">
-                        <Coins className="w-3 h-3" /> {currentPoints.toLocaleString()} pts
-                    </span>
-                </div>
-
-                <div className="flex rounded-xl overflow-hidden border border-neutral-200 mb-4">
+        <Modal
+            open
+            onClose={onClose}
+            dismissible={!isBusy}
+            title="Manage points"
+            description={
+                <span className="flex flex-wrap items-center gap-2">
+                    {userName}
+                    <Tag tone="warn">
+                        <Coins className="h-3 w-3" aria-hidden /> {currentPoints.toLocaleString("en-IN")} pts
+                    </Tag>
+                </span>
+            }
+            icon={Coins}
+            size="sm"
+            footer={
+                <>
+                    <Button variant="secondary" onClick={onClose} disabled={isBusy}>
+                        Cancel
+                    </Button>
+                    <Button variant={mode === "add" ? "primary" : "danger"} onClick={handleSubmit} disabled={!isValid} loading={isBusy}>
+                        {mode === "add" ? "Add points" : "Deduct points"}
+                    </Button>
+                </>
+            }
+        >
+            <div role="radiogroup" aria-label="Add or deduct" className="grid grid-cols-2 gap-1 rounded-control bg-brand-50/70 p-1">
+                {(["add", "deduct"] as const).map((m) => (
                     <button
-                        className={`flex-1 py-2 text-sm font-medium transition-colors ${mode === "add" ? "bg-emerald-600 text-white" : "text-neutral-600 hover:bg-neutral-50"}`}
-                        onClick={() => setMode("add")}
+                        key={m}
+                        type="button"
+                        role="radio"
+                        aria-checked={mode === m}
+                        onClick={() => setMode(m)}
+                        className={cx(
+                            "rounded-lg py-2 text-sm font-medium transition-colors",
+                            mode === m ? "bg-surface text-ink shadow-sm" : "text-ink-muted hover:text-ink"
+                        )}
                     >
-                        Add Points
+                        {m === "add" ? "Add" : "Deduct"}
                     </button>
-                    <button
-                        className={`flex-1 py-2 text-sm font-medium transition-colors ${mode === "deduct" ? "bg-red-600 text-white" : "text-neutral-600 hover:bg-neutral-50"}`}
-                        onClick={() => setMode("deduct")}
-                    >
-                        Deduct Points
-                    </button>
-                </div>
-
-                <input
+                ))}
+            </div>
+            <Field label="Amount">
+                <TextInput
                     type="number"
+                    inputMode="numeric"
                     min={1}
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    placeholder="Enter amount..."
-                    className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4"
+                    placeholder="Enter amount…"
                     disabled={isBusy}
-                    onKeyDown={(e) => { if (e.key === "Enter" && isValid) handleSubmit(); }}
+                    autoFocus
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter" && isValid) handleSubmit();
+                    }}
                 />
-
-                <div className="flex gap-2">
-                    <button onClick={onClose} disabled={isBusy} className="flex-1 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-600 hover:bg-neutral-50 transition-colors disabled:opacity-50">
-                        Cancel
-                    </button>
-                    <button
-                        onClick={handleSubmit}
-                        disabled={!isValid || isBusy}
-                        className={`flex-1 py-2.5 rounded-xl text-white text-sm font-medium transition-colors disabled:opacity-50 ${mode === "add" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"}`}
-                    >
-                        {isBusy ? "Saving..." : mode === "add" ? "Add" : "Deduct"}
-                    </button>
-                </div>
-            </div>
-        </div>
+            </Field>
+        </Modal>
     );
 }
 
 // ---- Main Component ----
+/** `/users?focus=<id>` (older search links) opens the user's page. */
 export function UsersPage() {
-    const { user: currentUser } = useAuthStore();
-    const queryClient = useQueryClient();
-    const isAdmin = !!currentUser && currentUser.role?.some(r => ADMIN_ROLES.includes(r));
+    const [searchParams] = useSearchParams();
+    const focusId = searchParams.get("focus");
+    if (focusId) return <Navigate to={`/users/${encodeURIComponent(focusId)}`} replace />;
+    return <UsersList />;
+}
 
-    // ---- State ----
-    const [searchInput, setSearchInput] = useState("");
-    const [debouncedQuery, setDebouncedQuery] = useState("");
-    const [statusFilter, setStatusFilter] = useState("");
-    const [roleFilter, setRoleFilter] = useState("");
-    const [creatorFilter, setCreatorFilter] = useState("");
-    const [page, setPage] = useState(1);
+function UsersList() {
+    const { user: currentUser } = useAuthStore();
+    const navigate = useNavigate();
+    const queryClient = useQueryClient();
+    const isAdmin = !!currentUser && currentUser.role?.some((r) => ADMIN_ROLES.includes(r));
+
+    // ---- State (filters, search and page live in the address) ----
+    const { state, set, reset } = useUrlState({ q: "", status: "", role: "", creator: "", page: 1 });
+    const [searchInput, setSearchInput] = useDebouncedUrlInput(state.q, (q) => set({ q }, { replace: true }));
+    const debouncedQuery = state.q;
+    const statusFilter = STATUS_OPTIONS.some((o) => o.value === state.status) ? state.status : "";
+    const roleFilter = ROLE_OPTIONS.some((o) => o.value === state.role) ? state.role : "";
+    const creatorFilter = state.creator === "true" || state.creator === "false" ? state.creator : "";
+    const page = Math.max(1, state.page);
+
     const [selectedIds, setSelectedIds] = useState<Set<string>>(() => loadSessionSelections());
     const [promotingUser, setPromotingUser] = useState<User | null>(null);
     const [pointsUser, setPointsUser] = useState<User | null>(null);
@@ -246,39 +262,37 @@ export function UsersPage() {
     // ---- Persist selections to session ----
     useEffect(() => saveSessionSelections(selectedIds), [selectedIds]);
 
-    // ---- Debounced search → triggers API call ----
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setDebouncedQuery(searchInput.trim());
-            setPage(1);
-        }, SEARCH_DEBOUNCE_MS);
-        return () => clearTimeout(timer);
-    }, [searchInput]);
-
     // Reset hard delete toggle when modal closes
-    useEffect(() => { if (!confirmAction) setHardDelete(false); }, [confirmAction]);
+    useEffect(() => {
+        if (!confirmAction) setHardDelete(false);
+    }, [confirmAction]);
 
     // ---- Fetch User Stats ----
     const { data: statsData } = useQuery({
         queryKey: ["admin-user-stats"],
         queryFn: () => usersService.getUserStats(),
         staleTime: 60_000,
+        enabled: isAdmin,
     });
 
     // ---- Fetch Users ----
-    const queryParams = useMemo(() => ({
-        q: debouncedQuery || undefined,
-        status: statusFilter || undefined,
-        role: roleFilter || undefined,
-        is_creator: creatorFilter || undefined,
-        page,
-        page_size: PER_PAGE,
-    }), [debouncedQuery, statusFilter, roleFilter, creatorFilter, page]);
+    const queryParams = useMemo(
+        () => ({
+            q: debouncedQuery || undefined,
+            status: statusFilter || undefined,
+            role: roleFilter || undefined,
+            is_creator: creatorFilter || undefined,
+            page,
+            page_size: PER_PAGE,
+        }),
+        [debouncedQuery, statusFilter, roleFilter, creatorFilter, page]
+    );
 
-    const { data, isLoading, error } = useQuery({
+    const { data, isLoading, isFetching, error, refetch } = useQuery({
         queryKey: ["admin-users", queryParams],
         queryFn: () => usersService.listUsers(queryParams),
         placeholderData: (prev) => prev,
+        enabled: isAdmin,
     });
 
     const users = useMemo(() => data?.users ?? [], [data]);
@@ -288,17 +302,14 @@ export function UsersPage() {
     const filteredUsers = useMemo(() => {
         if (!searchInput.trim() || searchInput.trim() === debouncedQuery) return users;
         const q = searchInput.trim().toLowerCase();
-        return users.filter((u) =>
-            `${u.first_name} ${u.last_name}`.toLowerCase().includes(q) ||
-            (u.email ?? "").toLowerCase().includes(q) ||
-            u._id.toLowerCase().includes(q)
+        return users.filter(
+            (u) => fullName(u).toLowerCase().includes(q) || (u.email ?? "").toLowerCase().includes(q) || u._id.toLowerCase().includes(q)
         );
     }, [users, searchInput, debouncedQuery]);
 
     // ---- Mutations ----
     const bulkActionMutation = useMutation({
-        mutationFn: ({ ids, action }: { ids: string[]; action: "suspend" | "delete" }) =>
-            usersService.bulkAction(ids, action),
+        mutationFn: ({ ids, action }: { ids: string[]; action: "suspend" | "delete" }) => usersService.bulkAction(ids, action),
         onSuccess: (result) => {
             if (result.succeeded.length > 0) {
                 toast.success(result.summary);
@@ -315,19 +326,24 @@ export function UsersPage() {
             }
             setConfirmAction(null);
         },
-        onError: (err: Error) => { toast.error(err.message); setConfirmAction(null); },
+        onError: (err: Error) => {
+            toast.error(err.message);
+            setConfirmAction(null);
+        },
     });
 
     const roleMutation = useMutation({
-        mutationFn: ({ userId, role, current }: { userId: string; role: string; current: string[] }) =>
-            usersService.updateUserRole(userId, role, current),
+        mutationFn: ({ userId, role, current }: { userId: string; role: string; current: string[] }) => usersService.updateUserRole(userId, role, current),
         onSuccess: () => {
             toast.success("Role updated successfully");
             queryClient.invalidateQueries({ queryKey: ["admin-users"] });
             setPromotingUser(null);
             setConfirmAction(null);
         },
-        onError: (err: Error) => { toast.error(err.message); setConfirmAction(null); },
+        onError: (err: Error) => {
+            toast.error(err.message);
+            setConfirmAction(null);
+        },
     });
 
     const deleteMutation = useMutation({
@@ -343,7 +359,10 @@ export function UsersPage() {
             });
             setConfirmAction(null);
         },
-        onError: (err: Error) => { toast.error(err.message); setConfirmAction(null); },
+        onError: (err: Error) => {
+            toast.error(err.message);
+            setConfirmAction(null);
+        },
     });
 
     const [accessBusinessName, setAccessBusinessName] = useState("");
@@ -358,44 +377,13 @@ export function UsersPage() {
             setConfirmAction(null);
             setAccessBusinessName("");
         },
-        onError: (err: Error) => { toast.error(err.message); setConfirmAction(null); },
+        onError: (err: Error) => {
+            toast.error(err.message);
+            setConfirmAction(null);
+        },
     });
 
-    // ---- Handlers ----
-    const toggleSelect = useCallback((id: string) => {
-        setSelectedIds((prev) => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-        });
-    }, []);
-
-    const toggleSelectAll = useCallback(() => {
-        setSelectedIds((prev) => {
-            const next = new Set(prev);
-            const allOnPage = filteredUsers.map((u) => u._id);
-            const allSelected = allOnPage.every((id) => next.has(id));
-            if (allSelected) {
-                allOnPage.forEach((id) => next.delete(id));
-            } else {
-                allOnPage.forEach((id) => next.add(id));
-            }
-            return next;
-        });
-    }, [filteredUsers]);
-
-    const clearFilters = useCallback(() => {
-        setSearchInput("");
-        setDebouncedQuery("");
-        setStatusFilter("");
-        setRoleFilter("");
-        setCreatorFilter("");
-        setPage(1);
-    }, []);
-
     const isBusy = bulkActionMutation.isPending || roleMutation.isPending || deleteMutation.isPending || accessMutation.isPending;
-    const allOnPageSelected = filteredUsers.length > 0 && filteredUsers.every((u) => selectedIds.has(u._id));
 
     // ---- Confirm handler (type-safe via switch) ----
     const executeConfirmedAction = useCallback(() => {
@@ -419,449 +407,335 @@ export function UsersPage() {
         }
     }, [confirmAction, bulkActionMutation, deleteMutation, roleMutation, accessMutation, hardDelete]);
 
+    const columns: DataColumn<User>[] = useMemo(
+        () => [
+            {
+                id: "name",
+                header: "Name",
+                hideable: false,
+                sortValue: (u) => fullName(u),
+                csv: (u) => fullName(u),
+                cell: (u) => (
+                    <div className="min-w-0">
+                        <Link to={`/users/${u._id}`} className="font-medium text-ink hover:text-accent-700 hover:underline">
+                            {fullName(u) || u.email || "—"}
+                        </Link>
+                        <div className="mt-0.5 text-[11px] text-ink-faint">
+                            <CopyText value={u._id} mono truncate={false} title="Copy user ID" />
+                        </div>
+                    </div>
+                ),
+            },
+            { id: "id", header: "User ID", defaultHidden: true, csv: (u) => u._id, cell: (u) => <span className="font-mono text-xs text-ink-muted">{u._id}</span> },
+            {
+                id: "email",
+                header: "Email",
+                sortValue: (u) => u.email ?? "",
+                className: "max-w-[240px]",
+                cell: (u) => <CopyText value={u.email} title="Copy email" />,
+            },
+            { id: "role", header: "Role", sortValue: (u) => primaryRole(u), cell: (u) => <RoleTag role={primaryRole(u)} /> },
+            { id: "status", header: "Status", sortValue: (u) => u.status, cell: (u) => <StatusPill status={u.status} /> },
+            ...(["creator", "business"] as const).map(
+                (kind): DataColumn<User> => ({
+                    id: kind,
+                    header: ACCESS_COPY[kind].label,
+                    sortValue: (u) => (kind === "creator" ? !!u.is_creator : !!u.role?.includes("business")),
+                    csv: (u) => ((kind === "creator" ? !!u.is_creator : !!u.role?.includes("business")) ? "on" : "off"),
+                    cell: (u) => {
+                        const on = kind === "creator" ? !!u.is_creator : !!u.role?.includes("business");
+                        return (
+                            <Switch
+                                size="sm"
+                                hideLabel
+                                checked={on}
+                                label={`${ACCESS_COPY[kind].label} access ${on ? "on" : "off"} for ${fullName(u)}`}
+                                disabled={isBusy}
+                                onChange={() =>
+                                    setConfirmAction({
+                                        type: "access",
+                                        payload: { userId: u._id, name: fullName(u), kind, enabled: !on },
+                                    })
+                                }
+                            />
+                        );
+                    },
+                })
+            ),
+            {
+                id: "joined",
+                header: "Joined",
+                sortValue: (u) => u.created_at ?? "",
+                csv: (u) => formatDate(u.created_at),
+                cell: (u) => <span className="whitespace-nowrap text-ink-muted">{formatDate(u.created_at)}</span>,
+            },
+            { id: "points", header: "Points", align: "right", defaultHidden: true, sortValue: (u) => u.points_earned ?? 0, cell: (u) => <span className="tabular-nums">{(u.points_earned ?? 0).toLocaleString("en-IN")}</span> },
+        ],
+        [isBusy]
+    );
+
+    const rowActions = (u: User) => (
+        <>
+            <div className="hidden items-center gap-0.5 md:flex">
+                <IconButton icon={Eye} size="sm" label={`Open ${fullName(u) || "user"}`} onClick={() => navigate(`/users/${u._id}`)} />
+                <IconButton icon={Coins} size="sm" label={`Manage points for ${fullName(u)}`} onClick={() => setPointsUser(u)} />
+                <IconButton icon={Shield} size="sm" label={`Change role for ${fullName(u)}`} onClick={() => setPromotingUser(u)} />
+                <IconButton
+                    icon={Trash2}
+                    size="sm"
+                    label={`Delete ${fullName(u)}`}
+                    className="hover:bg-bad-soft hover:text-bad"
+                    onClick={() => setConfirmAction({ type: "single-delete", payload: { userId: u._id, name: fullName(u) || u.email || "" } })}
+                />
+            </div>
+            <div className="md:hidden">
+                <Menu
+                    label={`Actions for ${fullName(u)}`}
+                    triggerVariant="ghost"
+                    size="sm"
+                    items={[
+                        { label: "Open user", icon: Eye, to: `/users/${u._id}` },
+                        { label: "Manage points", icon: Coins, onSelect: () => setPointsUser(u) },
+                        { label: "Change role", icon: Shield, onSelect: () => setPromotingUser(u) },
+                        {
+                            label: "Delete user",
+                            icon: Trash2,
+                            danger: true,
+                            onSelect: () => setConfirmAction({ type: "single-delete", payload: { userId: u._id, name: fullName(u) || u.email || "" } }),
+                        },
+                    ]}
+                />
+            </div>
+        </>
+    );
+
+    const card = {
+        title: (u: User) => fullName(u) || "—",
+        subtitle: (u: User) => u.email ?? u._id,
+        fields: ["role", "status", "creator", "business"],
+    };
+
     // ---- Render ----
     if (!isAdmin) {
         return <AccessDenied message="Only admins can manage users." />;
     }
 
+    const chips: FilterChip[] = [];
+    if (statusFilter) chips.push({ key: "status", label: chipLabel("Status", statusFilter, STATUS_OPTIONS), onRemove: () => set({ status: "" }) });
+    if (roleFilter) chips.push({ key: "role", label: chipLabel("Role", roleFilter, ROLE_OPTIONS), onRemove: () => set({ role: "" }) });
+    if (creatorFilter) chips.push({ key: "creator", label: chipLabel("Creator", creatorFilter, CREATOR_OPTIONS), onRemove: () => set({ creator: "" }) });
+
+    const singleDelete = confirmAction?.type === "single-delete" ? confirmAction.payload : null;
+    const typeName = singleDelete?.name.trim() || "DELETE";
+
     return (
-        <div className="p-6 max-w-[1400px] mx-auto space-y-5 animate-fade-in">
-            {/* Header */}
-            <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center shadow-sm">
-                        <Users className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold text-neutral-900">Manage Users</h1>
-                        <p className="text-sm text-neutral-500">
-                            {pagination ? `${pagination.total} total users` : "Loading..."}
-                        </p>
-                    </div>
-                </div>
-            </div>
+        <div className="space-y-5">
+            <PageHeader
+                icon={Users}
+                title="Users"
+                description={pagination ? `${pagination.total.toLocaleString("en-IN")} users match` : "Travelers, creators, business members and staff"}
+            />
 
             {/* Stats Panel */}
             {statsData && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4">
-                        <div className="flex items-center gap-2 mb-1">
-                            <Users className="w-4 h-4 text-indigo-500" />
-                            <span className="text-xs text-neutral-500 uppercase tracking-wider font-semibold">Total</span>
-                        </div>
-                        <div className="text-2xl font-bold text-neutral-900">{statsData.total?.toLocaleString() ?? "—"}</div>
-                    </div>
-                    <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4">
-                        <div className="flex items-center gap-2 mb-1">
-                            <TrendingUp className="w-4 h-4 text-emerald-500" />
-                            <span className="text-xs text-neutral-500 uppercase tracking-wider font-semibold">Active</span>
-                        </div>
-                        <div className="text-2xl font-bold text-emerald-700">{(statsData.by_status?.active ?? 0).toLocaleString()}</div>
-                    </div>
-                    <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4">
-                        <div className="flex items-center gap-2 mb-1">
-                            <Star className="w-4 h-4 text-teal-500" />
-                            <span className="text-xs text-neutral-500 uppercase tracking-wider font-semibold">Creators</span>
-                        </div>
-                        <div className="text-2xl font-bold text-teal-700">{statsData.creators?.toLocaleString() ?? "—"}</div>
-                        {(statsData.creators_by_status?.suspended ?? 0) > 0 && (
-                            <div className="text-xs text-amber-600 mt-1 font-medium">
-                                {statsData.creators_by_status?.suspended} suspended
-                            </div>
-                        )}
-                    </div>
-                    <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4">
-                        <div className="flex items-center gap-2 mb-1">
-                            <TrendingUp className="w-4 h-4 text-blue-500" />
-                            <span className="text-xs text-neutral-500 uppercase tracking-wider font-semibold">New (7d)</span>
-                        </div>
-                        <div className="text-2xl font-bold text-blue-700">{(statsData.new_last_7_days ?? 0).toLocaleString()}</div>
-                    </div>
-                </div>
+                <StatGrid>
+                    <StatTile icon={Users} label="Total" value={statsData.total?.toLocaleString("en-IN") ?? "—"} />
+                    <StatTile icon={TrendingUp} label="Active" value={(statsData.by_status?.active ?? 0).toLocaleString("en-IN")} />
+                    <StatTile
+                        icon={Star}
+                        label="Creators"
+                        value={statsData.creators?.toLocaleString("en-IN") ?? "—"}
+                        hint={(statsData.creators_by_status?.suspended ?? 0) > 0 ? `${statsData.creators_by_status?.suspended} suspended` : undefined}
+                        hintTone="warn"
+                    />
+                    <StatTile icon={TrendingUp} label="New (7d)" value={(statsData.new_last_7_days ?? 0).toLocaleString("en-IN")} />
+                </StatGrid>
             )}
 
-            {/* Toolbar */}
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-4 space-y-3">
-                {/* Search + Filters */}
-                <div className="flex flex-wrap items-center gap-3">
-                    <div className="relative flex-1 min-w-[260px]">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                        <input
-                            type="text"
-                            placeholder="Search by name, email or ID..."
-                            value={searchInput}
-                            onChange={(e) => setSearchInput(e.target.value)}
-                            className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                        />
-                        {searchInput && (
-                            <button
-                                onClick={() => { setSearchInput(""); setDebouncedQuery(""); setPage(1); }}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
-                            >
-                                <X className="w-4 h-4" />
-                            </button>
-                        )}
-                    </div>
+            <FilterBar
+                search={{ value: searchInput, onChange: setSearchInput, placeholder: "Search by name or email…" }}
+                chips={chips}
+                onReset={() => {
+                    setSearchInput("");
+                    reset();
+                }}
+            >
+                <FilterSelect label="Status" value={statusFilter} onChange={(v) => set({ status: v })} options={STATUS_OPTIONS} allLabel="All statuses" />
+                <FilterSelect label="Role" value={roleFilter} onChange={(v) => set({ role: v })} options={ROLE_OPTIONS} allLabel="All roles" />
+                <FilterSelect label="Creator" value={creatorFilter} onChange={(v) => set({ creator: v })} options={CREATOR_OPTIONS} allLabel="All users" />
+            </FilterBar>
 
-                    <FilterDropdown
-                        options={STATUS_OPTIONS}
-                        value={statusFilter}
-                        onChange={(v) => { setStatusFilter(v); setPage(1); }}
-                        icon={<Filter className="w-3.5 h-3.5" />}
-                        placeholder="Status"
+            <DataTable
+                label="Users"
+                rows={filteredUsers}
+                columns={columns}
+                rowKey={(u) => u._id}
+                isLoading={isLoading && !data}
+                isFetching={isFetching && !!data}
+                error={error}
+                onRetry={() => refetch()}
+                empty={{ icon: Users, title: "No users found", description: chips.length || debouncedQuery ? "Try clearing a filter." : undefined }}
+                onRowClick={(u) => navigate(`/users/${u._id}`)}
+                selectedIds={selectedIds}
+                onSelectionChange={setSelectedIds}
+                bulkActions={[
+                    { label: "Suspend", icon: Ban, onClick: (ids) => setConfirmAction({ type: "suspend", payload: { ids } }) },
+                    { label: "Delete", icon: Trash2, tone: "danger", onClick: (ids) => setConfirmAction({ type: "bulk-delete", payload: { ids } }) },
+                ]}
+                bulkBusy={isBusy}
+                rowActions={rowActions}
+                storageKey="users"
+                exportName="users"
+                summary={pagination ? `${filteredUsers.length} of ${pagination.total.toLocaleString("en-IN")}` : undefined}
+                card={card}
+                footer={
+                    <Pagination
+                        page={page}
+                        totalPages={pagination?.total_pages ?? 1}
+                        total={pagination?.total ?? 0}
+                        pageSize={PER_PAGE}
+                        onPageChange={(p) => set({ page: p })}
                     />
-
-                    <FilterDropdown
-                        options={ROLE_OPTIONS}
-                        value={roleFilter}
-                        onChange={(v) => { setRoleFilter(v); setPage(1); }}
-                        icon={<Shield className="w-3.5 h-3.5" />}
-                        placeholder="Role"
-                    />
-
-                    <FilterDropdown
-                        options={CREATOR_OPTIONS}
-                        value={creatorFilter}
-                        onChange={(v) => { setCreatorFilter(v); setPage(1); }}
-                        icon={<CheckCircle2 className="w-3.5 h-3.5" />}
-                        placeholder="Creator"
-                    />
-
-                    {(searchInput || statusFilter || roleFilter || creatorFilter) && (
-                        <button
-                            onClick={clearFilters}
-                            className="px-3 py-2.5 rounded-xl text-sm text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
-                        >
-                            Reset
-                        </button>
-                    )}
-                </div>
-
-                {/* Bulk Actions Bar */}
-                {selectedIds.size > 0 && (
-                    <div className="flex items-center gap-3 px-4 py-2.5 bg-indigo-50 rounded-xl border border-indigo-100 animate-slide-up">
-                        <span className="text-sm font-semibold text-indigo-700">
-                            {selectedIds.size} selected
-                        </span>
-                        <div className="h-4 w-px bg-indigo-200" />
-                        <button
-                            onClick={() => setConfirmAction({ type: "suspend", payload: { ids: [...selectedIds] } })}
-                            disabled={isBusy}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-100 text-amber-700 text-sm font-medium hover:bg-amber-200 transition-colors disabled:opacity-50"
-                        >
-                            <Ban className="w-3.5 h-3.5" /> Suspend
-                        </button>
-                        <button
-                            onClick={() => setConfirmAction({ type: "bulk-delete", payload: { ids: [...selectedIds] } })}
-                            disabled={isBusy}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-100 text-red-700 text-sm font-medium hover:bg-red-200 transition-colors disabled:opacity-50"
-                        >
-                            <Trash2 className="w-3.5 h-3.5" /> Delete
-                        </button>
-                        <button
-                            onClick={() => { setSelectedIds(new Set()); sessionStorage.removeItem(SESSION_KEY); }}
-                            className="ml-auto text-xs text-neutral-500 hover:text-neutral-700"
-                        >
-                            Deselect all
-                        </button>
-                    </div>
-                )}
-            </div>
-
-            {/* Table */}
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-                {isLoading && !data ? (
-                    <LoadingFallback />
-                ) : error ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-red-500 gap-2">
-                        <AlertTriangle className="w-8 h-8" />
-                        <p className="text-sm">Failed to load users</p>
-                        <button onClick={() => queryClient.invalidateQueries({ queryKey: ["admin-users"] })} className="text-sm text-indigo-600 hover:underline">
-                            Retry
-                        </button>
-                    </div>
-                ) : filteredUsers.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-neutral-400 gap-2">
-                        <Users className="w-8 h-8" />
-                        <p className="text-sm">No users found</p>
-                    </div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-neutral-100 bg-neutral-50/60">
-                                    <th className="w-12 px-4 py-3.5">
-                                        <input
-                                            type="checkbox"
-                                            checked={allOnPageSelected}
-                                            onChange={toggleSelectAll}
-                                            className="w-4 h-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer accent-indigo-600"
-                                        />
-                                    </th>
-                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Name · User ID</th>
-                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Email</th>
-                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Role</th>
-                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Status</th>
-                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Creator</th>
-                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Business</th>
-                                    <th className="text-left px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Joined</th>
-                                    <th className="text-right px-4 py-3.5 font-semibold text-neutral-500 text-xs uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-neutral-50">
-                                {filteredUsers.map((u) => {
-                                    const sc = statusConfig[u.status] || { label: u.status, dot: "bg-neutral-400", bg: "bg-neutral-50 text-neutral-600 border-neutral-200" };
-                                    const ROLE_PRIORITY = ["super_admin", "admin", "finance", "moderator", "creator", "user"];
-                                    const primaryRole = ROLE_PRIORITY.find(r => (u.role as readonly string[] | undefined)?.includes(r)) || u.role?.[0] || "user";
-                                    const rc = roleConfig[primaryRole] || { label: primaryRole, bg: "bg-neutral-50 text-neutral-600 border-neutral-200" };
-                                    return (
-                                        <tr
-                                            key={u._id}
-                                            className={`transition-colors group hover:bg-neutral-50/80 ${selectedIds.has(u._id) ? "bg-indigo-50/30" : ""}`}
-                                        >
-                                            <td className="px-4 py-3">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedIds.has(u._id)}
-                                                    onChange={() => toggleSelect(u._id)}
-                                                    className="w-4 h-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer accent-indigo-600"
-                                                />
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="font-medium text-neutral-900">
-                                                    {u.first_name} {u.last_name}
-                                                </div>
-                                                <div className="text-[11px] text-neutral-400 mt-0.5">
-                                                    <CopyText value={u._id} mono truncate={false} title="Copy user ID" />
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3 max-w-[240px] text-neutral-700">
-                                                <CopyText value={u.email} title="Copy email" />
-                                            </td>
-                                            <td className="px-4 py-3 space-x-1">
-                                                <Badge label={rc.label} styles={rc.bg} />
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${sc.bg}`}>
-                                                    <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
-                                                    {sc.label}
-                                                </span>
-                                            </td>
-                                            {(["creator", "business"] as const).map((kind) => {
-                                                const on = kind === "creator" ? !!u.is_creator : !!u.role?.includes("business");
-                                                return (
-                                                    <td key={kind} className="px-4 py-3">
-                                                        <AccessSwitch
-                                                            on={on}
-                                                            label={`${ACCESS_COPY[kind].label} access ${on ? "on" : "off"} for ${u.first_name} ${u.last_name}`}
-                                                            disabled={isBusy}
-                                                            onToggle={() =>
-                                                                setConfirmAction({
-                                                                    type: "access",
-                                                                    payload: { userId: u._id, name: `${u.first_name} ${u.last_name}`.trim(), kind, enabled: !on },
-                                                                })
-                                                            }
-                                                        />
-                                                    </td>
-                                                );
-                                            })}
-                                            <td className="px-4 py-3 text-neutral-500 whitespace-nowrap">
-                                                {new Date(u.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                                                    <button
-                                                        onClick={() => setPointsUser(u)}
-                                                        title="Manage points"
-                                                        className="p-1.5 rounded-lg text-neutral-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                                                    >
-                                                        <Coins className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setPromotingUser(u)}
-                                                        title="Change role"
-                                                        className="p-1.5 rounded-lg text-neutral-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                                                    >
-                                                        <Shield className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setConfirmAction({ type: "single-delete", payload: { userId: u._id } })}
-                                                        title="Delete user"
-                                                        className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-
-                {/* Pagination */}
-                <Pagination
-                    page={page}
-                    totalPages={pagination?.total_pages ?? 1}
-                    total={pagination?.total ?? 0}
-                    onPageChange={setPage}
-                />
-            </div>
+                }
+            />
 
             {/* Points Modal */}
             {pointsUser && (
-                <PointsModal
-                    userId={pointsUser._id}
-                    userName={`${pointsUser.first_name} ${pointsUser.last_name}`}
-                    currentPoints={pointsUser.points_earned}
-                    onClose={() => setPointsUser(null)}
-                />
+                <PointsModal userId={pointsUser._id} userName={fullName(pointsUser)} currentPoints={pointsUser.points_earned} onClose={() => setPointsUser(null)} />
             )}
 
-            {/* Role Promotion Modal */}
-            {promotingUser && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in" onClick={() => setPromotingUser(null)}>
-                    <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4 animate-slide-up" onClick={(e) => e.stopPropagation()}>
-                        <h3 className="text-lg font-bold text-neutral-900 mb-1">Change Role</h3>
-                        <p className="text-sm text-neutral-500 mb-5 flex items-center gap-2">
-                            {promotingUser.first_name} {promotingUser.last_name}
-                            <Badge
-                                label={effectiveRole(promotingUser.role ?? []).replace("_", " ")}
-                                styles={roleConfig[effectiveRole(promotingUser.role ?? [])]?.bg ?? ""}
-                            />
-                        </p>
-                        <div className="space-y-2">
-                            {PROMOTABLE_ROLES.map((role) => {
-                                const isCurrent = effectiveRole(promotingUser.role ?? []) === role;
-                                return (
+            {/* Role Modal */}
+            <Modal
+                open={!!promotingUser}
+                onClose={() => setPromotingUser(null)}
+                title="Change role"
+                icon={Shield}
+                size="sm"
+                description={
+                    promotingUser && (
+                        <span className="flex flex-wrap items-center gap-2">
+                            {fullName(promotingUser)}
+                            <RoleTag role={effectiveRole(promotingUser.role ?? [])} />
+                        </span>
+                    )
+                }
+                footer={
+                    <Button variant="secondary" onClick={() => setPromotingUser(null)}>
+                        Cancel
+                    </Button>
+                }
+            >
+                {promotingUser && (
+                    <div className="space-y-2">
+                        {PROMOTABLE_ROLES.map((role) => {
+                            const isCurrent = effectiveRole(promotingUser.role ?? []) === role;
+                            return (
                                 <button
                                     key={role}
+                                    type="button"
                                     disabled={isRedundantRoleChange(role, promotingUser.role ?? []) || roleMutation.isPending}
                                     onClick={() => {
                                         setConfirmAction({ type: "promote", payload: { userId: promotingUser._id, role, current: promotingUser.role ?? [] } });
                                         setPromotingUser(null);
                                     }}
-                                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all
-                                        ${isCurrent
-                                            ? "border-indigo-300 bg-indigo-50 text-indigo-700 cursor-default"
-                                            : "border-neutral-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-neutral-700"
-                                        }
-                                        disabled:opacity-50`}
+                                    className={cx(
+                                        "flex w-full items-center justify-between rounded-control border px-4 py-3 text-sm font-medium transition-colors disabled:opacity-50",
+                                        isCurrent ? "cursor-default border-accent-300 bg-accent-50 text-accent-700" : "border-line text-ink hover:border-accent-300 hover:bg-accent-50/50"
+                                    )}
                                 >
-                                    <span className="capitalize">{role.replace("_", " ")}</span>
-                                    {isCurrent && <span className="text-xs text-indigo-500">Current</span>}
+                                    <span>{ROLE_LABELS[role] ?? role}</span>
+                                    {isCurrent && <span className="text-xs text-accent-700">Current</span>}
                                 </button>
-                                );
-                            })}
-                        </div>
-                        <button
-                            onClick={() => setPromotingUser(null)}
-                            className="w-full mt-4 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-600 hover:bg-neutral-50 transition-colors"
-                        >
-                            Cancel
-                        </button>
+                            );
+                        })}
                     </div>
-                </div>
-            )}
+                )}
+            </Modal>
 
-            {/* Delete Confirmation */}
-            <ConfirmModal
+            {/* Delete — soft delete is a simple confirm; a permanent delete asks for the name */}
+            <ConfirmDialog
                 open={confirmAction?.type === "single-delete" || confirmAction?.type === "bulk-delete"}
-                title="Delete User(s)"
-                message={
+                title={confirmAction?.type === "bulk-delete" ? `Delete ${confirmAction.payload.ids.length} user(s)?` : hardDelete ? "Permanently delete user?" : "Delete user?"}
+                description={
                     confirmAction?.type === "single-delete"
-                        ? `This will ${hardDelete ? "PERMANENTLY" : "soft"}-delete this user. ${hardDelete ? "All data will be permanently removed." : "The user will be marked as deleted."}`
-                        : `This will soft-delete ${confirmAction?.type === "bulk-delete" ? confirmAction.payload.ids.length : 0} user(s). This cannot be easily undone.`
+                        ? hardDelete
+                            ? "All of this user's data will be permanently removed."
+                            : "The user will be marked as deleted and can't sign in."
+                        : `This will soft-delete ${confirmAction?.type === "bulk-delete" ? confirmAction.payload.ids.length : 0} user(s). They will be marked as deleted.`
                 }
-                confirmLabel={hardDelete ? "Hard Delete" : "Delete"}
-                confirmStyle="bg-red-600 hover:bg-red-700"
+                confirmLabel={hardDelete ? "Delete permanently" : "Delete"}
+                tone="danger"
+                level={confirmAction?.type === "single-delete" && hardDelete ? "type" : "simple"}
+                typeToConfirm={typeName}
                 onConfirm={executeConfirmedAction}
                 onCancel={() => setConfirmAction(null)}
                 isPending={bulkActionMutation.isPending || deleteMutation.isPending}
             >
                 {confirmAction?.type === "single-delete" && (
-                    <label className="flex items-center gap-2 mt-3 mb-1 px-1 cursor-pointer select-none">
-                        <input
-                            type="checkbox"
-                            checked={hardDelete}
-                            onChange={(e) => setHardDelete(e.target.checked)}
-                            className="w-4 h-4 rounded border-red-300 text-red-600 focus:ring-red-500 accent-red-600"
-                        />
-                        <span className="text-xs text-red-600 font-medium">Hard delete (permanent, irreversible)</span>
-                    </label>
+                    <Checkbox checked={hardDelete} onChange={setHardDelete} label="Delete permanently" hint="Removes all data. This can't be undone." />
                 )}
-            </ConfirmModal>
+            </ConfirmDialog>
 
-            {/* Suspend Confirmation */}
-            <ConfirmModal
+            {/* Suspend */}
+            <ConfirmDialog
                 open={confirmAction?.type === "suspend"}
-                title="Suspend User(s)"
-                message={`This will suspend ${confirmAction?.type === "suspend" ? confirmAction.payload.ids.length : 0} user(s). They will lose access until reactivated.`}
+                title={`Suspend ${confirmAction?.type === "suspend" ? confirmAction.payload.ids.length : 0} user(s)?`}
+                description="They will lose access until reactivated."
                 confirmLabel="Suspend"
-                confirmStyle="bg-amber-600 hover:bg-amber-700"
+                tone="warning"
                 onConfirm={executeConfirmedAction}
                 onCancel={() => setConfirmAction(null)}
                 isPending={bulkActionMutation.isPending}
             />
 
-            {/* Promote Role Confirmation */}
-            <ConfirmModal
+            {/* Promote role */}
+            <ConfirmDialog
                 open={confirmAction?.type === "promote"}
-                title="Change Role"
-                message={`You are about to change this user's role to "${confirmAction?.type === "promote" ? confirmAction.payload.role.replace("_", " ") : ""}". This will update their permissions immediately.`}
-                confirmLabel="Change Role"
-                confirmStyle="bg-indigo-600 hover:bg-indigo-700"
+                title="Change role?"
+                description={`This user's role becomes "${confirmAction?.type === "promote" ? (ROLE_LABELS[confirmAction.payload.role] ?? confirmAction.payload.role) : ""}". Their permissions change immediately.`}
+                confirmLabel="Change role"
                 onConfirm={executeConfirmedAction}
-                onCancel={() => { setConfirmAction(null); setPromotingUser(null); }}
+                onCancel={() => {
+                    setConfirmAction(null);
+                    setPromotingUser(null);
+                }}
                 isPending={roleMutation.isPending}
             />
 
             {/* Creator / Business access switch */}
-            {confirmAction?.type === "access" && (() => {
-                const { kind, enabled, name } = confirmAction.payload;
-                const copy = ACCESS_COPY[kind];
-                return (
-                    <ConfirmModal
-                        open
-                        title={`Turn ${enabled ? "on" : "off"} ${copy.label.toLowerCase()} access`}
-                        message={enabled ? copy.on(name) : copy.off(name)}
-                        confirmLabel={enabled ? "Turn on" : "Turn off"}
-                        confirmStyle={enabled ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"}
-                        theme={enabled ? "info" : "warning"}
-                        onConfirm={executeConfirmedAction}
-                        onCancel={() => { setConfirmAction(null); setAccessBusinessName(""); }}
-                        isPending={accessMutation.isPending}
-                    >
-                        {kind === "business" && enabled && (
-                            <div className="mt-4 text-left">
-                                <label htmlFor="access-business-name" className="block text-sm font-medium text-neutral-700 mb-1">
-                                    Business name <span className="text-neutral-400 font-normal">(optional)</span>
-                                </label>
-                                <input
-                                    id="access-business-name"
-                                    type="text"
-                                    maxLength={150}
-                                    value={accessBusinessName}
-                                    onChange={(e) => setAccessBusinessName(e.target.value)}
-                                    placeholder={`${name.split(" ")[0] || "Their"}'s business`}
-                                    className="w-full px-3 py-2 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-                                />
-                                <p className="mt-1 text-xs text-neutral-500">They can change it in the Partner Portal.</p>
-                            </div>
-                        )}
-                    </ConfirmModal>
-                );
-            })()}
+            {confirmAction?.type === "access" &&
+                (() => {
+                    const { kind, enabled, name } = confirmAction.payload;
+                    const copy = ACCESS_COPY[kind];
+                    return (
+                        <ConfirmDialog
+                            open
+                            title={`Turn ${enabled ? "on" : "off"} ${copy.label.toLowerCase()} access?`}
+                            description={enabled ? copy.on(name) : copy.off(name)}
+                            confirmLabel={enabled ? "Turn on" : "Turn off"}
+                            tone={enabled ? "primary" : "warning"}
+                            onConfirm={executeConfirmedAction}
+                            onCancel={() => {
+                                setConfirmAction(null);
+                                setAccessBusinessName("");
+                            }}
+                            isPending={accessMutation.isPending}
+                        >
+                            {kind === "business" && enabled && (
+                                <Field label={<>Business name <span className="font-normal text-ink-faint">(optional)</span></>} hint="They can change it in the Partner Portal.">
+                                    <TextInput
+                                        type="text"
+                                        maxLength={150}
+                                        value={accessBusinessName}
+                                        onChange={(e) => setAccessBusinessName(e.target.value)}
+                                        placeholder={`${name.split(" ")[0] || "Their"}'s business`}
+                                    />
+                                </Field>
+                            )}
+                        </ConfirmDialog>
+                    );
+                })()}
 
-            {/* Loading overlay for mutations */}
-            {isBusy && !confirmAction && (
-                <div className="fixed inset-0 z-40 bg-white/60 flex items-center justify-center">
-                    <RefreshCw className="w-6 h-6 text-indigo-600 animate-spin" />
-                </div>
-            )}
         </div>
     );
 }
-
