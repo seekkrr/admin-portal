@@ -233,7 +233,7 @@ export function ExperienceContentTab({
                 />
             </Panel>
 
-            <Panel title="Options" icon={Layers} description="Different versions people can book (e.g. Hatha, Vinyasa). Slots belong to one option.">
+            <Panel title="Options" icon={Layers} description="Different versions people can book (e.g. Hatha, Vinyasa). Slots belong to one option. Prices are on the Pricing tab.">
                 <RepeatableList
                     items={form.options}
                     onChange={(v) => set("options", v)}
@@ -245,7 +245,6 @@ export function ExperienceContentTab({
                     fields={[
                         { key: "name", label: "Name", maxLength: 80, required: true, wide: true },
                         { key: "duration_minutes", label: "Duration (minutes)", kind: "number" },
-                        { key: "price", label: "Price per person (₹)", kind: "number" },
                         { key: "description", label: "Description", kind: "textarea", maxLength: 500 },
                     ]}
                 />

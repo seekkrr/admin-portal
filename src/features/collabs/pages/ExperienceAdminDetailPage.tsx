@@ -12,17 +12,19 @@ import { Notice } from "@/components/detail/DetailStates";
 import { useAdminAccess } from "@/components/detail/useAdminAccess";
 import { useDetailTab } from "@/components/detail/useDetailTab";
 import { calendarDate, count, rupees } from "@/components/detail/detailFormat";
+import { gstTag } from "@/features/experience-payments/money";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { experienceDetailApi } from "@/services/admin-detail.service";
 import type { ExperienceDetail } from "@/types/admin-detail";
 import { businessesService } from "../services/businesses.service";
 import { featuresOf, partnerPortalUrl } from "../utils";
 import { ExperienceContentTab } from "../components/experience-detail/ExperienceContentTab";
+import { ExperiencePricingTab } from "../components/experience-detail/ExperiencePricingTab";
 import { ExperienceSlotsTab } from "../components/experience-detail/ExperienceSlotsTab";
 import { ExperienceBookingsTab } from "../components/experience-detail/ExperienceBookingsTab";
 import { ExperienceStatusTab } from "../components/experience-detail/ExperienceStatusTab";
 
-const TABS = ["content", "slots", "bookings", "status", "history"] as const;
+const TABS = ["content", "pricing", "slots", "bookings", "status", "history"] as const;
 type Tab = (typeof TABS)[number];
 
 /** One experience, edited with the business's own routes (admins pass the role check). */
@@ -56,6 +58,8 @@ export function ExperienceAdminDetailPage() {
         queryClient.invalidateQueries({ queryKey: key });
         queryClient.invalidateQueries({ queryKey: ["admin-experiences"] });
         queryClient.invalidateQueries({ queryKey: ["admin-audit", "experience", exp.id] });
+        // Slot prices are computed from the experience / option prices.
+        queryClient.invalidateQueries({ queryKey: ["experience-slots", exp.id] });
     };
     const experiencesOff = business.data ? !featuresOf(business.data).experiences : false;
     const businessName = exp.business?.name ?? business.data?.name ?? "Business";
@@ -89,6 +93,7 @@ export function ExperienceAdminDetailPage() {
                                     </Tag>
                                 )}
                                 <Tag>From {rupees(exp.price_from)}</Tag>
+                                {exp.gst?.enabled && <Tag>{gstTag(exp.gst)}</Tag>}
                                 <Tag>Next: {calendarDate(exp.next_date)}</Tag>
                                 <Tag>{count(exp.stats?.bookings)} bookings</Tag>
                             </span>
@@ -118,6 +123,7 @@ export function ExperienceAdminDetailPage() {
                 onChange={setTab}
                 tabs={[
                     { value: "content", label: "Content" },
+                    { value: "pricing", label: "Pricing" },
                     { value: "slots", label: "Slots" },
                     { value: "bookings", label: "Bookings" },
                     { value: "status", label: "Status" },
@@ -127,6 +133,7 @@ export function ExperienceAdminDetailPage() {
 
             <div role="tabpanel" id={`experience-panel-${tab}`} aria-labelledby={`experience-tab-${tab}`}>
                 {tab === "content" && <ExperienceContentTab experience={exp} canEdit={isAdmin} onSaved={saved} />}
+                {tab === "pricing" && <ExperiencePricingTab experience={exp} canEdit={isAdmin} onSaved={saved} />}
                 {tab === "slots" && <ExperienceSlotsTab experience={exp} canEdit={isAdmin} />}
                 {tab === "bookings" && <ExperienceBookingsTab experience={exp} canEdit={isAdmin} />}
                 {tab === "status" && <ExperienceStatusTab experience={exp} canEdit={isAdmin} onChanged={saved} />}

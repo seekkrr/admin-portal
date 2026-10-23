@@ -21,11 +21,13 @@ import { BusinessCollabsTab } from "../components/business-detail/BusinessCollab
 import { BusinessExperiencesTab } from "../components/business-detail/BusinessExperiencesTab";
 import { BusinessOffersTab } from "../components/business-detail/BusinessOffersTab";
 import { BusinessBillingTab } from "../components/business-detail/BusinessBillingTab";
+import { BusinessEarningsTab } from "../components/business-detail/BusinessEarningsTab";
+import { Notice } from "@/components/detail/DetailStates";
 
-const TABS = ["overview", "profile", "places", "team", "collabs", "experiences", "offers", "billing", "history"] as const;
+const TABS = ["overview", "profile", "places", "team", "collabs", "experiences", "earnings", "offers", "billing", "history"] as const;
 type Tab = (typeof TABS)[number];
 
-/** One business: switches, profile, places, team, collabs, experiences, offers, plan and history. */
+/** One business: switches, profile, places, team, collabs, experiences, earnings, offers, plan and history. */
 export function BusinessDetailPage() {
     const { businessId = "" } = useParams<{ businessId: string }>();
     const { isStaff, isAdmin } = useCollabAccess();
@@ -99,6 +101,8 @@ export function BusinessDetailPage() {
                     { value: "team", label: "Team", count: business.members.length },
                     { value: "collabs", label: "Collabs" },
                     { value: "experiences", label: "Experiences" },
+                    // Money: admins only (moderators hold no financial permissions).
+                    ...(isAdmin ? [{ value: "earnings" as const, label: "Earnings & payouts" }] : []),
                     { value: "offers", label: "Check-in offers" },
                     { value: "billing", label: "Billing" },
                     { value: "history", label: "Change history" },
@@ -112,6 +116,12 @@ export function BusinessDetailPage() {
                 {tab === "team" && <BusinessTeamTab business={business} canEdit={isAdmin} />}
                 {tab === "collabs" && <BusinessCollabsTab business={business} canEdit={isAdmin} />}
                 {tab === "experiences" && <BusinessExperiencesTab business={business} canEdit={isAdmin} />}
+                {tab === "earnings" &&
+                    (isAdmin ? (
+                        <BusinessEarningsTab business={business} canEdit={isAdmin} />
+                    ) : (
+                        <Notice tone="warn" title="Only admins can see earnings and payouts" />
+                    ))}
                 {tab === "offers" && <BusinessOffersTab business={business} canEdit={isAdmin} />}
                 {tab === "billing" && <BusinessBillingTab business={business} canEdit={isAdmin} />}
                 {tab === "history" && <ChangeHistoryPanel entityType="business" entityId={business.id} />}

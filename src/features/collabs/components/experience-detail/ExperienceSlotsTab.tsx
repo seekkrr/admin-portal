@@ -44,7 +44,6 @@ interface BulkForm {
     weekdays: number[];
     times: { start: string; end: string }[];
     capacity: string;
-    price: string;
 }
 
 function blankBulk(firstOption: string): BulkForm {
@@ -59,11 +58,23 @@ function blankBulk(firstOption: string): BulkForm {
         weekdays: [5, 6],
         times: [{ start: "09:00", end: "11:00" }],
         capacity: "10",
-        price: "",
     };
 }
 
-/** Add slots in bulk, edit capacity / price / time, cancel. */
+/** A price shown read-only: prices are set on the Pricing tab (slot = option price ?? price per person ?? free). */
+function PriceReadOnly({ label = "Price per person", price }: { label?: string; price: number | null | undefined }) {
+    return (
+        <div>
+            <p className="mb-1.5 text-sm font-medium text-ink">{label}</p>
+            <p className="flex h-10 items-center rounded-control border border-line bg-surface-muted px-3 text-sm tabular-nums text-ink">
+                {price === null || price === undefined ? "Free (no price set)" : rupees(price)}
+            </p>
+            <p className="mt-1 text-xs text-ink-faint">Set on the Pricing tab.</p>
+        </div>
+    );
+}
+
+/** Add slots in bulk, edit capacity / time, cancel. Prices come from the Pricing tab. */
 export function ExperienceSlotsTab({ experience, canEdit }: { experience: ExperienceDetail; canEdit: boolean }) {
     const queryClient = useQueryClient();
     const businessId = experience.business_id;
@@ -73,7 +84,10 @@ export function ExperienceSlotsTab({ experience, canEdit }: { experience: Experi
     const [showCancelled, setShowCancelled] = useState(false);
     const [bulk, setBulk] = useState<BulkForm | null>(null);
     const [editing, setEditing] = useState<ExperienceSlot | null>(null);
-    const [edit, setEdit] = useState({ capacity: "", price: "", start: "", end: "" });
+    const [edit, setEdit] = useState({ capacity: "", start: "", end: "" });
+    /** What a slot of this option costs per person (computed by the server the same way). */
+    const priceFor = (optionId: string | null | undefined): number | null =>
+        options.find((o) => o.id === optionId)?.price ?? experience.price_per_person ?? null;
     const [cancelling, setCancelling] = useState<ExperienceSlot | null>(null);
 
     const key = ["experience-slots", experience.id, from, to, showCancelled] as const;
@@ -102,7 +116,6 @@ export function ExperienceSlotsTab({ experience, canEdit }: { experience: Experi
         if (!validTimes.length) bulkProblems.push("Add a time that ends after it starts.");
         if (validTimes.length !== bulk.times.length) bulkProblems.push("Every time must end after it starts.");
         if (!Number.isFinite(capacityNum) || capacityNum < 1 || capacityNum > 10000) bulkProblems.push("Capacity is 1 to 10,000.");
-        if (bulk.price.trim() && (!Number.isFinite(Number(bulk.price)) || Number(bulk.price) < 0)) bulkProblems.push("Price must be 0 or more.");
         if (slotCount > MAX_SLOTS) bulkProblems.push(`That's ${slotCount} slots; add at most ${MAX_SLOTS} at a time.`);
     }
 
@@ -113,7 +126,6 @@ export function ExperienceSlotsTab({ experience, canEdit }: { experience: Experi
                 times: validTimes,
                 capacity: capacityNum,
                 ...(bulk.option_id ? { option_id: bulk.option_id } : {}),
-                ...(bulk.price.trim() ? { price: Number(bulk.price) } : {}),
                 ...(bulk.mode === "dates" ? { dates: bulk.dates } : { from: bulk.from, to: bulk.to, weekdays: bulk.weekdays }),
             };
             return experienceDetailApi.addSlots(businessId, experience.id, payload);
@@ -133,11 +145,6 @@ export function ExperienceSlotsTab({ experience, canEdit }: { experience: Experi
         const cap = Number.parseInt(edit.capacity, 10);
         if (!Number.isFinite(cap) || cap < 1) return null;
         if (cap !== editing.capacity) patch.capacity = cap;
-        if (edit.price.trim()) {
-            const p = Number(edit.price);
-            if (!Number.isFinite(p) || p < 0) return null;
-            if (p !== editing.price) patch.price = p;
-        }
         if (edit.start !== editing.start_time || edit.end !== editing.end_time) {
             if (!edit.start || !edit.end || edit.end <= edit.start) return null;
             patch.start_time = edit.start;
@@ -201,7 +208,7 @@ export function ExperienceSlotsTab({ experience, canEdit }: { experience: Experi
             <Panel
                 title="Slots"
                 icon={Clock}
-                description="Times are India time. Past slots aren't listed."
+                description="Times are India time. Past slots aren't listed. Prices come from the Pricing tab."
                 bodyClassName="p-0"
                 actions={
                     canEdit ? (
@@ -246,7 +253,7 @@ export function ExperienceSlotsTab({ experience, canEdit }: { experience: Experi
                                                   label={`Edit slot on ${s.date} at ${s.start_time}`}
                                                   onClick={() => {
                                                       setEditing(s);
-                                                      setEdit({ capacity: String(s.capacity), price: s.price === null ? "" : String(s.price), start: s.start_time, end: s.end_time });
+                                                      setEdit({ capacity: String(s.capacity), start: s.start_time, end: s.end_time });
                                                   }}
                                               />
                                               <IconButton
@@ -395,9 +402,7 @@ export function ExperienceSlotsTab({ experience, canEdit }: { experience: Experi
                             <Field label="Spots per slot" required>
                                 <TextInput type="number" min={1} max={10000} inputMode="numeric" value={bulk.capacity} onChange={(e) => setB({ capacity: e.target.value })} />
                             </Field>
-                            <Field label="Price per person (₹)" hint="Empty = the option's price.">
-                                <TextInput type="number" min={0} inputMode="decimal" value={bulk.price} onChange={(e) => setB({ price: e.target.value })} />
-                            </Field>
+                            <PriceReadOnly price={priceFor(bulk.option_id || null)} />
                         </div>
                         {bulkProblems.length > 0 && (bulk.dates.length > 0 || bulk.mode === "repeat") && (
                             <Notice tone="warn">
@@ -438,9 +443,7 @@ export function ExperienceSlotsTab({ experience, canEdit }: { experience: Experi
                             <Field label="Spots" hint={editing.booked ? `At least ${editing.booked} (already booked).` : undefined}>
                                 <TextInput type="number" min={Math.max(1, editing.booked)} inputMode="numeric" value={edit.capacity} onChange={(e) => setEdit({ ...edit, capacity: e.target.value })} />
                             </Field>
-                            <Field label="Price (₹)">
-                                <TextInput type="number" min={0} inputMode="decimal" value={edit.price} onChange={(e) => setEdit({ ...edit, price: e.target.value })} />
-                            </Field>
+                            <PriceReadOnly label="Price" price={editing.price ?? priceFor(editing.option_id)} />
                             <Field label="Starts" hint={editing.booked ? "Booked slots keep their time." : undefined}>
                                 <TextInput type="time" value={edit.start} disabled={editing.booked > 0} onChange={(e) => setEdit({ ...edit, start: e.target.value })} />
                             </Field>
@@ -458,7 +461,7 @@ export function ExperienceSlotsTab({ experience, canEdit }: { experience: Experi
                 description={
                     cancelling
                         ? `${calendarDate(cancelling.date)} at ${hhmmLabel(cancelling.start_time)}.${
-                              cancelling.booked ? ` ${cancelling.booked} booked spot${cancelling.booked === 1 ? " is" : "s are"} cancelled and the guests are told.` : " Nobody has booked it."
+                              cancelling.booked ? ` ${cancelling.booked} booked spot${cancelling.booked === 1 ? " is" : "s are"} cancelled and the guests are told. Paid bookings are refunded in full.` : " Nobody has booked it."
                           }`
                         : undefined
                 }
