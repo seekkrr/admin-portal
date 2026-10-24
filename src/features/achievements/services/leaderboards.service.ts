@@ -1,6 +1,27 @@
 import { api } from "@/services/api";
 import { API_ENDPOINTS } from "@/config/api";
-import type { LeaderboardResponse, RecomputeResponse } from "@/types";
+import type { LeaderboardEntry, LeaderboardResponse, RecomputeResponse } from "@/types";
+
+/** The three competition boards (GET /leaderboards/competition/<kind>). */
+export type CompetitionKind = "explorer" | "creator" | "crowd-favorite";
+
+/** A competition row: a leaderboard entry, plus the place for "crowd favourite". */
+export interface CompetitionEntry extends Omit<LeaderboardEntry, "type"> {
+    type: string | null;
+    marker_id?: string | null;
+    marker_name?: string | null;
+    marker_image?: string | null;
+}
+
+export interface CompetitionResponse extends Omit<LeaderboardResponse, "entries"> {
+    entries: CompetitionEntry[];
+}
+
+const COMPETITION_PATH: Record<CompetitionKind, string> = {
+    explorer: API_ENDPOINTS.COMPETITIONS.EXPLORER,
+    creator: API_ENDPOINTS.COMPETITIONS.CREATOR,
+    "crowd-favorite": API_ENDPOINTS.COMPETITIONS.CROWD_FAVORITE,
+};
 
 function boardQuery(page: number, page_size: number): string {
     const qs = new URLSearchParams();
@@ -35,6 +56,17 @@ export const leaderboardsService = {
         const { data } = await api.post<RecomputeResponse>(
             API_ENDPOINTS.LEADERBOARDS.REGION_RECOMPUTE(regionId),
         );
+        return data;
+    },
+
+    competition: async (kind: CompetitionKind, page = 1, page_size = 20): Promise<CompetitionResponse> => {
+        const { data } = await api.get<CompetitionResponse>(`${COMPETITION_PATH[kind]}?${boardQuery(page, page_size)}`);
+        return data;
+    },
+
+    /** Queues a rebuild of the competition boards (admin, super_admin). */
+    recomputeCompetitions: async (): Promise<{ success?: boolean; message?: string }> => {
+        const { data } = await api.post<{ success?: boolean; message?: string }>(API_ENDPOINTS.COMPETITIONS.RECOMPUTE);
         return data;
     },
 

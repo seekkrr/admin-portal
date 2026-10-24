@@ -34,31 +34,8 @@ export function formatPaise(
     return formatCurrency(minor / 100, currency);
 }
 
-/** Format an ISO timestamp as a readable date + time (en-IN). */
-export function formatDateTime(iso: string | null | undefined): string {
-    if (!iso) return "—";
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "—";
-    return d.toLocaleString("en-IN", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-    });
-}
-
-/** Format an ISO timestamp as a date only (en-IN). */
-export function formatDate(iso: string | null | undefined): string {
-    if (!iso) return "—";
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "—";
-    return d.toLocaleDateString("en-IN", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-}
+// Dates live in one place (utils/date.ts); re-exported here for older imports.
+export { formatDate, formatDateTime, formatTime, formatRelative } from "./date";
 
 /** Truncate a long id/reference to a copy-friendly short form. */
 export function shortId(id: string | null | undefined, lead = 6, tail = 4): string {

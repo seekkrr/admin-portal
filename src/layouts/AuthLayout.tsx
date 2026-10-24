@@ -2,7 +2,7 @@ import { Outlet } from "react-router-dom";
 
 export function AuthLayout() {
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-50 p-4 font-sans">
+        <div className="min-h-screen flex flex-col items-center justify-center bg-canvas p-4 font-sans">
             {/* Logo Section */}
             <div className="mb-8 text-center">
                 <img

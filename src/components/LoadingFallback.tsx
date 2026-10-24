@@ -16,12 +16,12 @@ export function LoadingFallback({
             <div className="flex flex-col items-center gap-5">
                 {/* Concentric orbital rings */}
                 <div className="relative w-12 h-12">
-                    <span className="absolute inset-0 rounded-full border-[3px] border-neutral-200/70" />
-                    <span className="absolute inset-0 rounded-full border-[3px] border-transparent border-t-indigo-600 border-r-indigo-600 animate-spin-slow" />
-                    <span className="absolute inset-1.5 rounded-full border-[3px] border-transparent border-b-indigo-400/70 animate-spin-reverse" />
-                    <span className="absolute inset-0 m-auto w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse" />
+                    <span className="absolute inset-0 rounded-full border-[3px] border-brand-100" />
+                    <span className="absolute inset-0 rounded-full border-[3px] border-transparent border-t-brand-900 border-r-brand-900 animate-spin-slow" />
+                    <span className="absolute inset-1.5 rounded-full border-[3px] border-transparent border-b-accent-500/70 animate-spin-reverse" />
+                    <span className="absolute inset-0 m-auto w-1.5 h-1.5 rounded-full bg-accent-500 animate-pulse" />
                 </div>
-                <p className="text-sm font-medium text-neutral-500 tracking-wide animate-pulse">
+                <p className="text-sm font-medium text-ink-muted tracking-wide animate-pulse">
                     {message}
                 </p>
             </div>

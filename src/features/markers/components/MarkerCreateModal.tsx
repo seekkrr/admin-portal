@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from "react";
+import { useRef, useState, type ChangeEvent, type RefObject } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { markersService } from "../services/markers.service";
 import { GeoMap } from "@/components/maps/GeoMap";
@@ -10,6 +10,10 @@ import { mediaService } from "@/services/media.service";
 import { RegionPicker } from "@/features/regions/components/RegionPicker";
 import { type CreateMarkerPayload } from "@/types";
 import { categoryService } from "@/services/category.service";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Checkbox, Field, TextArea, TextInput } from "@/components/ui/Field";
+import { cx } from "@/utils/cx";
 
 interface CreateForm {
     title: string;
@@ -127,13 +131,13 @@ export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
         mutationFn: (payload: CreateMarkerPayload) => markersService.create(payload),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["admin-markers"] });
-            toast.success("Marker created");
+            toast.success("Place created");
             onClose();
             setForm(EMPTY_FORM);
         },
         onError: (e: Error) => {
             // Surface the backend message (e.g. "A marker already exists within 20m of this location").
-            toast.error(e.message || "Failed to create marker");
+            toast.error(e.message || "Failed to create place");
         },
     });
 
@@ -217,352 +221,231 @@ export function MarkerCreateModal({ open, onClose }: MarkerCreateModalProps) {
         createMutation.mutate(payload);
     };
 
-    if (!open) return null;
+    const toggleCategory = (name: string, on: boolean) => {
+        if (on) {
+            if (form.categories.length >= 3) {
+                toast.error("Select up to 3 categories");
+                return;
+            }
+            setForm({ ...form, categories: [...form.categories, name] });
+        } else {
+            setForm({ ...form, categories: form.categories.filter((cat) => cat !== name) });
+        }
+    };
+
+    const subOptions = dbCategories
+        .filter((c) => form.categories.includes(c.name))
+        .flatMap((c) => c.sub_categories)
+        .filter((sub, index, self) => self.indexOf(sub) === index);
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-xl w-full mx-4 animate-slide-up max-w-2xl max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between p-6 border-b border-neutral-200 sticky top-0 bg-white z-10">
-                    <h3 className="text-lg font-bold text-neutral-900 flex items-center gap-2">
-                        <MapPin className="w-5 h-5 text-orange-600" />
-                        New Marker
-                    </h3>
-                    <button
-                        onClick={handleClose}
-                        className="text-neutral-400 hover:text-neutral-700 p-1 rounded-md"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
+        <Modal
+            open={open}
+            onClose={handleClose}
+            dismissible={!createMutation.isPending}
+            title="New place"
+            icon={MapPin}
+            size="2xl"
+            footer={
+                <>
+                    <Button variant="secondary" onClick={handleClose} disabled={createMutation.isPending}>
+                        Cancel
+                    </Button>
+                    <Button variant="primary" onClick={handleCreate} loading={createMutation.isPending}>
+                        Create place
+                    </Button>
+                </>
+            }
+        >
+            <Field label="Title" required>
+                <TextInput type="text" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            </Field>
+
+            <Field label="Categories" hint="Up to 3." htmlFor="new-place-categories">
+                <div id="new-place-categories" className="flex max-h-36 flex-wrap gap-x-4 gap-y-2 overflow-y-auto rounded-control border border-line-strong p-3">
+                    {dbCategories.length === 0 && <span className="text-sm text-ink-faint">No categories yet.</span>}
+                    {dbCategories.map((c) => (
+                        <Checkbox key={c.id} checked={form.categories.includes(c.name)} onChange={(on) => toggleCategory(c.name, on)} label={c.name} />
+                    ))}
                 </div>
-                <div className="p-6 space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-neutral-700 mb-1">Title *</label>
-                        <input
-                            type="text"
-                            className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                            value={form.title}
-                            onChange={(e) => setForm({ ...form, title: e.target.value })}
-                        />
+            </Field>
+
+            {form.categories.length > 0 && subOptions.length > 0 && (
+                <Field label="Subcategories" htmlFor="new-place-subcategories">
+                    <div id="new-place-subcategories" className="flex max-h-36 flex-wrap gap-x-4 gap-y-2 overflow-y-auto rounded-control border border-line-strong p-3">
+                        {subOptions.map((sub) => (
+                            <Checkbox
+                                key={sub}
+                                checked={form.subCategories.includes(sub)}
+                                onChange={(on) =>
+                                    setForm({
+                                        ...form,
+                                        subCategories: on ? [...form.subCategories, sub] : form.subCategories.filter((x) => x !== sub),
+                                    })
+                                }
+                                label={sub}
+                            />
+                        ))}
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-neutral-700 mb-1">Categories</label>
-                            <div className="flex flex-wrap gap-2 p-2 border border-neutral-200 rounded-xl max-h-32 overflow-y-auto">
-                                {dbCategories.map((c) => (
-                                    <label key={c.id} className="flex items-center gap-2 text-sm bg-neutral-50 px-2 py-1 rounded-md cursor-pointer hover:bg-neutral-100">
-                                        <input
-                                            type="checkbox"
-                                            className="rounded border-neutral-300 text-orange-500 focus:ring-orange-500"
-                                            checked={form.categories.includes(c.name)}
-                                            onChange={(e) => {
-                                                if (e.target.checked) {
-                                                    if (form.categories.length >= 3) {
-                                                        toast.error("Select up to 3 categories");
-                                                        return;
-                                                    }
-                                                    setForm({ ...form, categories: [...form.categories, c.name] });
-                                                } else {
-                                                    setForm({ ...form, categories: form.categories.filter((cat) => cat !== c.name) });
-                                                }
-                                            }}
-                                        />
-                                        {c.name}
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
-                        {form.categories.length > 0 && (
-                        <div className="col-span-1 md:col-span-2">
-                            <label className="block text-sm font-medium text-neutral-700 mb-1">Subcategories</label>
-                            <div className="flex flex-wrap gap-2 p-2 border border-neutral-200 rounded-xl max-h-32 overflow-y-auto">
-                                {dbCategories
-                                    .filter(c => form.categories.includes(c.name))
-                                    .flatMap(c => c.sub_categories)
-                                    .filter((sub, index, self) => self.indexOf(sub) === index)
-                                    .map((sub) => (
-                                    <label key={sub} className="flex items-center gap-2 text-sm bg-neutral-50 px-2 py-1 rounded-md cursor-pointer hover:bg-neutral-100">
-                                        <input
-                                            type="checkbox"
-                                            className="rounded border-neutral-300 text-orange-500 focus:ring-orange-500"
-                                            checked={form.subCategories.includes(sub)}
-                                            onChange={(e) => {
-                                                if (e.target.checked) {
-                                                    setForm({ ...form, subCategories: [...form.subCategories, sub] });
-                                                } else {
-                                                    setForm({ ...form, subCategories: form.subCategories.filter((s) => s !== sub) });
-                                                }
-                                            }}
-                                        />
-                                        {sub}
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
+                </Field>
+            )}
+
+            <Field label="Tags" hint="Separate with commas.">
+                <TextInput type="text" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} />
+            </Field>
+
+            <Field label="Address">
+                <TextInput type="text" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+            </Field>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Field label="Website">
+                    <TextInput type="url" placeholder="https://…" value={form.websiteUrl} onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })} />
+                </Field>
+                <Field label="Contact">
+                    <TextInput type="text" placeholder="Phone or email" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} />
+                </Field>
+            </div>
+
+            <Field label="Map link">
+                <TextInput type="url" placeholder="https://maps…" value={form.mapUrl} onChange={(e) => setForm({ ...form, mapUrl: e.target.value })} />
+            </Field>
+
+            <div className="grid grid-cols-2 gap-4">
+                <Field label="Min expense (₹)">
+                    <TextInput type="number" inputMode="numeric" value={form.minExpense} onChange={(e) => setForm({ ...form, minExpense: e.target.value })} />
+                </Field>
+                <Field label="Max expense (₹)">
+                    <TextInput type="number" inputMode="numeric" value={form.maxExpense} onChange={(e) => setForm({ ...form, maxExpense: e.target.value })} />
+                </Field>
+                <Field label="Opens at">
+                    <TextInput type="time" value={form.opensAt} onChange={(e) => setForm({ ...form, opensAt: e.target.value })} />
+                </Field>
+                <Field label="Closes at">
+                    <TextInput type="time" value={form.closesAt} onChange={(e) => setForm({ ...form, closesAt: e.target.value })} />
+                </Field>
+            </div>
+
+            <Field label="Region" htmlFor="new-place-region">
+                <div id="new-place-region">
+                    <RegionPicker value={form.regionId} onChange={(id) => setForm({ ...form, regionId: id })} />
+                </div>
+            </Field>
+
+            <Field label="Photos" htmlFor="new-place-media">
+                <div id="new-place-media" className="flex flex-wrap gap-3">
+                    {form.media.map((url) => (
+                        <ImageTile key={url} src={url} alt="Place photo" onRemove={() => removeMedia(url)} />
+                    ))}
+                    <UploadTile inputRef={mediaFileInputRef} uploading={uploadingMedia} multiple onChange={handleMediaUpload} />
+                </div>
+            </Field>
+
+            <fieldset className="space-y-4 rounded-card border border-line p-4">
+                <legend className="flex items-center gap-2 px-1 text-sm font-semibold text-ink">
+                    <ListChecks className="h-4 w-4 text-accent-600" aria-hidden />
+                    Things to do
+                </legend>
+                <Field label="Things to do (text)">
+                    <TextArea
+                        rows={3}
+                        placeholder="Suggested activities at this place…"
+                        value={form.thingsToDoText}
+                        onChange={(e) => setForm({ ...form, thingsToDoText: e.target.value })}
+                    />
+                </Field>
+                <Field label="Things to do image" htmlFor="new-place-ttd">
+                    <div id="new-place-ttd" className="flex flex-wrap gap-3">
+                        {form.thingsToDoImageUrl ? (
+                            <ImageTile src={form.thingsToDoImageUrl} alt="Things to do" onRemove={() => setForm({ ...form, thingsToDoImageUrl: "" })} large />
+                        ) : (
+                            <UploadTile inputRef={ttdFileInputRef} uploading={uploadingTtd} onChange={handleTtdImageUpload} large />
                         )}
-                        <div>
-                            <label className="block text-sm font-medium text-neutral-700 mb-1">Tags (comma-separated)</label>
-                            <input
-                                type="text"
-                                className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                value={form.tags}
-                                onChange={(e) => setForm({ ...form, tags: e.target.value })}
-                            />
-                        </div>
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-neutral-700 mb-1">Address</label>
-                        <input
-                            type="text"
-                            className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                            value={form.address}
-                            onChange={(e) => setForm({ ...form, address: e.target.value })}
-                        />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-neutral-700 mb-1">Website URL</label>
-                            <input
-                                type="text"
-                                placeholder="https://..."
-                                className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                value={form.websiteUrl}
-                                onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-neutral-700 mb-1">Contact</label>
-                            <input
-                                type="text"
-                                placeholder="Phone or email"
-                                className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                value={form.contact}
-                                onChange={(e) => setForm({ ...form, contact: e.target.value })}
-                            />
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-neutral-700 mb-1">Map URL</label>
-                        <input
-                            type="text"
-                            placeholder="https://maps..."
-                            className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                            value={form.mapUrl}
-                            onChange={(e) => setForm({ ...form, mapUrl: e.target.value })}
-                        />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-neutral-700 mb-1">Min expense (₹)</label>
-                            <input
-                                type="number"
-                                inputMode="numeric"
-                                className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                value={form.minExpense}
-                                onChange={(e) => setForm({ ...form, minExpense: e.target.value })}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-neutral-700 mb-1">Max expense (₹)</label>
-                            <input
-                                type="number"
-                                inputMode="numeric"
-                                className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                value={form.maxExpense}
-                                onChange={(e) => setForm({ ...form, maxExpense: e.target.value })}
-                            />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-neutral-700 mb-1">Opens at</label>
-                            <input
-                                type="time"
-                                className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                value={form.opensAt}
-                                onChange={(e) => setForm({ ...form, opensAt: e.target.value })}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-neutral-700 mb-1">Closes at</label>
-                            <input
-                                type="time"
-                                className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                value={form.closesAt}
-                                onChange={(e) => setForm({ ...form, closesAt: e.target.value })}
-                            />
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-neutral-700 mb-1">Region</label>
-                        <RegionPicker
-                            value={form.regionId}
-                            onChange={(id) => setForm({ ...form, regionId: id })}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-neutral-700 mb-1">Media images</label>
-                        <div className="flex flex-wrap gap-3">
-                            {form.media.map((url) => (
-                                <div
-                                    key={url}
-                                    className="group relative h-20 w-20 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50"
-                                >
-                                    <img src={url} alt="Marker media" className="h-full w-full object-cover" />
-                                    <button
-                                        type="button"
-                                        onClick={() => removeMedia(url)}
-                                        className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition-opacity hover:bg-black/80 group-hover:opacity-100"
-                                        title="Remove"
-                                    >
-                                        <X className="h-3.5 w-3.5" />
-                                    </button>
-                                </div>
-                            ))}
-                            <label
-                                className={`flex h-20 w-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-neutral-300 text-neutral-400 transition-colors hover:border-orange-400 hover:bg-orange-50 hover:text-orange-600 ${
-                                    uploadingMedia ? "pointer-events-none opacity-60" : ""
-                                }`}
-                            >
-                                {uploadingMedia ? (
-                                    <Loader2 className="h-5 w-5 animate-spin" />
-                                ) : (
-                                    <>
-                                        <Upload className="h-5 w-5" />
-                                        <span className="text-[10px] font-medium">Upload</span>
-                                    </>
-                                )}
-                                <input
-                                    ref={mediaFileInputRef}
-                                    type="file"
-                                    accept="image/*"
-                                    multiple
-                                    className="hidden"
-                                    onChange={handleMediaUpload}
-                                    disabled={uploadingMedia}
-                                />
-                            </label>
-                        </div>
-                    </div>
-                    <div className="rounded-xl border border-neutral-200 p-4 space-y-4">
-                        <h4 className="text-sm font-semibold text-neutral-800 flex items-center gap-2">
-                            <ListChecks className="w-4 h-4 text-orange-600" />
-                            Things to Do
-                        </h4>
-                        <div>
-                            <label className="block text-sm font-medium text-neutral-700 mb-1">Things to do (text)</label>
-                            <textarea
-                                rows={3}
-                                placeholder="Suggested activities at this place..."
-                                className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
-                                value={form.thingsToDoText}
-                                onChange={(e) => setForm({ ...form, thingsToDoText: e.target.value })}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-neutral-700 mb-1">Things to do image</label>
-                            <div className="flex flex-wrap gap-3">
-                                {form.thingsToDoImageUrl ? (
-                                    <div className="group relative h-24 w-24 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50">
-                                        <img
-                                            src={form.thingsToDoImageUrl}
-                                            alt="Things to do"
-                                            className="h-full w-full object-cover"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setForm({ ...form, thingsToDoImageUrl: "" })}
-                                            className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition-opacity hover:bg-black/80 group-hover:opacity-100"
-                                            title="Remove"
-                                        >
-                                            <X className="h-3.5 w-3.5" />
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <label
-                                        className={`flex h-24 w-24 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-neutral-300 text-neutral-400 transition-colors hover:border-orange-400 hover:bg-orange-50 hover:text-orange-600 ${
-                                            uploadingTtd ? "pointer-events-none opacity-60" : ""
-                                        }`}
-                                    >
-                                        {uploadingTtd ? (
-                                            <Loader2 className="h-5 w-5 animate-spin" />
-                                        ) : (
-                                            <>
-                                                <Upload className="h-5 w-5" />
-                                                <span className="text-[10px] font-medium">Upload</span>
-                                            </>
-                                        )}
-                                        <input
-                                            ref={ttdFileInputRef}
-                                            type="file"
-                                            accept="image/*"
-                                            className="hidden"
-                                            onChange={handleTtdImageUpload}
-                                            disabled={uploadingTtd}
-                                        />
-                                    </label>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-neutral-700 mb-1">Description</label>
-                        <textarea
-                            rows={3}
-                            className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
-                            value={form.description}
-                            onChange={(e) => setForm({ ...form, description: e.target.value })}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-neutral-700 mb-1">Location *</label>
-                        <p className="text-xs text-neutral-500 mb-2">
-                            Search a place, then drag the pin or click the map to fine-tune.
-                        </p>
-                        <div className="mb-3">
-                            <PlaceSearchInput
-                                mode="forward"
-                                searchTypes={MARKER_SEARCH_TYPES}
-                                proximity={INDIA_PROXIMITY}
-                                placeholder="Search a place… e.g. Bir Billing, Gateway of India"
-                                onSelect={handlePlaceSelect}
-                                onError={(msg) => toast.error(msg)}
-                            />
-                        </div>
+                </Field>
+            </fieldset>
+
+            <Field label="Description">
+                <TextArea rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            </Field>
+
+            <Field label="Location" required hint="Search a place, then drag the pin or click the map to fine-tune." htmlFor="new-place-location">
+                <div id="new-place-location" className="space-y-3">
+                    <PlaceSearchInput
+                        mode="forward"
+                        searchTypes={MARKER_SEARCH_TYPES}
+                        proximity={INDIA_PROXIMITY}
+                        placeholder="Search a place… e.g. Bir Billing, Gateway of India"
+                        onSelect={handlePlaceSelect}
+                        onError={(msg) => toast.error(msg)}
+                    />
+                    <div className="overflow-hidden rounded-control border border-line">
                         <GeoMap
                             height="280px"
                             draggable
-                            pinColor="#ea580c"
+                            pinColor="#00a49e"
                             markerPosition={form.coordinates}
                             onPick={(coords) => setForm((f) => ({ ...f, coordinates: coords }))}
                             onMarkerDragEnd={(coords) => setForm((f) => ({ ...f, coordinates: coords }))}
                         />
-                        <p className="mt-2 text-xs text-neutral-500">
-                            {form.coordinates
-                                ? `Selected: ${form.coordinates[0]}, ${form.coordinates[1]} (lon, lat)`
-                                : "Search, click the map, or drag the pin to choose coordinates."}
-                        </p>
                     </div>
+                    <p className="text-xs text-ink-muted">
+                        {form.coordinates
+                            ? `Selected: ${form.coordinates[1]}, ${form.coordinates[0]} (lat, lon)`
+                            : "Search, click the map, or drag the pin to choose the spot."}
+                    </p>
                 </div>
-                <div className="p-6 border-t border-neutral-200 flex justify-end gap-3 sticky bottom-0 bg-white z-10">
-                    <button
-                        onClick={handleClose}
-                        disabled={createMutation.isPending}
-                        className="px-4 py-2.5 text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-xl transition-colors disabled:opacity-50"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        onClick={handleCreate}
-                        disabled={createMutation.isPending}
-                        className="px-4 py-2.5 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"
-                    >
-                        {createMutation.isPending && (
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        )}
-                        Create Marker
-                    </button>
-                </div>
-            </div>
+            </Field>
+        </Modal>
+    );
+}
+
+function ImageTile({ src, alt, onRemove, large }: { src: string; alt: string; onRemove: () => void; large?: boolean }) {
+    return (
+        <div className={cx("group relative overflow-hidden rounded-control border border-line bg-surface-muted", large ? "h-24 w-24" : "h-20 w-20")}>
+            <img src={src} alt={alt} className="h-full w-full object-cover" />
+            <button
+                type="button"
+                onClick={onRemove}
+                aria-label={`Remove ${alt.toLowerCase()}`}
+                className="absolute right-1 top-1 rounded-full bg-brand-950/70 p-1 text-white transition-opacity hover:bg-brand-950 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+            >
+                <X className="h-3.5 w-3.5" aria-hidden />
+            </button>
         </div>
+    );
+}
+
+function UploadTile({
+    inputRef,
+    uploading,
+    multiple,
+    onChange,
+    large,
+}: {
+    inputRef: RefObject<HTMLInputElement>;
+    uploading: boolean;
+    multiple?: boolean;
+    onChange: (e: ChangeEvent<HTMLInputElement>) => void;
+    large?: boolean;
+}) {
+    return (
+        <label
+            className={cx(
+                "flex cursor-pointer flex-col items-center justify-center gap-1 rounded-control border border-dashed border-line-strong text-ink-faint transition-colors hover:border-accent-400 hover:bg-accent-50 hover:text-accent-700 focus-within:ring-2 focus-within:ring-accent-500",
+                large ? "h-24 w-24" : "h-20 w-20",
+                uploading && "pointer-events-none opacity-60"
+            )}
+        >
+            {uploading ? (
+                <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+            ) : (
+                <>
+                    <Upload className="h-5 w-5" aria-hidden />
+                    <span className="text-[11px] font-medium">Upload</span>
+                </>
+            )}
+            <input ref={inputRef} type="file" accept="image/*" multiple={multiple} className="sr-only" onChange={onChange} disabled={uploading} />
+        </label>
     );
 }

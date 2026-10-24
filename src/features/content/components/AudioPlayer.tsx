@@ -30,8 +30,8 @@ export function AudioPlayer({ src, durationS }: AudioPlayerProps) {
 
     if (!src) {
         return (
-            <div className="flex items-center gap-3 rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-500">
-                <VolumeX className="h-5 w-5 text-neutral-400" />
+            <div className="flex items-center gap-3 rounded-control border border-line bg-surface-muted px-4 py-3 text-sm text-ink-muted">
+                <VolumeX className="h-5 w-5 text-ink-faint" />
                 No audio generated
             </div>
         );
@@ -39,8 +39,8 @@ export function AudioPlayer({ src, durationS }: AudioPlayerProps) {
 
     if (errored) {
         return (
-            <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-                <AlertTriangle className="h-5 w-5 text-amber-500" />
+            <div className="flex items-center gap-3 rounded-control border border-warn-line bg-warn-soft px-4 py-3 text-sm text-warn">
+                <AlertTriangle className="h-5 w-5 text-warn" />
                 Audio unavailable
             </div>
         );
@@ -67,7 +67,7 @@ export function AudioPlayer({ src, durationS }: AudioPlayerProps) {
     const progressMax = duration > 0 ? duration : 0;
 
     return (
-        <div className="flex items-center gap-4 rounded-lg border border-orange-200 bg-orange-50/50 px-4 py-3">
+        <div className="flex items-center gap-4 rounded-control border border-accent-200 bg-accent-50 px-4 py-3">
             <audio
                 ref={audioRef}
                 src={src}
@@ -89,7 +89,7 @@ export function AudioPlayer({ src, durationS }: AudioPlayerProps) {
                 type="button"
                 onClick={togglePlay}
                 aria-label={isPlaying ? "Pause" : "Play"}
-                className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-orange-600 text-white transition-colors hover:bg-orange-700"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-900 text-white transition-colors hover:bg-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
             >
                 {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="ml-0.5 h-5 w-5" />}
             </button>
@@ -102,9 +102,9 @@ export function AudioPlayer({ src, durationS }: AudioPlayerProps) {
                     value={current}
                     onChange={onSeek}
                     aria-label="Seek"
-                    className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-orange-200 accent-orange-600"
+                    className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-accent-200 accent-accent-600"
                 />
-                <span className="w-24 flex-shrink-0 text-right font-mono text-xs text-neutral-500">
+                <span className="w-24 shrink-0 text-right font-mono text-xs text-ink-muted">
                     {formatTime(current)} / {formatTime(duration)}
                 </span>
             </div>

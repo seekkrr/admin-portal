@@ -1,10 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-    X, ExternalLink, CheckCircle, XCircle, Link as LinkIcon,
-    Calendar, Phone, Mail, User, Trash2
-} from "lucide-react";
+import { CheckCircle, ExternalLink, Trash2, UserPlus, XCircle } from "lucide-react";
 import { toast } from "sonner";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { SectionHeading } from "@/components/ui/PageHeader";
+import { DetailList, DetailRow } from "@/components/ui/Panel";
+import { CopyText } from "@/components/ui/CopyText";
+import { IdLink } from "@/components/ui/IdLink";
+import { formatDateTime } from "@/utils/date";
 import { creatorApplicationsService } from "../services/creator-applications.service";
 import type { CreatorApplication } from "@/types";
 
@@ -14,281 +20,151 @@ interface ApplicationDetailModalProps {
     onClose: () => void;
 }
 
-export function ApplicationDetailModal({
-    open,
-    application,
-    onClose,
-}: ApplicationDetailModalProps) {
+/** Review one creator application: approve, reject with a reason, or delete. */
+export function ApplicationDetailModal({ open, application, onClose }: ApplicationDetailModalProps) {
     const queryClient = useQueryClient();
-    const [rejectReason, setRejectReason] = useState("");
-    const [showRejectInput, setShowRejectInput] = useState(false);
-    const [confirmDelete, setConfirmDelete] = useState(false);
+    const [confirm, setConfirm] = useState<"reject" | "delete" | null>(null);
 
-    // Close on Escape key
-    useEffect(() => {
-        if (!open) return;
-        const handleEsc = (e: KeyboardEvent) => {
-            if (e.key === "Escape") onClose();
-        };
-        window.addEventListener("keydown", handleEsc);
-        return () => window.removeEventListener("keydown", handleEsc);
-    }, [open, onClose]);
+    const done = (message: string) => {
+        toast.success(message);
+        queryClient.invalidateQueries({ queryKey: ["admin-creator-applications"] });
+        setConfirm(null);
+        onClose();
+    };
 
-    // Reset state on open/close
-    useEffect(() => {
-        if (!open) {
-            setShowRejectInput(false);
-            setRejectReason("");
-            setConfirmDelete(false);
-        }
-    }, [open]);
-
-    // ---- Mutations ----
     const approveMutation = useMutation({
         mutationFn: (id: string) => creatorApplicationsService.approveApplication(id),
-        onSuccess: () => {
-            toast.success("Application approved!");
-            queryClient.invalidateQueries({ queryKey: ["admin-creator-applications"] });
-            onClose();
-        },
-        onError: (err: Error) => {
-            toast.error(err.message || "Failed to approve application");
-        },
+        onSuccess: () => done("Application approved"),
+        onError: (err: Error) => toast.error(err.message || "Failed to approve application"),
     });
 
     const rejectMutation = useMutation({
-        mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
-            creatorApplicationsService.rejectApplication(id, reason),
-        onSuccess: () => {
-            toast.success("Application rejected.");
-            queryClient.invalidateQueries({ queryKey: ["admin-creator-applications"] });
-            onClose();
-        },
-        onError: (err: Error) => {
-            toast.error(err.message || "Failed to reject application");
-        },
+        mutationFn: ({ id, reason }: { id: string; reason?: string }) => creatorApplicationsService.rejectApplication(id, reason),
+        onSuccess: () => done("Application rejected"),
+        onError: (err: Error) => toast.error(err.message || "Failed to reject application"),
     });
 
     const deleteMutation = useMutation({
         mutationFn: (id: string) => creatorApplicationsService.deleteApplication(id),
-        onSuccess: () => {
-            toast.success("Application deleted.");
-            queryClient.invalidateQueries({ queryKey: ["admin-creator-applications"] });
-            onClose();
-        },
-        onError: (err: Error) => {
-            toast.error(err.message || "Failed to delete application");
-        },
+        onSuccess: () => done("Application deleted"),
+        onError: (err: Error) => toast.error(err.message || "Failed to delete application"),
     });
 
-    if (!open || !application) return null;
+    if (!application) return null;
 
     const canAction = application.status === "pending" || application.status === "verifying";
     const isBusy = approveMutation.isPending || rejectMutation.isPending || deleteMutation.isPending;
 
-    const handleReject = () => {
-        if (!showRejectInput) {
-            setShowRejectInput(true);
-            return;
-        }
-        rejectMutation.mutate({ id: application.id, reason: rejectReason.trim() || undefined });
-    };
-
     return (
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in p-4"
-            onClick={onClose}
-        >
-            <div
-                className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-auto animate-slide-up overflow-hidden flex flex-col max-h-[90vh]"
-                onClick={(e) => e.stopPropagation()}
+        <>
+            <Modal
+                open={open}
+                onClose={onClose}
+                dismissible={!isBusy}
+                icon={UserPlus}
+                title="Review application"
+                description={
+                    <span className="flex flex-wrap items-center gap-2">
+                        {application.name}
+                        <StatusPill status={application.status} />
+                    </span>
+                }
+                size="lg"
+                footer={
+                    <>
+                        <Button variant="ghost" icon={Trash2} onClick={() => setConfirm("delete")} disabled={isBusy} className="text-bad hover:bg-bad-soft hover:text-bad sm:mr-auto">
+                            Delete
+                        </Button>
+                        {canAction ? (
+                            <>
+                                <Button variant="secondary" icon={XCircle} onClick={() => setConfirm("reject")} disabled={isBusy}>
+                                    Reject
+                                </Button>
+                                <Button variant="primary" icon={CheckCircle} onClick={() => approveMutation.mutate(application.id)} loading={approveMutation.isPending} disabled={isBusy}>
+                                    Approve
+                                </Button>
+                            </>
+                        ) : (
+                            <Button variant="secondary" onClick={onClose}>
+                                Close
+                            </Button>
+                        )}
+                    </>
+                }
             >
-                {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 bg-gradient-to-r from-neutral-50 to-white shrink-0">
-                    <div>
-                        <h3 className="text-lg font-bold text-neutral-900 border-none m-0 p-0 leading-tight">Review Application</h3>
-                        <p className="text-xs text-neutral-500 mt-1 font-mono">{application.id}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {!confirmDelete ? (
-                            <button
-                                onClick={() => setConfirmDelete(true)}
-                                title="Delete application"
-                                disabled={isBusy}
-                                className="p-2 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        ) : (
-                            <div className="flex items-center gap-2 animate-slide-up">
-                                <span className="text-xs text-red-600 font-medium">Delete?</span>
-                                <button
-                                    onClick={() => deleteMutation.mutate(application.id)}
-                                    disabled={isBusy}
-                                    className="px-2.5 py-1 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
-                                >
-                                    {deleteMutation.isPending ? "..." : "Yes"}
-                                </button>
-                                <button
-                                    onClick={() => setConfirmDelete(false)}
-                                    disabled={isBusy}
-                                    className="px-2.5 py-1 rounded-lg border border-neutral-200 text-neutral-600 text-xs hover:bg-neutral-50 transition-colors"
-                                >
-                                    No
-                                </button>
-                            </div>
-                        )}
-                        <button
-                            onClick={onClose}
-                            className="p-2 rounded-lg text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-colors"
-                            disabled={isBusy}
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
-                    </div>
-                </div>
-
-                {/* Body */}
-                <div className="px-6 py-5 overflow-y-auto flex-1 space-y-6">
-
-                    {/* Status Banner */}
-                    {application.status === "approved" && (
-                        <div className="flex items-center gap-2 p-3 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-sm font-medium">
-                            <CheckCircle className="w-5 h-5" /> Application Approved
-                        </div>
-                    )}
-                    {application.status === "rejected" && (
-                        <div className="flex flex-col gap-1.5 p-3 bg-red-50 text-red-700 border border-red-200 rounded-xl text-sm font-medium">
-                            <div className="flex items-center gap-2">
-                                <XCircle className="w-5 h-5" /> Application Rejected
-                            </div>
-                            {application.rejection_reason && (
-                                <p className="text-red-600 font-normal pl-7 text-xs">
-                                    Reason: {application.rejection_reason}
-                                </p>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Basic Info */}
-                    <div className="space-y-4">
-                        <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-2 border-b border-neutral-100 pb-2">
-                            <User className="w-4 h-4" /> Applicant Details
-                        </h4>
-
-                        <div className="grid gap-3 text-sm">
-                            <div className="flex justify-between items-center">
-                                <span className="text-neutral-500 flex items-center gap-1.5"><User className="w-3.5 h-3.5" /> Name</span>
-                                <span className="font-medium text-neutral-900">{application.name}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-neutral-500 flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" /> Email</span>
-                                <span className="font-medium text-neutral-900">{application.email}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-neutral-500 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" /> Phone</span>
-                                <span className="font-medium text-neutral-900">{application.phone || "Not provided"}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-neutral-500 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Applied</span>
-                                <span className="font-medium text-neutral-900">
-                                    {new Date(application.applied_at).toLocaleString("en-IN", {
-                                        day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
-                                    })}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Social Links */}
-                    {application.social_links?.length > 0 && (
-                        <div className="space-y-4">
-                            <h4 className="text-sm font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-2 border-b border-neutral-100 pb-2">
-                                <LinkIcon className="w-4 h-4" /> Social Links ({application.social_links.length})
-                            </h4>
-
-                            <div className="grid gap-2">
-                                {application.social_links.map((link, idx) => (
-                                    <a
-                                        key={idx}
-                                        href={link.startsWith('http') ? link : 'https://' + link}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-2 p-3 bg-neutral-50 border border-neutral-200 rounded-xl hover:bg-neutral-100 hover:border-neutral-300 transition-colors group"
-                                    >
-                                        <div className="w-8 h-8 rounded-full bg-white border border-neutral-200 flex items-center justify-center shrink-0">
-                                            <ExternalLink className="w-4 h-4 text-neutral-400 group-hover:text-neutral-600" />
-                                        </div>
-                                        <span className="text-sm text-neutral-700 truncate font-medium flex-1">
-                                            {link.replace(/^https?:\/\/(www\.)?/, '')}
-                                        </span>
-                                    </a>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* Footer Actions */}
-                {canAction && (
-                    <div className="border-t border-neutral-100 bg-neutral-50/50 p-4 shrink-0">
-                        {showRejectInput ? (
-                            <div className="space-y-3 animate-slide-up">
-                                <label className="block text-sm font-medium text-neutral-700">
-                                    Reason for rejection <span className="text-neutral-400 text-xs">(optional)</span>
-                                </label>
-                                <textarea
-                                    value={rejectReason}
-                                    onChange={(e) => setRejectReason(e.target.value)}
-                                    placeholder="e.g. Does not meet minimum follower requirement..."
-                                    className="w-full p-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none resize-none min-h-[80px]"
-                                    disabled={isBusy}
-                                />
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={() => {
-                                            setShowRejectInput(false);
-                                            setRejectReason("");
-                                        }}
-                                        disabled={isBusy}
-                                        className="flex-1 py-2 rounded-xl text-neutral-600 font-medium hover:bg-neutral-200/50 transition-colors disabled:opacity-50"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={handleReject}
-                                        disabled={isBusy}
-                                        className="flex-1 py-2 rounded-xl bg-red-600 text-white font-medium hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                                    >
-                                        {rejectMutation.isPending ? "Rejecting..." : "Confirm Rejection"}
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={handleReject}
-                                    disabled={isBusy}
-                                    className="flex-1 py-2.5 rounded-xl border-2 border-red-100 text-red-600 font-semibold hover:bg-red-50 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                                >
-                                    <XCircle className="w-4 h-4" /> Reject
-                                </button>
-                                <button
-                                    onClick={() => approveMutation.mutate(application.id)}
-                                    disabled={isBusy}
-                                    className="flex-1 py-2.5 rounded-xl bg-teal-600 text-white font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
-                                >
-                                    {approveMutation.isPending ? (
-                                        "Approving..."
-                                    ) : (
-                                        <><CheckCircle className="w-4 h-4" /> Approve</>
-                                    )}
-                                </button>
-                            </div>
-                        )}
+                {application.status === "rejected" && application.rejection_reason && (
+                    <div className="rounded-control border border-bad-line bg-bad-soft px-3 py-2.5 text-sm text-bad">
+                        <span className="font-medium">Rejected:</span> {application.rejection_reason}
                     </div>
                 )}
-            </div>
-        </div>
+
+                <section className="space-y-3">
+                    <SectionHeading>Applicant</SectionHeading>
+                    <DetailList>
+                        <DetailRow label="Name" value={application.name} />
+                        <DetailRow
+                            label="Email"
+                            value={application.email ? <CopyText value={application.email} title="Copy email" /> : "Not shared"}
+                        />
+                        <DetailRow label="Source" value={application.source === "app" ? "SeekKrr app (Become a Creator)" : "Website"} />
+                        {application.applicant_user_id && (
+                            <DetailRow label="Applicant" value={<IdLink kind="user" id={application.applicant_user_id} />} />
+                        )}
+                        <DetailRow label="Phone" value={application.phone || "Not provided"} />
+                        <DetailRow label="Applied" value={formatDateTime(application.applied_at)} />
+                        {application.actioned_at && <DetailRow label="Decided" value={formatDateTime(application.actioned_at)} />}
+                        {application.admin_id && <DetailRow label="Decided by" value={<IdLink kind="user" id={application.admin_id} />} />}
+                        {application.used_by_user_id && <DetailRow label="Became creator" value={<IdLink kind="user" id={application.used_by_user_id} />} />}
+                        <DetailRow label="Application ID" value={<CopyText value={application.id} mono truncate={false} />} />
+                    </DetailList>
+                </section>
+
+                {application.social_links?.length > 0 && (
+                    <section className="space-y-3">
+                        <SectionHeading>Social links ({application.social_links.length})</SectionHeading>
+                        <ul className="space-y-2">
+                            {application.social_links.map((link, idx) => (
+                                <li key={idx}>
+                                    <a
+                                        href={link.startsWith("http") ? link : "https://" + link}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-2 rounded-control border border-line px-3 py-2.5 text-sm text-ink transition-colors hover:border-accent-300 hover:bg-accent-50/40"
+                                    >
+                                        <ExternalLink className="h-4 w-4 shrink-0 text-ink-faint" aria-hidden />
+                                        <span className="min-w-0 flex-1 truncate font-medium">{link.replace(/^https?:\/\/(www\.)?/, "")}</span>
+                                    </a>
+                                </li>
+                            ))}
+                        </ul>
+                    </section>
+                )}
+            </Modal>
+
+            <ConfirmDialog
+                open={open && confirm === "reject"}
+                title="Reject application?"
+                description={`${application.name} is told their application was not approved.`}
+                level="reason"
+                reasonLabel="Reason for rejection"
+                reasonPlaceholder="e.g. Does not meet the minimum follower requirement…"
+                confirmLabel="Reject"
+                tone="danger"
+                isPending={rejectMutation.isPending}
+                onConfirm={(reason) => rejectMutation.mutate({ id: application.id, reason: reason || undefined })}
+                onCancel={() => setConfirm(null)}
+            />
+
+            <ConfirmDialog
+                open={open && confirm === "delete"}
+                title="Delete application?"
+                description={`The application from ${application.name} is removed from the list.`}
+                confirmLabel="Delete"
+                tone="danger"
+                isPending={deleteMutation.isPending}
+                onConfirm={() => deleteMutation.mutate(application.id)}
+                onCancel={() => setConfirm(null)}
+            />
+        </>
     );
 }

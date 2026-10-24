@@ -1,103 +1,72 @@
-import { type ReactNode } from "react";
-import { CheckCircle, XCircle, AlertCircle, MessageSquare } from "lucide-react";
+import { AlertCircle, CheckCircle, MessageSquare, Pause, Play, XCircle, type LucideIcon } from "lucide-react";
+import { StatusPill } from "@/components/ui/StatusPill";
+import type { StatusTone } from "@/components/ui/status";
+import { IdLink } from "@/components/ui/IdLink";
+import { formatDateTime, toDate } from "@/utils/date";
 import type { QuestReviewHistoryEntry } from "@/types";
 
 interface ReviewHistoryProps {
     entries: QuestReviewHistoryEntry[];
 }
 
-const ACTION_STYLES: Record<string, { icon: ReactNode; badge: string }> = {
-    approved: {
-        icon: <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />,
-        badge: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    },
-    rejected: {
-        icon: <XCircle className="w-4 h-4 text-rose-500 flex-shrink-0" />,
-        badge: "bg-rose-50 text-rose-700 border-rose-200",
-    },
-    changes_requested: {
-        icon: <AlertCircle className="w-4 h-4 text-orange-500 flex-shrink-0" />,
-        badge: "bg-orange-50 text-orange-700 border-orange-200",
-    },
-    submitted: {
-        icon: <MessageSquare className="w-4 h-4 text-blue-500 flex-shrink-0" />,
-        badge: "bg-blue-50 text-blue-700 border-blue-200",
-    },
+const ACTIONS: Record<string, { icon: LucideIcon; tone: StatusTone; label: string }> = {
+    approved: { icon: CheckCircle, tone: "good", label: "Approved" },
+    rejected: { icon: XCircle, tone: "bad", label: "Rejected" },
+    changes_requested: { icon: AlertCircle, tone: "warn", label: "Changes requested" },
+    submitted: { icon: MessageSquare, tone: "info", label: "Submitted" },
+    paused: { icon: Pause, tone: "neutral", label: "Paused" },
+    unpaused: { icon: Play, tone: "good", label: "Unpaused" },
 };
 
-const DEFAULT_STYLE = {
-    icon: <MessageSquare className="w-4 h-4 text-neutral-400 flex-shrink-0" />,
-    badge: "bg-neutral-100 text-neutral-600 border-neutral-200",
+const TONE_TEXT: Record<StatusTone, string> = {
+    good: "text-good",
+    warn: "text-warn",
+    bad: "text-bad",
+    info: "text-info",
+    neutral: "text-ink-faint",
+    brand: "text-accent-600",
 };
 
-function formatAction(action: string): string {
-    return action
-        .split("_")
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(" ");
+function humanize(action: string): string {
+    const s = action.replace(/_/g, " ");
+    return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/** The review trail of a quest, newest first. */
 export function ReviewHistory({ entries }: ReviewHistoryProps) {
     if (entries.length === 0) {
-        return (
-            <p className="text-sm text-neutral-400 italic">No review actions yet for this quest.</p>
-        );
+        return <p className="text-sm text-ink-muted">No review actions yet for this quest.</p>;
     }
 
-    const sorted = [...entries].sort(
-        (a, b) =>
-            new Date(b.commented_at ?? 0).getTime() -
-            new Date(a.commented_at ?? 0).getTime()
-    );
+    const sorted = [...entries].sort((a, b) => (toDate(b.commented_at)?.getTime() ?? 0) - (toDate(a.commented_at)?.getTime() ?? 0));
 
     return (
-        <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+        <ol className="max-h-[400px] space-y-3 overflow-y-auto pr-1">
             {sorted.map((entry, i) => {
-                const style = ACTION_STYLES[entry.action] ?? DEFAULT_STYLE;
+                const cfg = ACTIONS[entry.action] ?? { icon: MessageSquare, tone: "neutral" as StatusTone, label: humanize(entry.action) };
+                const Icon = cfg.icon;
                 return (
-                    <div
-                        key={i}
-                        className="bg-neutral-50 rounded-xl border border-neutral-200 p-4 space-y-2"
-                    >
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <li key={i} className="space-y-2 rounded-card border border-line bg-surface-muted p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
-                                {style.icon}
-                                <span
-                                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${style.badge}`}
-                                >
-                                    {formatAction(entry.action)}
-                                </span>
+                                <Icon className={`h-4 w-4 shrink-0 ${TONE_TEXT[cfg.tone]}`} aria-hidden />
+                                <StatusPill status={entry.action} label={cfg.label} tone={cfg.tone} />
                             </div>
-                            <div className="text-xs text-neutral-400 flex items-center gap-1.5 flex-shrink-0">
+                            <div className="flex shrink-0 items-center gap-1.5 text-xs text-ink-muted">
                                 {entry.commented_by && (
                                     <>
-                                        <span className="font-medium text-neutral-500">
-                                            Admin (…{entry.commented_by.slice(-6)})
-                                        </span>
-                                        <span>·</span>
+                                        <span>By</span>
+                                        <IdLink kind="user" id={entry.commented_by} />
+                                        <span aria-hidden>·</span>
                                     </>
                                 )}
-                                <span>
-                                    {entry.commented_at
-                                        ? new Date(entry.commented_at).toLocaleString("en-IN", {
-                                              day: "2-digit",
-                                              month: "short",
-                                              hour: "2-digit",
-                                              minute: "2-digit",
-                                              hour12: true,
-                                          })
-                                        : "—"}
-                                </span>
+                                <span>{formatDateTime(entry.commented_at)}</span>
                             </div>
                         </div>
-                        {entry.comment && (
-                            <p className="text-sm text-neutral-700 leading-relaxed pl-6 italic">
-                                "{entry.comment}"
-                            </p>
-                        )}
-                    </div>
+                        {entry.comment && <p className="pl-6 text-sm leading-relaxed text-ink">“{entry.comment}”</p>}
+                    </li>
                 );
             })}
-        </div>
+        </ol>
     );
 }

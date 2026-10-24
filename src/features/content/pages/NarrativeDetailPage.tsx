@@ -1,39 +1,45 @@
 import { useRef, useState, type ChangeEvent } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-    ArrowLeft,
-    BookOpen,
-    CheckCircle2,
-    XCircle,
     Archive,
     AudioLines,
-    Trash2,
-    ExternalLink,
+    BookOpen,
+    CheckCircle2,
     Eye,
-    Clock,
+    Image as ImageIcon,
+    ListOrdered,
     Loader2,
-    Pencil,
-    Save,
     Lock,
     LockOpen,
+    Pencil,
     Pin,
-    ListOrdered,
-    Image as ImageIcon,
+    Save,
+    Trash2,
     Upload,
     X,
+    XCircle,
 } from "lucide-react";
-import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { Badge } from "@/components/ui/Badge";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
-import { LoadingFallback } from "@components/LoadingFallback";
+import { Button, ButtonLink } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { DetailList, DetailRow, Panel } from "@/components/ui/Panel";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { ErrorState, LoadingState } from "@/components/ui/States";
+import { Tag } from "@/components/ui/StatusPill";
+import { IdLink } from "@/components/ui/IdLink";
+import { Checkbox, Field, TextArea, TextInput } from "@/components/ui/Field";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { formatDateTime } from "@/utils/date";
+import type { EntityKind } from "@/utils/entity";
 import { GeoMap } from "@/components/maps/GeoMap";
 import { useAuthStore } from "@store/auth.store";
 import { mediaService } from "@/services/media.service";
 import { narrativesService } from "../services/narratives.service";
 import { AudioPlayer } from "../components/AudioPlayer";
 import { VoicePersonaSamples } from "../components/VoicePersonaSamples";
+import { AudioStatusPill, NarrativeStatusPill } from "../components/NarrativePills";
+import { PERSONAS } from "../components/voicePersonas";
 import type {
     AdminNarrative,
     NarrativeAttachType,
@@ -43,13 +49,12 @@ import type {
 
 const CAN_MODERATE_ROLES = ["admin", "super_admin", "moderator"];
 
-const ATTACH_PATH: Record<NarrativeAttachType, string> = {
-    marker: "/markers",
-    quest: "/quests",
-    region: "/regions",
-};
+const ATTACH_KIND: Record<NarrativeAttachType, EntityKind> = { marker: "place", quest: "quest", region: "region" };
+const ATTACH_LABEL: Record<NarrativeAttachType, string> = { marker: "Place", quest: "Quest", region: "Region" };
 
-
+function personaName(p: VoicePersona): string {
+    return PERSONAS.find((x) => x.id === p)?.label ?? (p === "custom" ? "Custom voice" : p.replace(/_/g, " "));
+}
 
 type ModalAction = "approve" | "reject" | "archive";
 
@@ -76,7 +81,6 @@ export function NarrativeDetailPage() {
     const isSuper = !!user?.role?.includes("super_admin");
 
     const [modal, setModal] = useState<ModalAction | null>(null);
-    const [note, setNote] = useState("");
     const [editForm, setEditForm] = useState<EditForm | null>(null);
     const [showDelete, setShowDelete] = useState(false);
     const [hardDelete, setHardDelete] = useState(false);
@@ -87,11 +91,13 @@ export function NarrativeDetailPage() {
         data: narrative,
         isLoading,
         error,
+        refetch,
     } = useQuery({
         queryKey: ["narrative-detail", narrativeId],
         queryFn: () => narrativesService.getById(narrativeId),
         enabled: !!narrativeId,
     });
+    usePageTitle(narrative?.title);
 
     const { data: audioStatus } = useQuery({
         queryKey: ["narrative-audio-status", narrativeId],
@@ -109,7 +115,7 @@ export function NarrativeDetailPage() {
     };
 
     const approveMut = useMutation({
-        mutationFn: () => narrativesService.approve(narrativeId, note || undefined),
+        mutationFn: (note?: string) => narrativesService.approve(narrativeId, note || undefined),
         onSuccess: () => {
             invalidate();
             toast.success("Narrative approved");
@@ -119,7 +125,7 @@ export function NarrativeDetailPage() {
     });
 
     const rejectMut = useMutation({
-        mutationFn: () => narrativesService.reject(narrativeId, note),
+        mutationFn: (note: string) => narrativesService.reject(narrativeId, note),
         onSuccess: () => {
             invalidate();
             toast.success("Narrative rejected");
@@ -180,10 +186,7 @@ export function NarrativeDetailPage() {
         },
     });
 
-    const closeModal = () => {
-        setModal(null);
-        setNote("");
-    };
+    const closeModal = () => setModal(null);
 
     const startEdit = (n: AdminNarrative) => {
         setEditForm({
@@ -267,16 +270,22 @@ export function NarrativeDetailPage() {
         updateMut.mutate(payload);
     };
 
-    if (isLoading) return <LoadingFallback message="Loading narrative..." />;
+    if (isLoading) return <LoadingState label="Loading narrative…" />;
 
     if (error || !narrative) {
         return (
-            <div className="p-6 text-center">
-                <p className="mb-4 text-red-500">Failed to load narrative or it does not exist.</p>
-                <Link to="/narratives" className="text-orange-600 hover:underline">
-                    Back to Narratives
-                </Link>
-            </div>
+            <Panel>
+                <ErrorState
+                    error={error ?? new Error("This narrative doesn't exist or was deleted.")}
+                    title="Couldn't load the narrative"
+                    onRetry={error ? () => void refetch() : undefined}
+                />
+                <div className="flex justify-center pb-6">
+                    <ButtonLink to="/narratives" variant="secondary" size="sm">
+                        Back to narratives
+                    </ButtonLink>
+                </div>
+            </Panel>
         );
     }
 
@@ -285,514 +294,322 @@ export function NarrativeDetailPage() {
     const liveAudioUrl = audioStatus?.audio_url ?? n.audio_url;
     const liveAudioDuration = audioStatus?.audio_duration_s ?? n.audio_duration_s;
     const isGenerating = liveAudioStatus === "generating";
-
-    const attachLabel =
-        n.attach_type === "marker" ? "View marker" : n.attach_type === "quest" ? "View quest" : "View region";
-
     const pending = approveMut.isPending || rejectMut.isPending || archiveMut.isPending;
+    const editing = !!editForm;
 
     return (
-        <div className="animate-fade-in mx-auto max-w-4xl space-y-6">
-            <div className="flex items-center justify-between">
-                <Link
-                    to="/narratives"
-                    className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-600 shadow-sm transition-colors hover:bg-neutral-50 hover:text-neutral-900"
-                >
-                    <ArrowLeft className="h-4 w-4" />
-                    Back
-                </Link>
-                {canModerate && (
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                        <button
-                            onClick={() => setModal("approve")}
-                            disabled={n.status === "approved"}
-                            className="flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-4 py-2.5 font-medium text-emerald-700 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <CheckCircle2 className="h-4 w-4" />
-                            Approve
-                        </button>
-                        <button
-                            onClick={() => setModal("reject")}
-                            disabled={n.status === "rejected"}
-                            className="flex items-center justify-center gap-2 rounded-xl bg-rose-50 px-4 py-2.5 font-medium text-rose-700 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <XCircle className="h-4 w-4" />
-                            Reject
-                        </button>
-                        <button
-                            onClick={() => setModal("archive")}
-                            disabled={n.status === "archived"}
-                            className="flex items-center justify-center gap-2 rounded-xl bg-neutral-100 px-4 py-2.5 font-medium text-neutral-700 transition-colors hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <Archive className="h-4 w-4" />
-                            Archive
-                        </button>
-                        <button
-                            onClick={() => (editForm ? setEditForm(null) : startEdit(n))}
-                            className={`flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-medium transition-colors ${
-                                editForm
-                                    ? "bg-orange-100 text-orange-700 hover:bg-orange-200"
-                                    : "bg-orange-50 text-orange-700 hover:bg-orange-100"
-                            }`}
-                        >
-                            <Pencil className="h-4 w-4" />
-                            {editForm ? "Close Editor" : "Edit"}
-                        </button>
-                        <button
-                            onClick={() => {
-                                setHardDelete(false);
-                                setShowDelete(true);
-                            }}
-                            className="flex items-center justify-center gap-2 rounded-xl bg-red-50 px-4 py-2.5 font-medium text-red-600 transition-colors hover:bg-red-100"
-                        >
-                            <Trash2 className="h-4 w-4" />
-                            Delete
-                        </button>
-                    </div>
-                )}
-            </div>
+        <div className="space-y-5">
+            <PageHeader
+                icon={BookOpen}
+                title={n.title || "Untitled"}
+                description={n.subtitle ?? undefined}
+                badge={<NarrativeStatusPill status={n.status} />}
+                actions={
+                    canModerate && (
+                        <>
+                            <Button icon={CheckCircle2} onClick={() => setModal("approve")} disabled={n.status === "approved"}>
+                                Approve
+                            </Button>
+                            <Button icon={XCircle} onClick={() => setModal("reject")} disabled={n.status === "rejected"}>
+                                Reject
+                            </Button>
+                        </>
+                    )
+                }
+                primaryAction={
+                    canModerate && (
+                        <Button variant={editing ? "secondary" : "primary"} icon={editing ? X : Pencil} onClick={() => (editing ? setEditForm(null) : startEdit(n))}>
+                            {editing ? "Close editor" : "Edit"}
+                        </Button>
+                    )
+                }
+                menu={
+                    canModerate
+                        ? [
+                              { label: "Archive", icon: Archive, onSelect: () => setModal("archive"), disabled: n.status === "archived" },
+                              {
+                                  label: "Delete narrative",
+                                  icon: Trash2,
+                                  danger: true,
+                                  onSelect: () => {
+                                      setHardDelete(false);
+                                      setShowDelete(true);
+                                  },
+                              },
+                          ]
+                        : undefined
+                }
+            />
 
-            {/* Header */}
-            <Card padding="md">
-                <div className="flex items-start gap-3">
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-600">
-                        <BookOpen className="h-5 w-5" />
-                    </div>
-                        <div className="flex-1">
-                            <h1 className="text-2xl font-bold text-neutral-900">{n.title || "Untitled"}</h1>
-                            {n.subtitle && <p className="mt-1 text-neutral-500">{n.subtitle}</p>}
-                            <div className="mt-3 flex flex-wrap items-center gap-2">
-                                <Badge
-                                    label={n.status.replace(/_/g, " ")}
-                                    styles={
-                                        n.status === "draft" ? "bg-neutral-50 text-neutral-700 border-neutral-200" :
-                                        n.status === "under_review" ? "bg-amber-50 text-amber-700 border-amber-200" :
-                                        n.status === "approved" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                                        n.status === "rejected" ? "bg-rose-50 text-rose-700 border-rose-200" :
-                                        "bg-neutral-100 text-neutral-600 border-neutral-300"
-                                    }
-                                />
-                                {n.voice_persona && (
-                                    <Badge
-                                        label={n.voice_persona.replace(/_/g, " ")}
-                                        styles="bg-orange-50 text-orange-700 border-orange-200"
-                                    />
-                                )}
-                                <span className="inline-flex items-center gap-1 text-xs text-neutral-500">
-                                    <Eye className="h-3.5 w-3.5" /> {n.view_count} views
+            {/* Overview */}
+            <Panel>
+                <div className="flex flex-wrap items-center gap-2">
+                    {n.voice_persona && <Tag tone="brand">{personaName(n.voice_persona)}</Tag>}
+                    {n.is_mandatory && (
+                        <Tag tone="info">
+                            <Pin className="h-3 w-3" aria-hidden /> Mandatory
+                        </Tag>
+                    )}
+                    <Tag>
+                        {n.is_unlocked ? <LockOpen className="h-3 w-3" aria-hidden /> : <Lock className="h-3 w-3" aria-hidden />}
+                        {n.is_unlocked ? "Unlocked" : "Locked"}
+                    </Tag>
+                    {n.sequence_order !== null && (
+                        <Tag>
+                            <ListOrdered className="h-3 w-3" aria-hidden /> #{n.sequence_order}
+                        </Tag>
+                    )}
+                    <span className="inline-flex items-center gap-1 text-xs text-ink-muted">
+                        <Eye className="h-3.5 w-3.5" aria-hidden /> {n.view_count.toLocaleString("en-IN")} views
+                    </span>
+                </div>
+                <DetailList className="mt-4">
+                    <DetailRow
+                        label="Attached to"
+                        value={
+                            <span className="inline-flex flex-wrap items-center gap-2">
+                                <Tag>{ATTACH_LABEL[n.attach_type] ?? n.attach_type}</Tag>
+                                <IdLink kind={ATTACH_KIND[n.attach_type] ?? "place"} id={n.attach_id} short={false} />
+                            </span>
+                        }
+                    />
+                    {n.chain_id && <DetailRow label="Chain" value={<span className="font-mono text-xs text-ink-muted">{n.chain_id}</span>} />}
+                    <DetailRow label="Created" value={formatDateTime(n.created_at)} />
+                    {n.updated_at && <DetailRow label="Updated" value={formatDateTime(n.updated_at)} />}
+                    {n.created_by && <DetailRow label="Created by" value={<IdLink kind="user" id={n.created_by} />} />}
+                    {n.reviewed_at && (
+                        <DetailRow
+                            label="Reviewed"
+                            value={
+                                <span className="inline-flex flex-wrap items-center gap-1.5">
+                                    {formatDateTime(n.reviewed_at)}
+                                    {n.reviewed_by && (
+                                        <>
+                                            <span className="text-ink-faint">by</span>
+                                            <IdLink kind="user" id={n.reviewed_by} />
+                                        </>
+                                    )}
                                 </span>
-                                {n.is_mandatory && (
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2.5 py-0.5 text-xs font-medium text-purple-700">
-                                        <Pin className="h-3.5 w-3.5" /> Mandatory
-                                    </span>
-                                )}
-                                <span
-                                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                        n.is_unlocked ? "bg-sky-50 text-sky-700" : "bg-neutral-100 text-neutral-600"
-                                    }`}
-                                >
-                                    {n.is_unlocked ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
-                                    {n.is_unlocked ? "Unlocked" : "Locked"}
-                                </span>
-                                {n.sequence_order !== null && (
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-600">
-                                        <ListOrdered className="h-3.5 w-3.5" /> #{n.sequence_order}
-                                    </span>
-                                )}
-                                {n.created_at && (
-                                    <span className="inline-flex items-center gap-1 text-xs text-neutral-500">
-                                        <Clock className="h-3.5 w-3.5" /> {new Date(n.created_at).toLocaleString()}
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    </div>
+                            }
+                        />
+                    )}
+                </DetailList>
+            </Panel>
 
-                    {/* Attached to */}
-                        <div className="mt-6 flex items-center justify-between gap-3 rounded-lg border border-orange-200 bg-orange-50/50 p-4">
-                            <div>
-                                <p className="text-xs font-semibold uppercase tracking-wider text-orange-700">Attached to</p>
-                                <span className="text-sm text-neutral-700 mt-1 block">
-                                    <span className="capitalize">{n.attach_type}</span> ·{" "}
-                                    <span className="font-mono text-xs">{n.attach_id}</span>
-                                </span>
-                            </div>
-                            <Link
-                                to={`${ATTACH_PATH[n.attach_type]}/${n.attach_id}`}
-                                className="flex flex-shrink-0 items-center gap-1.5 text-sm font-medium text-orange-600 hover:underline"
-                            >
-                                {attachLabel}
-                                <ExternalLink className="h-4 w-4" />
-                            </Link>
-                        </div>
-                </Card>
             {/* Edit panel */}
             {canModerate && editForm && (
-                <Card padding="none" className="border-orange-200">
-                    <CardHeader className="border-b border-neutral-100 bg-neutral-50/50 px-5 sm:px-6 pt-5 sm:pt-6 pb-4 mb-0 rounded-t-xl">
-                        <CardTitle className="flex items-center gap-2">
-                            <Pencil className="h-4 w-4 text-orange-600" />
-                            Edit Narrative
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4 p-5 sm:p-6">
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                            <div>
-                                <label className="mb-1 block text-sm font-medium text-neutral-700">Title</label>
-                                <input
-                                    type="text"
-                                    value={editForm.title}
-                                    onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                                    className="w-full rounded-xl border border-neutral-200 px-4 py-2.5 text-sm transition-all focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
-                                />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-sm font-medium text-neutral-700">Subtitle</label>
-                                <input
-                                    type="text"
-                                    value={editForm.subtitle}
-                                    onChange={(e) => setEditForm({ ...editForm, subtitle: e.target.value })}
-                                    className="w-full rounded-xl border border-neutral-200 px-4 py-2.5 text-sm transition-all focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
-                                />
-                            </div>
-                            <div className="md:col-span-2">
-                                <label className="mb-1 block text-sm font-medium text-neutral-700">Content</label>
-                                <textarea
-                                    rows={6}
-                                    value={editForm.content}
-                                    onChange={(e) => setEditForm({ ...editForm, content: e.target.value })}
-                                    className="w-full rounded-xl border border-neutral-200 px-4 py-2.5 text-sm transition-all focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
-                                />
-                            </div>
-                            <div className="md:col-span-2">
-                                <label className="mb-2 block text-sm font-medium text-neutral-700">Voice persona</label>
-                                <VoicePersonaSamples
-                                    selected={editForm.voice_persona || undefined}
-                                    onSelect={(persona) => setEditForm({ ...editForm, voice_persona: persona })}
-                                    customVoiceId={editForm.custom_voice_id}
-                                    onCustomVoiceIdChange={(value) => setEditForm({ ...editForm, custom_voice_id: value })}
-                                />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-sm font-medium text-neutral-700">Trigger radius (m)</label>
-                                <input
-                                    type="number"
-                                    min={1}
-                                    value={editForm.trigger_radius_m}
-                                    onChange={(e) => setEditForm({ ...editForm, trigger_radius_m: e.target.value })}
-                                    className="w-full rounded-xl border border-neutral-200 px-4 py-2.5 text-sm transition-all focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
-                                />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-sm font-medium text-neutral-700">Sequence order</label>
-                                <input
-                                    type="number"
-                                    min={0}
-                                    value={editForm.sequence_order}
-                                    onChange={(e) => setEditForm({ ...editForm, sequence_order: e.target.value })}
-                                    className="w-full rounded-xl border border-neutral-200 px-4 py-2.5 text-sm transition-all focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
-                                />
-                            </div>
-                            <div className="md:col-span-2">
-                                <label className="mb-1 block text-sm font-medium text-neutral-700">Media</label>
-                                <div className="flex flex-wrap gap-3">
-                                    {editForm.media.map((url) => (
-                                        <div
-                                            key={url}
-                                            className="group relative h-20 w-20 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50"
-                                        >
-                                            <img src={url} alt="Narrative media" className="h-full w-full object-cover" />
-                                            <button
-                                                type="button"
-                                                onClick={() => removeMedia(url)}
-                                                className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition-opacity hover:bg-black/80 group-hover:opacity-100"
-                                                title="Remove"
-                                            >
-                                                <X className="h-3.5 w-3.5" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                    <label
-                                        className={`flex h-20 w-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-neutral-300 text-neutral-400 transition-colors hover:border-orange-400 hover:bg-orange-50 hover:text-orange-600 ${
-                                            uploadingMedia ? "pointer-events-none opacity-60" : ""
-                                        }`}
-                                    >
-                                        {uploadingMedia ? (
-                                            <Loader2 className="h-5 w-5 animate-spin" />
-                                        ) : (
-                                            <>
-                                                <Upload className="h-5 w-5" />
-                                                <span className="text-[10px] font-medium">Upload</span>
-                                            </>
-                                        )}
-                                        <input
-                                            ref={mediaFileInputRef}
-                                            type="file"
-                                            accept="image/*"
-                                            multiple
-                                            className="hidden"
-                                            onChange={handleMediaUpload}
-                                            disabled={uploadingMedia}
-                                        />
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="flex flex-wrap gap-6">
-                            <label className="flex items-center gap-2 text-sm font-medium text-neutral-700">
-                                <input
-                                    type="checkbox"
-                                    checked={editForm.is_mandatory}
-                                    onChange={(e) => setEditForm({ ...editForm, is_mandatory: e.target.checked })}
-                                    className="rounded border-neutral-300 text-orange-600 focus:ring-orange-500"
-                                />
-                                Mandatory
-                            </label>
-                            <label className="flex items-center gap-2 text-sm font-medium text-neutral-700">
-                                <input
-                                    type="checkbox"
-                                    checked={editForm.is_unlocked}
-                                    onChange={(e) => setEditForm({ ...editForm, is_unlocked: e.target.checked })}
-                                    className="rounded border-neutral-300 text-orange-600 focus:ring-orange-500"
-                                />
-                                Unlocked by default
-                            </label>
-                        </div>
-                        <div className="flex justify-end gap-3 border-t border-neutral-100 pt-4">
-                            <button
-                                onClick={() => setEditForm(null)}
-                                disabled={updateMut.isPending}
-                                className="flex items-center justify-center gap-2 rounded-xl bg-neutral-100 px-4 py-2.5 font-medium text-neutral-700 transition-colors hover:bg-neutral-200 disabled:opacity-50"
-                            >
+                <Panel
+                    title="Edit narrative"
+                    icon={Pencil}
+                    actions={
+                        <>
+                            <Button variant="secondary" size="sm" onClick={() => setEditForm(null)} disabled={updateMut.isPending}>
                                 Cancel
-                            </button>
-                            <button
-                                onClick={() => saveEdit(n)}
-                                disabled={updateMut.isPending}
-                                className="flex items-center justify-center gap-2 rounded-xl bg-orange-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-orange-700 disabled:opacity-50"
-                            >
-                                {updateMut.isPending ? (
-                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                                ) : (
-                                    <Save className="h-4 w-4" />
-                                )}
-                                Save Changes
-                            </button>
+                            </Button>
+                            <Button variant="primary" size="sm" icon={Save} onClick={() => saveEdit(n)} loading={updateMut.isPending} disabled={uploadingMedia}>
+                                Save changes
+                            </Button>
+                        </>
+                    }
+                >
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <Field label="Title" required>
+                            <TextInput type="text" value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} />
+                        </Field>
+                        <Field label="Subtitle">
+                            <TextInput type="text" value={editForm.subtitle} onChange={(e) => setEditForm({ ...editForm, subtitle: e.target.value })} />
+                        </Field>
+                        <Field label="Content" className="md:col-span-2">
+                            <TextArea rows={6} value={editForm.content} onChange={(e) => setEditForm({ ...editForm, content: e.target.value })} />
+                        </Field>
+                        <div className="md:col-span-2">
+                            <span className="mb-2 block text-sm font-medium text-ink">Voice persona</span>
+                            <VoicePersonaSamples
+                                selected={editForm.voice_persona || undefined}
+                                onSelect={(persona) => setEditForm({ ...editForm, voice_persona: persona })}
+                                customVoiceId={editForm.custom_voice_id}
+                                onCustomVoiceIdChange={(value) => setEditForm({ ...editForm, custom_voice_id: value })}
+                            />
                         </div>
-                    </CardContent>
-                </Card>
+                        <Field label="Trigger radius (m)">
+                            <TextInput type="number" min={1} inputMode="numeric" value={editForm.trigger_radius_m} onChange={(e) => setEditForm({ ...editForm, trigger_radius_m: e.target.value })} />
+                        </Field>
+                        <Field label="Sequence order">
+                            <TextInput type="number" min={0} inputMode="numeric" value={editForm.sequence_order} onChange={(e) => setEditForm({ ...editForm, sequence_order: e.target.value })} />
+                        </Field>
+                        <div className="md:col-span-2">
+                            <span className="mb-1.5 block text-sm font-medium text-ink">Media</span>
+                            <div className="flex flex-wrap gap-3">
+                                {editForm.media.map((url) => (
+                                    <div key={url} className="group relative h-20 w-20 overflow-hidden rounded-control border border-line bg-surface-muted">
+                                        <img src={url} alt="Narrative media" className="h-full w-full object-cover" />
+                                        <button
+                                            type="button"
+                                            onClick={() => removeMedia(url)}
+                                            className="absolute right-1 top-1 rounded-full bg-brand-950/70 p-1 text-white transition-opacity hover:bg-brand-950 sm:opacity-0 sm:focus:opacity-100 sm:group-hover:opacity-100"
+                                            aria-label="Remove image"
+                                        >
+                                            <X className="h-3.5 w-3.5" aria-hidden />
+                                        </button>
+                                    </div>
+                                ))}
+                                <label
+                                    className={`flex h-20 w-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-control border border-dashed border-line-strong text-ink-faint transition-colors focus-within:ring-2 focus-within:ring-accent-500 hover:border-accent-400 hover:bg-accent-50 hover:text-accent-700 ${
+                                        uploadingMedia ? "pointer-events-none opacity-60" : ""
+                                    }`}
+                                >
+                                    {uploadingMedia ? (
+                                        <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+                                    ) : (
+                                        <>
+                                            <Upload className="h-5 w-5" aria-hidden />
+                                            <span className="text-[11px] font-medium">Upload</span>
+                                        </>
+                                    )}
+                                    <input
+                                        ref={mediaFileInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        multiple
+                                        className="sr-only"
+                                        onChange={handleMediaUpload}
+                                        disabled={uploadingMedia}
+                                        aria-label="Upload images"
+                                    />
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-6">
+                        <Checkbox checked={editForm.is_mandatory} onChange={(v) => setEditForm({ ...editForm, is_mandatory: v })} label="Mandatory" />
+                        <Checkbox checked={editForm.is_unlocked} onChange={(v) => setEditForm({ ...editForm, is_unlocked: v })} label="Unlocked by default" />
+                    </div>
+                </Panel>
             )}
 
             {/* Content & other sections only visible when not editing */}
-            {!editForm && (
+            {!editing && (
                 <>
-                    {/* Content */}
-            <Card padding="none">
-                <CardHeader className="border-b border-neutral-100 bg-neutral-50/50 px-5 sm:px-6 pt-5 sm:pt-6 pb-4 mb-0 rounded-t-xl">
-                    <CardTitle>Narrative Content</CardTitle>
-                </CardHeader>
-                <CardContent className="px-5 sm:px-6 pb-5 sm:pb-6 pt-4">
-                    <div className="prose prose-sm prose-neutral max-w-none whitespace-pre-wrap text-neutral-700">
-                        {n.content || "No content provided."}
-                    </div>
-                    {n.review_note && (
-                        <div className="mt-4 rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm">
-                            <span className="font-semibold text-neutral-700">Review note: </span>
-                            <span className="text-neutral-600">{n.review_note}</span>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-
-            {/* Media gallery */}
-            {!editForm && n.media && n.media.length > 0 && (
-                <Card padding="none">
-                    <CardHeader className="border-b border-neutral-100 bg-neutral-50/50 px-5 sm:px-6 pt-5 sm:pt-6 pb-4 mb-0 rounded-t-xl">
-                        <CardTitle className="text-base flex items-center gap-2">
-                            <ImageIcon className="h-4 w-4 text-orange-600" />
-                            Media
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-5 sm:px-6 pb-5 sm:pb-6 pt-4">
-                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-                            {n.media.map((url, i) => (
-                                <a
-                                    key={`${url}-${i}`}
-                                    href={url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="block aspect-square overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50 transition hover:ring-2 hover:ring-orange-500"
-                                >
-                                    <img
-                                        src={url}
-                                        alt={`Narrative media ${i + 1}`}
-                                        loading="lazy"
-                                        className="h-full w-full object-cover"
-                                    />
-                                </a>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
-
-            {/* Trigger location map */}
-            {n.trigger_location && (
-                <Card padding="none">
-                    <CardHeader className="border-b border-neutral-100 bg-neutral-50/50 px-5 sm:px-6 pt-5 sm:pt-6 pb-4 mb-0 rounded-t-xl">
-                        <CardTitle>Trigger Location</CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-5 sm:px-6 pb-5 sm:pb-6 pt-4">
-                        <GeoMap
-                            points={[{ coordinates: n.trigger_location.coordinates, label: n.title }]}
-                            radiusMeters={n.trigger_radius_m}
-                            height="320px"
-                        />
-                    </CardContent>
-                </Card>
-            )}
-
-            {/* Audio */}
-            <Card padding="none">
-                <CardHeader className="border-b border-neutral-100 bg-neutral-50/50 px-5 sm:px-6 pt-5 sm:pt-6 pb-4 mb-0 rounded-t-xl">
-                    <div className="flex flex-row items-center justify-between">
-                        <CardTitle>Audio Narration</CardTitle>
-                        <Badge
-                            label={(liveAudioStatus || "none").replace(/_/g, " ")}
-                            styles={
-                                liveAudioStatus === "pending" ? "bg-neutral-50 text-neutral-600 border-neutral-200" :
-                                liveAudioStatus === "generating" ? "bg-blue-50 text-blue-700 border-blue-200" :
-                                liveAudioStatus === "ready" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                                liveAudioStatus === "failed" ? "bg-rose-50 text-rose-700 border-rose-200" :
-                                "bg-amber-50 text-amber-700 border-amber-200"
-                            }
-                        />
-                    </div>
-                </CardHeader>
-                <CardContent className="px-5 sm:px-6 pb-5 sm:pb-6 pt-4 space-y-4">
-                    <AudioPlayer src={liveAudioUrl} durationS={liveAudioDuration} />
-
-                    <div className="flex flex-wrap items-center gap-3">
-                        <button
-                            onClick={() => generateMut.mutate()}
-                            disabled={generateMut.isPending || isGenerating}
-                            className="flex items-center justify-center gap-2 rounded-xl bg-orange-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            {generateMut.isPending || isGenerating ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                                <AudioLines className="h-4 w-4" />
-                            )}
-                            {isGenerating ? "Generating…" : "Generate Audio"}
-                        </button>
-                        <button
-                            onClick={() => deleteAudioMut.mutate()}
-                            disabled={deleteAudioMut.isPending || (!liveAudioUrl && liveAudioStatus !== "generating")}
-                            className="flex items-center justify-center gap-2 rounded-xl bg-neutral-100 px-4 py-2.5 font-medium text-neutral-700 transition-colors hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <Trash2 className="h-4 w-4" />
-                            {liveAudioStatus === "generating" ? "Cancel Audio" : "Clear Audio"}
-                        </button>
-                        {isGenerating && (
-                            <span className="text-xs text-blue-600">Polling for completion…</span>
+                    <Panel title="Narrative content">
+                        <div className="max-w-none whitespace-pre-wrap text-sm leading-relaxed text-ink">{n.content || <span className="text-ink-muted">No content provided.</span>}</div>
+                        {n.review_note && (
+                            <div className="mt-4 rounded-control border border-line bg-surface-muted p-3 text-sm">
+                                <span className="font-semibold text-ink">Review note: </span>
+                                <span className="text-ink-muted">{n.review_note}</span>
+                            </div>
                         )}
-                    </div>
-                </CardContent>
-            </Card>
+                    </Panel>
 
-            {/* Voice personas */}
-            <Card padding="none">
-                <CardHeader className="border-b border-neutral-100 bg-neutral-50/50 px-5 sm:px-6 pt-5 sm:pt-6 pb-4 mb-0 rounded-t-xl">
-                    <CardTitle>Voice Personas</CardTitle>
-                </CardHeader>
-                <CardContent className="px-5 sm:px-6 pb-5 sm:pb-6 pt-4">
-                    <VoicePersonaSamples selected={n.voice_persona ?? undefined} />
-                </CardContent>
-                </Card>
+                    {n.media && n.media.length > 0 && (
+                        <Panel title="Media" icon={ImageIcon}>
+                            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+                                {n.media.map((url, i) => (
+                                    <a
+                                        key={`${url}-${i}`}
+                                        href={url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="block aspect-square overflow-hidden rounded-control border border-line bg-surface-muted transition hover:ring-2 hover:ring-accent-500"
+                                    >
+                                        <img src={url} alt={`Narrative media ${i + 1}`} loading="lazy" className="h-full w-full object-cover" />
+                                    </a>
+                                ))}
+                            </div>
+                        </Panel>
+                    )}
+
+                    {n.trigger_location && (
+                        <Panel title="Trigger location" description={n.trigger_radius_m ? `Plays within ${n.trigger_radius_m} m` : undefined}>
+                            <GeoMap points={[{ coordinates: n.trigger_location.coordinates, label: n.title }]} radiusMeters={n.trigger_radius_m} height="320px" />
+                        </Panel>
+                    )}
+
+                    <Panel title="Audio narration" actions={<AudioStatusPill status={liveAudioStatus} />}>
+                        <div className="space-y-4">
+                            <AudioPlayer src={liveAudioUrl} durationS={liveAudioDuration} />
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Button variant="primary" icon={AudioLines} onClick={() => generateMut.mutate()} loading={generateMut.isPending || isGenerating}>
+                                    {isGenerating ? "Generating…" : "Generate audio"}
+                                </Button>
+                                <Button
+                                    icon={Trash2}
+                                    onClick={() => deleteAudioMut.mutate()}
+                                    loading={deleteAudioMut.isPending}
+                                    disabled={!liveAudioUrl && liveAudioStatus !== "generating"}
+                                >
+                                    {liveAudioStatus === "generating" ? "Cancel audio" : "Clear audio"}
+                                </Button>
+                                {isGenerating && (
+                                    <span className="text-xs text-info" role="status">
+                                        Checking for completion…
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </Panel>
+
+                    <Panel title="Voice personas">
+                        <VoicePersonaSamples selected={n.voice_persona ?? undefined} />
+                    </Panel>
                 </>
             )}
 
-            {/* Moderation modal */}
-            <ConfirmModal
-                open={!!modal}
-                title={
-                    modal === "approve"
-                        ? "Approve Narrative"
-                        : modal === "reject"
-                        ? "Reject Narrative"
-                        : "Archive Narrative"
-                }
-                message={
-                    <>
-                        <p className="mb-4">
-                            {modal === "approve"
-                                ? "This narrative will become publicly visible. You may add an optional review note."
-                                : modal === "reject"
-                                ? "Provide a reason for rejection. This note is required."
-                                : "This narrative will be archived and hidden from users."}
-                        </p>
-                        {(modal === "approve" || modal === "reject") && (
-                            <textarea
-                                value={note}
-                                onChange={(e) => setNote(e.target.value)}
-                                rows={4}
-                                placeholder={
-                                    modal === "reject" ? "Reason for rejection (required)" : "Review note (optional)"
-                                }
-                                className="w-full rounded-xl border border-neutral-200 px-4 py-2.5 text-sm transition-all focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
-                            />
-                        )}
-                    </>
-                }
-                confirmLabel={modal === "approve" ? "Approve" : modal === "reject" ? "Reject" : "Archive"}
-                confirmStyle={
-                    modal === "approve"
-                        ? "bg-emerald-600 hover:bg-emerald-700"
-                        : modal === "reject"
-                        ? "bg-rose-600 hover:bg-rose-700"
-                        : "bg-neutral-700 hover:bg-neutral-800"
-                }
+            {/* Moderation: approve takes an optional note, reject a required reason (sent to the author) */}
+            <ConfirmDialog
+                open={modal === "approve" || modal === "reject"}
+                title={modal === "approve" ? "Approve narrative?" : "Reject narrative"}
+                description={modal === "approve" ? "This narrative becomes publicly visible." : "The author sees your reason."}
+                confirmLabel={modal === "approve" ? "Approve" : "Reject"}
+                tone={modal === "approve" ? "primary" : "danger"}
+                level="reason"
+                reasonLabel={modal === "approve" ? "Review note" : "Reason"}
+                reasonPlaceholder={modal === "approve" ? "Optional note for the author" : "Why is this narrative rejected?"}
+                reasonMinLength={modal === "reject" ? 1 : 0}
+                reasonMaxLength={2000}
                 isPending={pending}
-                onConfirm={() => {
-                    if (modal === "approve") approveMut.mutate();
-                    else if (modal === "reject") rejectMut.mutate();
-                    else archiveMut.mutate();
+                onConfirm={(reason) => {
+                    if (modal === "approve") approveMut.mutate(reason);
+                    else rejectMut.mutate(reason ?? "");
                 }}
                 onCancel={closeModal}
-                disabledConfirm={modal === "reject" && note.trim().length === 0}
             />
 
-            {/* Delete modal */}
-            <ConfirmModal
+            <ConfirmDialog
+                open={modal === "archive"}
+                title="Archive narrative?"
+                description="It is hidden from users. You can find it under Archived."
+                confirmLabel="Archive"
+                tone="warning"
+                isPending={pending}
+                onConfirm={() => archiveMut.mutate()}
+                onCancel={closeModal}
+            />
+
+            {/* Delete — soft by default; super admins can delete permanently (type the title) */}
+            <ConfirmDialog
                 open={showDelete}
-                title="Delete Narrative"
-                message={
-                    <>
-                        <p className="mb-4 text-neutral-600">
-                            Are you sure you want to delete <strong>{n.title || "this narrative"}</strong>?
-                            {hardDelete
-                                ? " This will permanently remove the record."
-                                : " It will be soft-deleted and hidden from users."}
-                        </p>
-                        {isSuper && (
-                            <label className="flex items-center gap-2 text-sm font-medium text-red-700 mt-2">
-                                <input
-                                    type="checkbox"
-                                    checked={hardDelete}
-                                    onChange={(e) => setHardDelete(e.target.checked)}
-                                    className="rounded border-neutral-300 text-red-600 focus:ring-red-500"
-                                />
-                                Permanently delete (super-admin, irreversible)
-                            </label>
-                        )}
-                    </>
+                title={hardDelete ? "Permanently delete narrative?" : "Delete narrative?"}
+                description={
+                    hardDelete ? (
+                        <>
+                            <strong className="text-ink">{n.title || "This narrative"}</strong> is removed for good.
+                        </>
+                    ) : (
+                        <>
+                            <strong className="text-ink">{n.title || "This narrative"}</strong> is hidden from users and the admin lists.
+                        </>
+                    )
                 }
-                confirmLabel="Delete"
-                confirmStyle="bg-red-600 hover:bg-red-700"
+                confirmLabel={hardDelete ? "Delete permanently" : "Delete"}
+                tone="danger"
+                level={hardDelete ? "type" : "simple"}
+                typeToConfirm={hardDelete ? n.title?.trim() || "DELETE" : undefined}
                 isPending={deleteMut.isPending}
                 onConfirm={() => deleteMut.mutate()}
                 onCancel={() => setShowDelete(false)}
-            />
+            >
+                {isSuper && <Checkbox checked={hardDelete} onChange={setHardDelete} label="Delete permanently" hint="Super admins only. This can't be undone." />}
+            </ConfirmDialog>
         </div>
     );
 }

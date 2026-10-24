@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, X, MapPin, Check, Loader2 } from "lucide-react";
+import { X, MapPin, Check, Loader2 } from "lucide-react";
+import { IconButton } from "@/components/ui/Button";
+import { SearchInput } from "@/components/ui/FilterBar";
 import { markersService } from "@/features/markers/services/markers.service";
 import { regionsService } from "@/features/regions/services/regions.service";
 import { questsService } from "@/features/quests/services/quests.service";
@@ -24,7 +26,7 @@ interface AttachTargetPickerProps {
 }
 
 const TYPE_LABEL: Record<NarrativeAttachType, string> = {
-    marker: "marker",
+    marker: "place",
     quest: "quest",
     region: "region",
 };
@@ -69,7 +71,7 @@ export function AttachTargetPicker({
                 });
                 return res.markers.map((m) => ({
                     id: m.id,
-                    title: m.title || "Untitled marker",
+                    title: m.title || "Untitled place",
                     location: m.address || formatCoords(m.location?.coordinates) || null,
                 }));
             }
@@ -107,79 +109,57 @@ export function AttachTargetPicker({
     if (value) {
         // Confirmation card — title + location, with a "change" affordance.
         return (
-            <div className="flex items-start justify-between gap-3 rounded-xl border border-orange-200 bg-orange-50/60 px-4 py-3">
-                <div className="flex items-start gap-2.5 min-w-0">
-                    <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-orange-600" />
+            <div className="flex items-start justify-between gap-3 rounded-control border border-accent-200 bg-accent-50 px-4 py-3">
+                <div className="flex min-w-0 items-start gap-2.5">
+                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-accent-700" aria-hidden />
                     <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-neutral-900">
-                            {value.title}
-                        </div>
-                        <div className="mt-0.5 flex items-center gap-2 text-xs text-neutral-500">
+                        <div className="truncate text-sm font-semibold text-ink">{value.title}</div>
+                        <div className="mt-0.5 flex items-center gap-2 text-xs text-ink-muted">
                             <span className="capitalize">{label}</span>
                             {value.location && (
                                 <>
-                                    <span className="text-neutral-300">•</span>
+                                    <span aria-hidden>·</span>
                                     <span className="truncate">{value.location}</span>
                                 </>
                             )}
                         </div>
-                        <div className="mt-1 font-mono text-[10px] text-neutral-400">{value.id}</div>
+                        <div className="mt-1 font-mono text-[11px] text-ink-faint">{value.id}</div>
                     </div>
                 </div>
-                {!disabled && (
-                    <button
-                        type="button"
-                        onClick={() => onChange(null)}
-                        className="flex-shrink-0 rounded-lg p-1 text-neutral-400 hover:bg-orange-100 hover:text-orange-700"
-                        title={`Change ${label}`}
-                    >
-                        <X className="h-4 w-4" />
-                    </button>
-                )}
+                {!disabled && <IconButton icon={X} size="sm" label={`Change ${label}`} onClick={() => onChange(null)} />}
             </div>
         );
     }
 
     return (
         <div className="space-y-2">
-            <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
-                <input
-                    type="text"
-                    autoFocus
-                    disabled={disabled}
-                    placeholder={placeholder}
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="w-full rounded-xl border border-neutral-200 py-2.5 pl-10 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50"
-                />
-                {isFetching && (
-                    <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-neutral-400" />
-                )}
-            </div>
+            <SearchInput value={search} onChange={setSearch} placeholder={placeholder} label={`Search ${label}s`} autoFocus />
 
-            <div className="max-h-56 overflow-y-auto rounded-xl border border-neutral-200 divide-y divide-neutral-100">
-                {results.length === 0 && !isFetching && (
-                    <div className="px-4 py-6 text-center text-xs text-neutral-400">
-                        {debounced ? `No ${label}s match “${debounced}”.` : `No ${label}s found.`}
-                    </div>
-                )}
+            <div className="max-h-56 divide-y divide-line overflow-y-auto rounded-control border border-line" role="listbox" aria-label={`${label}s`} aria-busy={isFetching || undefined}>
+                {results.length === 0 &&
+                    (isFetching ? (
+                        <div className="flex items-center justify-center gap-2 px-4 py-6 text-xs text-ink-muted">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Searching…
+                        </div>
+                    ) : (
+                        <div className="px-4 py-6 text-center text-xs text-ink-muted">
+                            {debounced ? `No ${label}s match “${debounced}”.` : `No ${label}s found.`}
+                        </div>
+                    ))}
                 {results.map((r) => (
                     <button
                         key={r.id}
                         type="button"
+                        role="option"
+                        aria-selected={false}
                         onClick={() => onChange(r)}
-                        className="group flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-orange-50/70"
+                        className="group flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors hover:bg-brand-50 focus:bg-brand-50 focus:outline-none"
                     >
                         <div className="min-w-0">
-                            <div className="truncate text-sm font-medium text-neutral-800">
-                                {r.title}
-                            </div>
-                            {r.location && (
-                                <div className="truncate text-xs text-neutral-500">{r.location}</div>
-                            )}
+                            <div className="truncate text-sm font-medium text-ink">{r.title}</div>
+                            {r.location && <div className="truncate text-xs text-ink-muted">{r.location}</div>}
                         </div>
-                        <Check className="h-4 w-4 flex-shrink-0 text-orange-500 opacity-0 group-hover:opacity-100" />
+                        <Check className="h-4 w-4 shrink-0 text-accent-600 opacity-0 group-hover:opacity-100 group-focus:opacity-100" aria-hidden />
                     </button>
                 ))}
             </div>

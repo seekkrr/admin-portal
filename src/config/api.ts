@@ -49,6 +49,8 @@ export const API_ENDPOINTS = {
         USER_POINTS_ADD: (id: string) => `/api/v2/users/${id}/points/add`,
         USER_POINTS_DEDUCT: (id: string) => `/api/v2/users/${id}/points/deduct`,
         USER_PROMOTE_CREATOR: (id: string) => `/api/v2/users/${id}/promote-creator`,
+        // Admin on/off switches (PUT { enabled, business_name? }).
+        USER_ACCESS: (id: string, kind: "creator" | "business") => `/api/v2/users/${id}/${kind}`,
     },
     CREATOR_APPLICATIONS: {
         LIST: "/api/v2/creator-applications",
@@ -104,6 +106,12 @@ export const API_ENDPOINTS = {
         ADMIN_WEIGHT: (id: string) => `/api/v2/regions/${id}/admin-weight`,
         MATRIX_REFRESH: (id: string) => `/api/v2/regions/${id}/matrix/refresh`,
         LINK_QUEST: (regionId: string, questId: string) => `/api/v2/regions/${regionId}/quests/${questId}`,
+    },
+    // Region-based explore map: which cities the app shows, in what order (admin only).
+    EXPLORE: {
+        ADMIN_REGIONS: "/api/v2/explore/admin/regions",
+        ADMIN_ORDER: "/api/v2/explore/admin/order",
+        ADMIN_REGION_BY_ID: (id: string) => `/api/v2/explore/admin/regions/${id}`,
     },
     ANALYTICS: {
         OVERVIEW: "/api/v2/analytics/overview",
@@ -224,5 +232,121 @@ export const API_ENDPOINTS = {
     OFFERS: {
         ADMIN_LIST: "/api/v2/offers/admin/business-offers",
         ADMIN_ANALYTICS: "/api/v2/offers/admin/business-analytics",
+    },
+    // ── Collabs (creator × business) ──
+    BUSINESS_APPLICATIONS: {
+        LIST: "/api/v2/business-applications",
+        BY_ID: (id: string) => `/api/v2/business-applications/${id}`,
+        APPROVE: (id: string) => `/api/v2/business-applications/${id}/approve`,
+        REJECT: (id: string) => `/api/v2/business-applications/${id}/reject`,
+    },
+    BUSINESSES_ADMIN: {
+        BASE: "/api/v2/businesses/admin",
+        CATEGORIES: "/api/v2/businesses/categories",
+        BY_ID: (id: string) => `/api/v2/businesses/admin/${id}`,
+        OWNER: (id: string) => `/api/v2/businesses/admin/${id}/owner`,
+    },
+    COLLABS_ADMIN: {
+        ANALYTICS: "/api/v2/admin/collabs/analytics",
+        MODERATION: "/api/v2/admin/collabs/moderation",
+        MODERATE: (collabId: string) => `/api/v2/admin/collabs/moderation/${collabId}`,
+        COLLABS: "/api/v2/admin/collabs/collabs",
+        REPORTS: "/api/v2/admin/collabs/reports",
+        REPORT_RESOLVE: (id: string) => `/api/v2/admin/collabs/reports/${id}/resolve`,
+        FRAUD_FLAGS: "/api/v2/admin/collabs/fraud-flags",
+        FRAUD_FLAG_RESOLVE: (id: string) => `/api/v2/admin/collabs/fraud-flags/${id}/resolve`,
+        APPLICATIONS: "/api/v2/admin/collabs/applications",
+        APPLICATION_FORCE: (id: string) => `/api/v2/admin/collabs/applications/${id}/force`,
+        CREATOR_VERIFICATIONS: "/api/v2/admin/collabs/creators/verifications",
+        CREATOR_VERIFY_HANDLE: (userId: string) => `/api/v2/admin/collabs/creators/${userId}/verify-handle`,
+        CREATOR_TIER: (userId: string) => `/api/v2/admin/collabs/creators/${userId}/tier`,
+        PLANS: "/api/v2/admin/collabs/plans",
+        PLAN_BY_CODE: (code: string) => `/api/v2/admin/collabs/plans/${code}`,
+        PLAN_SYNC_RAZORPAY: (code: string) => `/api/v2/admin/collabs/plans/${code}/sync-razorpay`,
+        COUPONS: "/api/v2/admin/collabs/coupons",
+        SUBSCRIPTIONS: "/api/v2/admin/collabs/subscriptions",
+        SUBSCRIPTION_OVERRIDE: (businessId: string) => `/api/v2/admin/collabs/subscriptions/${businessId}/override`,
+        MATCH_CONFIG: "/api/v2/admin/collabs/match/config",
+        MATCH_PREVIEW: "/api/v2/admin/collabs/match/preview",
+        MATCH_EVALUATION: "/api/v2/admin/collabs/match/evaluation",
+    },
+    // Experiences (bookable tours/classes listed by businesses with features.experiences).
+    EXPERIENCES_ADMIN: {
+        BASE: "/api/v2/admin/experiences",
+        BY_ID: (id: string) => `/api/v2/admin/experiences/${id}`,
+        /** Set up a host from a user ID, business ID or email (turns Experiences on / creates the business). */
+        HOSTS: "/api/v2/admin/experiences/hosts",
+        /** Business-side create (staff act as owner on any business). */
+        FOR_BUSINESS: (businessId: string) => `/api/v2/businesses/${businessId}/experiences`,
+    },
+    // Email templates — keys contain dots (layout.header, v1.interest_welcome).
+    EMAIL_TEMPLATES: {
+        BASE: "/api/v2/admin/email-templates",
+        BY_KEY: (key: string) => `/api/v2/admin/email-templates/${encodeURIComponent(key)}`,
+        PREVIEW: (key: string) => `/api/v2/admin/email-templates/${encodeURIComponent(key)}/preview`,
+        TEST: (key: string) => `/api/v2/admin/email-templates/${encodeURIComponent(key)}/test`,
+        RESET: (key: string) => `/api/v2/admin/email-templates/${encodeURIComponent(key)}/reset`,
+        RESTORE: (key: string) => `/api/v2/admin/email-templates/${encodeURIComponent(key)}/restore`,
+        DELIVERY: (key: string) => `/api/v2/admin/email-templates/${encodeURIComponent(key)}/delivery`,
+    },
+    PLATFORM_CONFIG: {
+        FEATURES_ADMIN: "/api/v2/config/features/admin",
+        FEATURE_BY_KEY: (key: string) => `/api/v2/config/features/${key}`,
+        TERMS: "/api/v2/terms",
+        TERMS_BY_DOC: (doc: string) => `/api/v2/terms/${doc}`,
+        // GET: any signed-in user; PUT: admin|super_admin.
+        PARTNER_PORTAL: "/api/v2/config/partner-portal",
+    },
+    // Admin search across users, businesses, places, quests, experiences, regions
+    // (header search, Ctrl/Cmd+K) and the change history (admin audit log).
+    // GET ?q=&types=&limit= → { results: { user: [hit], ... } }; hit.url_path is a portal route.
+    ADMIN_SEARCH: "/api/v2/admin/search",
+    // GET ?entity_type=&entity_id=&actor_id=&action=&page=&page_size= → { items, total }
+    ADMIN_AUDIT: "/api/v2/admin/audit",
+    // ── Screens added in the rebuild (phase 2) ──
+    // Push broadcast (admin): POST {title, body, group_key, image?, long_body?, send_at?};
+    // scheduled list (pending) and cancel.
+    NOTIFICATIONS: {
+        BROADCAST: "/api/v2/notifications/broadcast",
+        SCHEDULED: "/api/v2/notifications/scheduled",
+        SCHEDULED_BY_ID: (id: string) => `/api/v2/notifications/scheduled/${id}`,
+    },
+    // Place categories (admin list/create/update; public = active only).
+    CATEGORIES: {
+        PUBLIC: "/api/v2/categories/public",
+        ADMIN: "/api/v2/categories/admin",
+        ADMIN_BY_ID: (id: string) => `/api/v2/categories/admin/${id}`,
+    },
+    // Partner hub admin workspace: queue counts, held chat messages, reported threads.
+    PARTNER_ADMIN: {
+        HUB: "/api/v2/admin/hub",
+        HELD_MESSAGES: "/api/v2/admin/chat/held",
+        HELD_REVIEW: (messageId: string) => `/api/v2/admin/chat/held/${messageId}`,
+        THREAD: (threadId: string) => `/api/v2/admin/chat/threads/${threadId}`,
+    },
+    // Quest bookings (admin list: ?quest_id=&user_id=&status=&page=&page_size=).
+    BOOKINGS: {
+        ADMIN_LIST: "/api/v2/bookings",
+        BY_ID: (id: string) => `/api/v2/bookings/${id}`,
+    },
+    // Competition leaderboards (explorer / creator / crowd favourite) and their rebuild.
+    COMPETITIONS: {
+        RECOMPUTE: "/api/v2/leaderboards/recompute-competitions",
+        EXPLORER: "/api/v2/leaderboards/competition/explorer",
+        CREATOR: "/api/v2/leaderboards/competition/creator",
+        CROWD_FAVORITE: "/api/v2/leaderboards/competition/crowd-favorite",
+    },
+    // Collab lifecycle sweep (expire stale requests, close finished collabs) — admin.
+    COLLABS_LIFECYCLE_SWEEP: "/api/v2/admin/collabs/lifecycle/sweep",
+    // Check-in offers: admin edit / disable (PATCH {title, description, discount fields, active, expires_at}).
+    OFFERS_ADMIN_BY_ID: (offerId: string) => `/api/v2/offers/admin/${offerId}`,
+    // Command chat (no AI): text → choose / need / preview / answer → run. Any signed-in user;
+    // what each may run depends on role. Owned by src/services/commands.service.ts.
+    COMMANDS: {
+        SUGGEST: "/api/v2/commands/suggest",
+        UNDERSTAND: "/api/v2/commands/understand",
+        RUN: "/api/v2/commands/run",
+        HISTORY: "/api/v2/commands/history",
+        CATALOG: "/api/v2/commands/catalog",
     },
 } as const;

@@ -144,7 +144,7 @@ export function PlaceSearchInput({
     return (
         <div>
             <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
                 <input
                     type="text"
                     autoFocus={autoFocus}
@@ -153,22 +153,22 @@ export function PlaceSearchInput({
                         setInput(e.target.value);
                         if (errorMsg) setErrorMsg(null);
                     }}
-                    className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    className="w-full pl-10 pr-10 h-10 rounded-control border border-line-strong bg-surface text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-accent-500"
                     placeholder={placeholder}
                 />
                 {(optionsQuery.isFetching || retrievingId !== null) && (
-                    <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-cyan-500 animate-spin" />
+                    <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint animate-spin" />
                 )}
             </div>
 
             {errorText && <p className="mt-2 text-xs text-red-500">{errorText}</p>}
 
             {!errorText && q.length >= 3 && !optionsQuery.isFetching && results.length === 0 && (
-                <p className="mt-2 text-xs text-neutral-500">No places found for “{q}”.</p>
+                <p className="mt-2 text-xs text-ink-muted">No places found for “{q}”.</p>
             )}
 
             {results.length > 0 && (
-                <ul className="mt-2 border border-neutral-200 rounded-xl divide-y divide-neutral-100 overflow-hidden">
+                <ul className="mt-2 border border-line rounded-card divide-y divide-line overflow-hidden">
                     {results.map((option) => {
                         const isAdmin = isAdminFeatureType(option.featureType);
                         return (
@@ -177,11 +177,11 @@ export function PlaceSearchInput({
                                     type="button"
                                     onClick={() => handlePick(option)}
                                     disabled={retrievingId !== null}
-                                    className="w-full flex items-start gap-3 px-4 py-2.5 text-left hover:bg-cyan-50/60 transition-colors disabled:opacity-60"
+                                    className="w-full flex items-start gap-3 px-4 py-2.5 text-left hover:bg-surface-muted transition-colors disabled:opacity-60"
                                 >
                                     <span
                                         className={`mt-0.5 flex items-center justify-center w-7 h-7 rounded-lg shrink-0 ${
-                                            isAdmin ? "bg-cyan-100 text-cyan-600" : "bg-amber-100 text-amber-600"
+                                            isAdmin ? "bg-accent-50 text-accent-700" : "bg-warn-soft text-warn"
                                         }`}
                                     >
                                         {isAdmin ? (
@@ -191,13 +191,13 @@ export function PlaceSearchInput({
                                         )}
                                     </span>
                                     <span className="min-w-0">
-                                        <span className="block text-sm font-medium text-neutral-800 truncate">
+                                        <span className="block text-sm font-medium text-ink truncate">
                                             {option.name}
                                         </span>
-                                        <span className="block text-xs text-neutral-500 truncate">
+                                        <span className="block text-xs text-ink-muted truncate">
                                             {option.secondary}
                                         </span>
-                                        <span className="text-[10px] uppercase tracking-wide text-neutral-400">
+                                        <span className="text-[10px] uppercase tracking-wide text-ink-faint">
                                             {option.featureType}
                                         </span>
                                     </span>
