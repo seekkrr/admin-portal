@@ -16,7 +16,7 @@ import { formatDate, formatDateTime } from "@/utils/date";
 import { collabsAdminService } from "../services/collabs-admin.service";
 import { useCollabAccess } from "../roles";
 import { MarkerLink } from "../components/CollabPickers";
-import { humanize, totalPagesOf } from "../utils";
+import { deliverableLabel, humanize, totalPagesOf } from "../utils";
 import type { AdminCollab, ModerationStatus } from "../types";
 
 const FLAG_LABELS: Record<string, string> = {
@@ -33,7 +33,7 @@ function BriefSummary({ collab }: { collab: AdminCollab }) {
     const b = collab.brief;
     if (!b) return null;
     const parts = [
-        ...(b.deliverables ?? []).map((d) => `${d.count} ${d.count === 1 ? d.type : d.type === "story" ? "stories" : `${d.type}s`}`),
+        ...(b.deliverables ?? []).map((d) => deliverableLabel(d.type, d.count)),
         ...(b.tag_handles ?? []).map((h) => (h.startsWith("@") ? h : `@${h}`)),
         ...(b.hashtags ?? []).map((h) => (h.startsWith("#") ? h : `#${h}`)),
     ];

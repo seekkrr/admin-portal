@@ -66,6 +66,27 @@ export function humanize(value: string | null | undefined): string {
     return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+// How brief deliverables read. "video" is always a YouTube Short (businesses
+// can't ask for long videos); the stored type stays "video".
+const DELIVERABLE_WORDS: Record<string, [string, string]> = {
+    reel: ["reel", "reels"],
+    post: ["post", "posts"],
+    story: ["story", "stories"],
+    video: ["YouTube Short", "YouTube Shorts"],
+    review: ["review", "reviews"],
+};
+
+/** "2 reels", "1 YouTube Short". */
+export function deliverableLabel(type: string, count: number): string {
+    const [one, many] = DELIVERABLE_WORDS[type] ?? [type, `${type}s`];
+    return `${count} ${count === 1 ? one : many}`;
+}
+
+/** "Reel", "YouTube Short": a submitted piece's type. */
+export function deliverableTypeName(type: string): string {
+    return humanize(DELIVERABLE_WORDS[type]?.[0] ?? type);
+}
+
 /** Whole-rupee amounts (plan prices / MRR are integers in INR). */
 export function formatInr(amount: number | null | undefined): string {
     if (amount === null || amount === undefined || Number.isNaN(amount)) return "—";
