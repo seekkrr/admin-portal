@@ -331,7 +331,7 @@ export const placeDetailApi = {
         return marker;
     },
 
-    /** Any PUT /markers/{id} fields, including staff-only owner_id / subscription_flag / opens_at. */
+    /** Any PUT /markers/{id} fields, including staff-only owner_id / subscription_flag / opens_at and admin-only created_by. */
     update: (markerId: string, payload: Record<string, unknown>) =>
         call<{ marker: MovedMarker & Record<string, unknown> }>({ method: "put", url: `/api/v2/markers/${enc(markerId)}`, data: payload }).then(
             (d) => d.marker
