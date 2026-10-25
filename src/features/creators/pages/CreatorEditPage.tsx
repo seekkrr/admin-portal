@@ -20,6 +20,7 @@ import { formatCurrency } from "@/utils/format";
 import { formatDate, formatDateTime } from "@/utils/date";
 import { cx } from "@/utils/cx";
 import { creatorsService } from "../services/creators.service";
+import { ActAsCreatorButton } from "@/features/users/components/ActAsCreatorButton";
 
 // ---- Creator verification statuses ----
 const CREATOR_STATUSES = ["active", "suspended", "rejected"] as const;
@@ -113,9 +114,12 @@ export function CreatorEditPage() {
                 }
                 description={creator.tagline ?? undefined}
                 actions={
-                    <ButtonLink to={`/payouts?createForCreator=${creatorId}&amount=${creator.pending_payouts ?? 0}`} variant="secondary" icon={Banknote}>
-                        Create payout
-                    </ButtonLink>
+                    <span className="flex flex-wrap gap-2">
+                        {creator.user_id && <ActAsCreatorButton userId={creator.user_id} name={displayName} />}
+                        <ButtonLink to={`/payouts?createForCreator=${creatorId}&amount=${creator.pending_payouts ?? 0}`} variant="secondary" icon={Banknote}>
+                            Create payout
+                        </ButtonLink>
+                    </span>
                 }
             />
 

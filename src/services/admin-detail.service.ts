@@ -143,6 +143,16 @@ export const auditApi = {
 /** Fields the older PUT /api/v2/users/{id} can't change (only the new PATCH can). */
 const PATCH_ONLY_FIELDS = ["username", "phone", "email"] as const;
 
+/** "Act as creator": a one-time code the Partner Portal swaps for the creator's 30-minute session. */
+export const impersonationApi = {
+    start: (userId: string, reason?: string) =>
+        call<{ code: string; session_id: string; expires_at: string; user: { id: string; name: string } }>({
+            method: "post",
+            url: "/api/v2/admin/impersonation",
+            data: { user_id: userId, reason: reason?.trim() || undefined },
+        }),
+};
+
 export const userDetailApi = {
     overview: (userId: string) =>
         call<UserOverview & { success?: boolean }>({ method: "get", url: `/api/v2/admin/users/${enc(userId)}/overview` }),
@@ -331,7 +341,7 @@ export const placeDetailApi = {
         return marker;
     },
 
-    /** Any PUT /markers/{id} fields, including staff-only owner_id / subscription_flag / opens_at. */
+    /** Any PUT /markers/{id} fields, including staff-only owner_id / subscription_flag / opens_at and admin-only created_by. */
     update: (markerId: string, payload: Record<string, unknown>) =>
         call<{ marker: MovedMarker & Record<string, unknown> }>({ method: "put", url: `/api/v2/markers/${enc(markerId)}`, data: payload }).then(
             (d) => d.marker

@@ -3,12 +3,23 @@ import { formatDate, formatDateTime } from "@/utils/format";
 import { BUSINESS_FEATURE_DEFAULTS, type AdminBusiness, type BusinessFeatures, type CollabsPage, type EntitlementKey } from "./types";
 
 /**
- * Partner Portal link that opens a business in its admin view (staff act as owner):
- * `<portal>/business/experiences[/<experienceId>]?business=<businessId>`.
+ * Partner Portal link that opens a business in its admin view, where staff act
+ * as its owner: `<portal>/business[/<path>]?business=<businessId>`. Staff must
+ * be signed in to the Partner Portal with their admin account.
  */
+export function partnerPortalBusinessUrl(businessId: string, path = "", extra: Record<string, string> = {}): string {
+    const params = new URLSearchParams({ business: businessId, ...extra });
+    return `${config.partnerPortal.baseUrl}/business${path ? `/${path}` : ""}?${params}`;
+}
+
+/** The admin view of a business's experiences, or of one experience. */
 export function partnerPortalUrl(businessId: string, experienceId?: string | null): string {
-    const path = experienceId ? `/business/experiences/${encodeURIComponent(experienceId)}` : "/business/experiences";
-    return `${config.partnerPortal.baseUrl}${path}?business=${encodeURIComponent(businessId)}`;
+    return partnerPortalBusinessUrl(businessId, experienceId ? `experiences/${encodeURIComponent(experienceId)}` : "experiences");
+}
+
+/** The admin view of a business's collabs with the "Post a UGC brief" editor open. */
+export function partnerPortalNewBriefUrl(businessId: string): string {
+    return partnerPortalBusinessUrl(businessId, "collabs", { new: "1" });
 }
 
 /** A 24-character hex id (user, business, experience). */
@@ -64,6 +75,27 @@ export function humanize(value: string | null | undefined): string {
     if (!value) return "—";
     const s = value.replace(/_/g, " ");
     return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// How brief deliverables read. "video" is always a YouTube Short (businesses
+// can't ask for long videos); the stored type stays "video".
+const DELIVERABLE_WORDS: Record<string, [string, string]> = {
+    reel: ["reel", "reels"],
+    post: ["post", "posts"],
+    story: ["story", "stories"],
+    video: ["YouTube Short", "YouTube Shorts"],
+    review: ["review", "reviews"],
+};
+
+/** "2 reels", "1 YouTube Short". */
+export function deliverableLabel(type: string, count: number): string {
+    const [one, many] = DELIVERABLE_WORDS[type] ?? [type, `${type}s`];
+    return `${count} ${count === 1 ? one : many}`;
+}
+
+/** "Reel", "YouTube Short": a submitted piece's type. */
+export function deliverableTypeName(type: string): string {
+    return humanize(DELIVERABLE_WORDS[type]?.[0] ?? type);
 }
 
 /** Whole-rupee amounts (plan prices / MRR are integers in INR). */

@@ -23,6 +23,7 @@ export function MarkerOwnerTab({ marker, canEdit, onSaved }: { marker: Marker & 
     const ownerId = marker.owner_id ?? null;
     const { business, isLoading } = useMarkerBusiness(marker.id);
     const [newOwner, setNewOwner] = useState("");
+    const [newAdder, setNewAdder] = useState("");
     const [linkId, setLinkId] = useState("");
     const [code, setCode] = useState("");
     const [confirm, setConfirm] = useState<"clear-owner" | "unlink" | null>(null);
@@ -53,6 +54,16 @@ export function MarkerOwnerTab({ marker, canEdit, onSaved }: { marker: Marker & 
             toast.success(id ? "Owner changed" : "Owner removed");
             setNewOwner("");
             setConfirm(null);
+            onSaved();
+        },
+        onError: (e: Error) => toast.error(e.message),
+    });
+    // "Added by": the user credited with the place, who can also edit it.
+    const setAdder = useMutation({
+        mutationFn: (id: string) => placeDetailApi.update(marker.id, { created_by: id }),
+        onSuccess: () => {
+            toast.success("\"Added by\" changed");
+            setNewAdder("");
             onSaved();
         },
         onError: (e: Error) => toast.error(e.message),
@@ -141,6 +152,22 @@ export function MarkerOwnerTab({ marker, canEdit, onSaved }: { marker: Marker & 
                                     </Button>
                                 )}
                             </div>
+                        </form>
+                    )}
+                    {canEdit && (
+                        <form
+                            className="flex flex-col gap-3 sm:flex-row sm:items-end"
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                if (OBJECT_ID.test(newAdder.trim())) setAdder.mutate(newAdder.trim());
+                            }}
+                        >
+                            <Field label='Change "Added by"' hint="A user ID. Shown as who added the place in the app, and they can edit it." className="flex-1">
+                                <TextInput value={newAdder} onChange={(e) => setNewAdder(e.target.value)} placeholder="24-character user ID" className="font-mono" maxLength={24} />
+                            </Field>
+                            <Button type="submit" variant="secondary" disabled={!OBJECT_ID.test(newAdder.trim())} loading={setAdder.isPending}>
+                                Save "Added by"
+                            </Button>
                         </form>
                     )}
                 </div>
