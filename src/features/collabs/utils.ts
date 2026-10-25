@@ -3,12 +3,23 @@ import { formatDate, formatDateTime } from "@/utils/format";
 import { BUSINESS_FEATURE_DEFAULTS, type AdminBusiness, type BusinessFeatures, type CollabsPage, type EntitlementKey } from "./types";
 
 /**
- * Partner Portal link that opens a business in its admin view (staff act as owner):
- * `<portal>/business/experiences[/<experienceId>]?business=<businessId>`.
+ * Partner Portal link that opens a business in its admin view, where staff act
+ * as its owner: `<portal>/business[/<path>]?business=<businessId>`. Staff must
+ * be signed in to the Partner Portal with their admin account.
  */
+export function partnerPortalBusinessUrl(businessId: string, path = "", extra: Record<string, string> = {}): string {
+    const params = new URLSearchParams({ business: businessId, ...extra });
+    return `${config.partnerPortal.baseUrl}/business${path ? `/${path}` : ""}?${params}`;
+}
+
+/** The admin view of a business's experiences, or of one experience. */
 export function partnerPortalUrl(businessId: string, experienceId?: string | null): string {
-    const path = experienceId ? `/business/experiences/${encodeURIComponent(experienceId)}` : "/business/experiences";
-    return `${config.partnerPortal.baseUrl}${path}?business=${encodeURIComponent(businessId)}`;
+    return partnerPortalBusinessUrl(businessId, experienceId ? `experiences/${encodeURIComponent(experienceId)}` : "experiences");
+}
+
+/** The admin view of a business's collabs with the "Post a UGC brief" editor open. */
+export function partnerPortalNewBriefUrl(businessId: string): string {
+    return partnerPortalBusinessUrl(businessId, "collabs", { new: "1" });
 }
 
 /** A 24-character hex id (user, business, experience). */

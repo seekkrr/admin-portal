@@ -2,9 +2,9 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Store, Plus, BadgeCheck, Globe, Star } from "lucide-react";
+import { Store, Plus, BadgeCheck, Globe, Star, ExternalLink } from "lucide-react";
 import { AccessDenied } from "@components/AccessDenied";
-import { Button } from "@/components/ui/Button";
+import { Button, IconButton } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { FilterBar, FilterSelect, type FilterChip, type FilterOption } from "@/components/ui/FilterBar";
 import { chipLabel } from "@/components/ui/filters";
@@ -21,7 +21,7 @@ import { FeatureChips } from "../components/CollabsUi";
 import { RegionName } from "../components/CollabPickers";
 import { BusinessFormFields } from "../components/BusinessFormFields";
 import { createPayloadFromDraft, emptyBusinessDraft, slugError, type BusinessDraft } from "../businessDraft";
-import { featuresOf } from "../utils";
+import { featuresOf, partnerPortalBusinessUrl } from "../utils";
 import type { AdminBusiness, BusinessStatus, ListBusinessesParams } from "../types";
 
 const PAGE_SIZE = 20;
@@ -211,6 +211,15 @@ export function BusinessesPage() {
                 onRetry={() => refetch()}
                 empty={{ icon: Store, title: "No businesses found", description: chips.length || state.q ? "Try clearing a filter." : undefined }}
                 onRowClick={(b) => navigate(`/collabs/businesses/${b.id}`)}
+                rowActions={(b) => (
+                    <IconButton
+                        icon={ExternalLink}
+                        size="sm"
+                        label={`Open ${b.name} in the Partner Portal`}
+                        title="Open in the Partner Portal as this business (admin view)"
+                        onClick={() => window.open(partnerPortalBusinessUrl(b.id), "_blank", "noopener,noreferrer")}
+                    />
+                )}
                 storageKey="businesses"
                 exportName="businesses"
                 summary={data ? `${businesses.length} of ${data.total.toLocaleString("en-IN")}` : undefined}

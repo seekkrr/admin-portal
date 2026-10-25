@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { GitPullRequestArrow, Pause, Play, Sparkles } from "lucide-react";
+import { ExternalLink, GitPullRequestArrow, Pause, Play, Sparkles } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import { DataTable, type DataColumn } from "@/components/ui/DataTable";
 import { Pagination } from "@/components/ui/Pagination";
@@ -13,7 +13,7 @@ import { buttonClass } from "@/components/ui/buttonStyles";
 import { businessDetailApi } from "@/services/admin-detail.service";
 import { formatDate } from "@/utils/date";
 import { collabsAdminService } from "../../services/collabs-admin.service";
-import { featuresOf, humanize, totalPagesOf } from "../../utils";
+import { featuresOf, humanize, partnerPortalNewBriefUrl, totalPagesOf } from "../../utils";
 import type { AdminBusiness, AdminCollab } from "../../types";
 import { Notice } from "@/components/detail/DetailStates";
 
@@ -83,9 +83,23 @@ export function BusinessCollabsTab({ business, canEdit }: { business: AdminBusin
                 icon={Sparkles}
                 bodyClassName="p-0"
                 actions={
-                    <Link to={`/collabs/applications?business_id=${business.id}`} className={buttonClass("ghost", "sm")}>
-                        <GitPullRequestArrow className="h-3.5 w-3.5" aria-hidden /> Requests
-                    </Link>
+                    <span className="flex flex-wrap gap-2">
+                        <Link to={`/collabs/applications?business_id=${business.id}`} className={buttonClass("ghost", "sm")}>
+                            <GitPullRequestArrow className="h-3.5 w-3.5" aria-hidden /> Requests
+                        </Link>
+                        {/* Posting happens in the Partner Portal's admin view, as the business. */}
+                        {collabsOn && (
+                            <a
+                                href={partnerPortalNewBriefUrl(business.id)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={buttonClass("primary", "sm")}
+                                title="Opens the Partner Portal as this business with a new UGC brief. Sign in there with your admin account."
+                            >
+                                <ExternalLink className="h-3.5 w-3.5" aria-hidden /> Post a UGC brief
+                            </a>
+                        )}
+                    </span>
                 }
             >
                 <DataTable
