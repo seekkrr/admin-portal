@@ -12,7 +12,7 @@ import { useDetailTab } from "@/components/detail/useDetailTab";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { businessesService } from "../services/businesses.service";
 import { useCollabAccess } from "../roles";
-import { featuresOf, humanize } from "../utils";
+import { featuresOf, humanize, partnerPortalBusinessUrl } from "../utils";
 import { BusinessOverviewTab } from "../components/business-detail/BusinessOverviewTab";
 import { BusinessProfileTab } from "../components/business-detail/BusinessProfileTab";
 import { BusinessPlacesTab } from "../components/business-detail/BusinessPlacesTab";
@@ -80,11 +80,23 @@ export function BusinessDetailPage() {
                         </span>
                     }
                     actions={
-                        publicPage ? (
-                            <a href={`https://seekkrr.com/places/${business.slug}`} target="_blank" rel="noopener noreferrer" className={buttonClass("ghost", "sm")}>
-                                <ExternalLink className="h-3.5 w-3.5" aria-hidden /> Public page
+                        <span className="flex flex-wrap gap-2">
+                            {publicPage && (
+                                <a href={`https://seekkrr.com/places/${business.slug}`} target="_blank" rel="noopener noreferrer" className={buttonClass("ghost", "sm")}>
+                                    <ExternalLink className="h-3.5 w-3.5" aria-hidden /> Public page
+                                </a>
+                            )}
+                            {/* Work on the business as its owner (admin view) in a new tab. */}
+                            <a
+                                href={partnerPortalBusinessUrl(business.id)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={buttonClass("secondary", "sm")}
+                                title="Opens this business in the Partner Portal as its owner. Sign in there with your admin account."
+                            >
+                                <ExternalLink className="h-3.5 w-3.5" aria-hidden /> Open in Partner Portal
                             </a>
-                        ) : undefined
+                        </span>
                     }
                 />
             </div>

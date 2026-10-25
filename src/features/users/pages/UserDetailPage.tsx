@@ -18,6 +18,7 @@ import { UserOverviewTab } from "../components/user-detail/UserOverviewTab";
 import { UserProfileTab } from "../components/user-detail/UserProfileTab";
 import { UserAccessTab } from "../components/user-detail/UserAccessTab";
 import { UserActivityTab } from "../components/user-detail/UserActivityTab";
+import { ActAsCreatorButton } from "../components/ActAsCreatorButton";
 
 const TABS = ["overview", "profile", "access", "activity", "history"] as const;
 type Tab = (typeof TABS)[number];
@@ -90,9 +91,14 @@ export function UserDetailPage() {
                         </span>
                     }
                     actions={
-                        <ButtonLink to={`/users?focus=${user.id}`} variant="ghost" size="sm" icon={List}>
-                            In the list
-                        </ButtonLink>
+                        <span className="flex flex-wrap gap-2">
+                            <ButtonLink to={`/users?focus=${user.id}`} variant="ghost" size="sm" icon={List}>
+                                In the list
+                            </ButtonLink>
+                            {(user.is_creator || user.roles.includes("creator")) && !user.roles.some((r) => STAFF_ROLES.includes(r)) && (
+                                <ActAsCreatorButton userId={user.id} name={name ?? "this creator"} />
+                            )}
+                        </span>
                     }
                     menu={[
                         {

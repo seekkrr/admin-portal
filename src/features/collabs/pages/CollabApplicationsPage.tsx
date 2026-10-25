@@ -24,7 +24,7 @@ import { collabsAdminService } from "../services/collabs-admin.service";
 import { useCollabAccess } from "../roles";
 import { MarkerLink } from "../components/CollabPickers";
 import { DrawerSection } from "../components/AdminBits";
-import { humanize, totalPagesOf } from "../utils";
+import { deliverableTypeName, humanize, totalPagesOf } from "../utils";
 import { APPLICATION_STATUSES, type AdminCollabApplication, type ApplicationRating } from "../types";
 
 const STATUS_OPTIONS: FilterOption[] = APPLICATION_STATUSES.map((s) => ({ value: s, label: humanize(s) }));
@@ -297,7 +297,7 @@ export function CollabApplicationsPage() {
                                             <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden /> {d.url}
                                         </a>
                                         <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
-                                            <Tag>{humanize(d.type)}</Tag>
+                                            <Tag>{deliverableTypeName(d.type)}</Tag>
                                             <span>{formatDateTime(d.submitted_at)}</span>
                                             {d.auto_check &&
                                                 (d.auto_check.ok ? (
