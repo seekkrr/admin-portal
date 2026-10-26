@@ -225,6 +225,12 @@ export interface ExperienceLocation {
 
 export type ExperienceStatus = "draft" | "published" | "paused" | "archived";
 
+/** Whether slots block each other: one shared space (a go-kart track) or one group per slot. */
+export interface ExperienceScheduling {
+    shared_space: boolean;
+    private_slots: boolean;
+}
+
 export interface ExperienceDetail {
     id: string;
     business_id: string;
@@ -249,6 +255,7 @@ export interface ExperienceDetail {
     faqs: ExperienceFaq[];
     gallery: string[];
     options: ExperienceOption[];
+    scheduling?: ExperienceScheduling | null;
     /** Admin-set price per person (null = not set). Slot price = option price ?? this ?? free. */
     price_per_person?: number | null;
     gst?: ExperienceGst | null;
@@ -286,6 +293,7 @@ export interface ExperiencePatch {
     gallery?: string[];
     /** `price` is only echoed back unchanged (prices are set on the Pricing tab). */
     options?: Array<Omit<ExperienceOption, "id" | "price"> & { id?: string; price?: number | null }>;
+    scheduling?: Partial<ExperienceScheduling>;
 }
 
 export interface ExperienceSlot {
@@ -306,6 +314,8 @@ export interface ExperienceSlot {
     sold_out: boolean;
     status: "open" | "cancelled";
     cancelled_at: string | null;
+    /** Why travellers can't book it: "price_not_set" until SeekKrr prices its option. */
+    unavailable_reason?: "cancelled" | "blocked" | "price_not_set" | "time_taken" | "private_booked" | "full" | null;
 }
 
 export interface BulkSlotsPayload {
