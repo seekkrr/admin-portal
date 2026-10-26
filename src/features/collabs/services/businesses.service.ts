@@ -47,8 +47,12 @@ export const businessesService = {
     },
 
     /** Make a user (ID or email) the owner; the business goes live. */
-    setOwner: async (id: string, userRef: string): Promise<AdminBusiness> => {
-        const { data } = await api.put<{ business: AdminBusiness }>(API_ENDPOINTS.BUSINESSES_ADMIN.OWNER(id), { user_id: userRef });
+    /** The previous owner loses access unless `keepPreviousOwner` keeps them on as a manager. */
+    setOwner: async (id: string, userRef: string, keepPreviousOwner = false): Promise<AdminBusiness> => {
+        const { data } = await api.put<{ business: AdminBusiness }>(API_ENDPOINTS.BUSINESSES_ADMIN.OWNER(id), {
+            user_id: userRef,
+            keep_previous_owner: keepPreviousOwner,
+        });
         return data.business;
     },
 

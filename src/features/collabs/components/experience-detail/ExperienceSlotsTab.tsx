@@ -193,7 +193,13 @@ export function ExperienceSlotsTab({ experience, canEdit }: { experience: Experi
             cell: (s) => (
                 <span className="tabular-nums">
                     {s.booked}/{s.capacity}
-                    {s.sold_out && s.status === "open" && <Tag tone="warn" className="ml-1.5">Full</Tag>}
+                    {s.status === "open" && s.unavailable_reason === "price_not_set" ? (
+                        <Tag tone="warn" className="ml-1.5">No price</Tag>
+                    ) : s.status === "open" && s.unavailable_reason === "time_taken" ? (
+                        <Tag tone="warn" className="ml-1.5">Time taken</Tag>
+                    ) : (
+                        s.sold_out && s.status === "open" && <Tag tone="warn" className="ml-1.5">Full</Tag>
+                    )}
                 </span>
             ),
         },
