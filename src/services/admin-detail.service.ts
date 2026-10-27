@@ -15,6 +15,8 @@ import type {
     AnnouncePayload,
     AnnounceResult,
     AuditPage,
+    BulkSlotChange,
+    BulkSlotChangeResult,
     BulkSlotsPayload,
     BulkSlotsResult,
     BusinessOffer,
@@ -29,6 +31,7 @@ import type {
     MarkerCollabsInfo,
     MovedMarker,
     OfferPatch,
+    OfflineBookingPayload,
     PlaceReviewsPage,
     PublicExperienceCard,
     QuestBookingsPage,
@@ -299,6 +302,22 @@ export const experienceDetailApi = {
             method: "delete",
             url: `${bx(businessId)}/experience-slots/${enc(slotId)}${qs({ reason })}`,
         }),
+
+    /** Block, unblock, resize or cancel many slots of the experience; slots that can't take it come back in `skipped`. */
+    bulkUpdateSlots: (businessId: string, experienceId: string, change: BulkSlotChange) =>
+        call<BulkSlotChangeResult>({
+            method: "post",
+            url: `${bx(businessId)}/experiences/${enc(experienceId)}/slots/bulk-update`,
+            data: change,
+        }).then((d) => ({ changed: d.changed ?? 0, skipped: d.skipped ?? [], cancelled_bookings: d.cancelled_bookings ?? 0 })),
+
+    /** A walk-in or phone booking on a slot: confirmed at once, nobody is notified. */
+    addOfflineBooking: (businessId: string, slotId: string, payload: OfflineBookingPayload) =>
+        call<{ booking: ExperienceBooking }>({
+            method: "post",
+            url: `${bx(businessId)}/experience-slots/${enc(slotId)}/offline-bookings`,
+            data: payload,
+        }).then((d) => d.booking),
 
     bookings: (
         businessId: string,
