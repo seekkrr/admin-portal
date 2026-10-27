@@ -323,6 +323,9 @@ export const API_ENDPOINTS = {
         HELD_MESSAGES: "/api/v2/admin/chat/held",
         HELD_REVIEW: (messageId: string) => `/api/v2/admin/chat/held/${messageId}`,
         THREAD: (threadId: string) => `/api/v2/admin/chat/threads/${threadId}`,
+        /** Every business–creator chat (admins only; ?q=&before=&limit=). */
+        CONVERSATIONS: "/api/v2/admin/conversations",
+        CONVERSATION: (threadId: string) => `/api/v2/admin/conversations/${threadId}`,
     },
     // Quest bookings (admin list: ?quest_id=&user_id=&status=&page=&page_size=).
     BOOKINGS: {
