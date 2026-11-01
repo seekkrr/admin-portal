@@ -7,6 +7,7 @@ import { useAuthStore } from "@/store/auth.store";
 import { navGroupsForRoles, type NavItem } from "@/config/navigation";
 import { useOverlay } from "@/hooks/useOverlay";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useAdminChatOn } from "@/features/command-chat/hooks/useChatSettings";
 import { safeStorage } from "@/utils/storage";
 import { cx } from "@/utils/cx";
 import { errorMessage } from "@/utils/errors";
@@ -79,7 +80,8 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
         retry: false,
     });
 
-    const groups = useMemo(() => navGroupsForRoles(roles), [roles]);
+    const chatOn = useAdminChatOn();
+    const groups = useMemo(() => navGroupsForRoles(roles, { chat: chatOn }), [roles, chatOn]);
     const q = query.trim();
 
     const pageOptions: Option[] = useMemo(() => {

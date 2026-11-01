@@ -167,7 +167,8 @@ export interface CatalogResponse {
  * - network: no response (offline, timeout). Retry.
  * - server: 5xx / 429. Retry.
  * - expired: run token expired or invalid (400). Send the command again.
+ * - disabled: 403 CHAT_DISABLED — an admin turned the chat off for this group (Rollout → Chat).
  * - forbidden: 403 — not (or no longer) allowed.
  * - invalid: any other 4xx; the server's message is shown as-is.
  */
-export type CommandsErrorKind = "unavailable" | "network" | "server" | "expired" | "forbidden" | "invalid";
+export type CommandsErrorKind = "unavailable" | "network" | "server" | "expired" | "disabled" | "forbidden" | "invalid";

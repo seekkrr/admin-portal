@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Rocket, Power, Globe, Save, FileText, ExternalLink, Upload, LayoutPanelLeft } from "lucide-react";
+import { Rocket, Power, Globe, Save, FileText, ExternalLink, Upload, LayoutPanelLeft, MessagesSquare } from "lucide-react";
 import { AccessDenied } from "@components/AccessDenied";
 import { Button } from "@/components/ui/Button";
 import { PageHeader, SectionHeading } from "@/components/ui/PageHeader";
@@ -11,17 +11,22 @@ import { Field, SelectInput, Switch, TextInput } from "@/components/ui/Field";
 import { PanelState } from "@/components/ui/States";
 import { formatDateTime } from "@/utils/date";
 import { cx } from "@/utils/cx";
+import { CHAT_SETTINGS_KEY, useChatSettings } from "@/features/command-chat/hooks/useChatSettings";
 import { platformConfigService } from "../services/platform-config.service";
 import { collabsAdminService } from "../services/collabs-admin.service";
 import { useCollabAccess } from "../roles";
 import { RegionMultiSelect } from "../components/CollabPickers";
 import type {
+    ChatAudience,
+    ChatAudiences,
+    ChatSettings,
     FeatureFlag,
     PartnerPortalSection,
     PartnerPortalSections,
     PartnerPortalSettings,
     TermsDoc,
     TermsVersion,
+    UpdateChatSettingsPayload,
     UpdatePartnerPortalPayload,
 } from "../types";
 
@@ -43,6 +48,13 @@ const PARTNER_PORTAL_SECTIONS: { key: PartnerPortalSection; label: string; hint:
     { key: "team", label: "Team", hint: "Invite managers and staff to help run the business." },
     { key: "messages", label: "Messages", hint: "Chat threads with creators about each collab." },
     { key: "blocked_creators", label: "Blocked creators", hint: "Creators the business has blocked, and unblocking them." },
+];
+
+const CHAT_AUDIENCES: { key: ChatAudience; label: string; hint: string }[] = [
+    { key: "users", label: "Users", hint: "People using the SeekKrr app." },
+    { key: "creators", label: "Creators", hint: "Creators in the app and the Partner Portal." },
+    { key: "businesses", label: "Businesses", hint: "Business teams in the app and the Partner Portal." },
+    { key: "admin", label: "SeekKrr team", hint: "Chat in this admin portal. When it's off, Chat leaves the menu." },
 ];
 
 const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
@@ -235,6 +247,73 @@ function PartnerPortalEditor({ settings }: { settings: PartnerPortalSettings }) 
     );
 }
 
+function ChatEditor({ settings }: { settings: ChatSettings }) {
+    const queryClient = useQueryClient();
+    const [audiences, setAudiences] = useState<ChatAudiences>(settings.audiences);
+    const [reason, setReason] = useState("");
+
+    const changed = CHAT_AUDIENCES.filter((a) => audiences[a.key] !== settings.audiences[a.key]).map((a) => a.key);
+
+    const save = useMutation({
+        mutationFn: () => {
+            const payload: UpdateChatSettingsPayload = { audiences: Object.fromEntries(changed.map((k) => [k, audiences[k]])) };
+            if (reason.trim()) payload.reason = reason.trim();
+            return platformConfigService.updateChatSettings(payload);
+        },
+        onSuccess: (updated) => {
+            queryClient.setQueryData(CHAT_SETTINGS_KEY, updated);
+            toast.success("Chat settings saved");
+        },
+        onError: (e: Error) => toast.error(e.message || "Failed to save the chat settings"),
+    });
+
+    return (
+        <Panel
+            title="Chat"
+            icon={MessagesSquare}
+            actions={
+                <Button variant="primary" icon={Save} onClick={() => save.mutate()} disabled={changed.length === 0} loading={save.isPending}>
+                    Save
+                </Button>
+            }
+        >
+            <p className="mb-4 text-sm text-ink-muted">
+                Choose who can use the chat.
+                {settings.updated_at ? ` Last changed ${formatDateTime(settings.updated_at)}.` : ""}
+            </p>
+            <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {CHAT_AUDIENCES.map((a) => {
+                    const on = audiences[a.key];
+                    return (
+                        <li key={a.key} className="flex items-start justify-between gap-4 rounded-control border border-line bg-surface-muted p-3">
+                            <div className="min-w-0">
+                                <p className="text-sm font-medium text-ink">
+                                    {a.label}
+                                    <span className={cx("ml-2 text-xs font-semibold", on ? "text-accent-700" : "text-ink-faint")}>{on ? "On" : "Off"}</span>
+                                </p>
+                                <p className="mt-0.5 text-xs text-ink-muted">{a.hint}</p>
+                            </div>
+                            <Switch
+                                checked={on}
+                                label={`Chat for ${a.label}`}
+                                hideLabel
+                                disabled={save.isPending}
+                                onChange={() => setAudiences((prev) => ({ ...prev, [a.key]: !prev[a.key] }))}
+                            />
+                        </li>
+                    );
+                })}
+            </ul>
+            {!settings.ai_ready && <p className="mt-3 text-sm text-ink-muted">AI isn't set up on the server yet. The chat still works, without AI.</p>}
+            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Reason" hint="Optional. Saved to the change history.">
+                    <TextInput type="text" maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Trying the chat with the team first" />
+                </Field>
+            </div>
+        </Panel>
+    );
+}
+
 function TermsCard({ doc, label, who, current }: { doc: TermsDoc; label: string; who: string; current: TermsVersion | undefined }) {
     const queryClient = useQueryClient();
     const [version, setVersion] = useState("");
@@ -300,6 +379,7 @@ export function RolloutPage() {
     const flagsQuery = useQuery({ queryKey: ["platform-feature-flags"], queryFn: platformConfigService.listFlags, enabled: isAdmin });
     const termsQuery = useQuery({ queryKey: ["platform-terms"], queryFn: platformConfigService.getTerms, enabled: isAdmin });
     const portalQuery = useQuery({ queryKey: PARTNER_PORTAL_KEY, queryFn: platformConfigService.getPartnerPortal, enabled: isAdmin });
+    const chatQuery = useChatSettings();
 
     if (!isAdmin) return <AccessDenied message="Only admins can change the collabs rollout." />;
 
@@ -309,7 +389,7 @@ export function RolloutPage() {
 
     return (
         <div className="max-w-[1200px] space-y-5">
-            <PageHeader icon={Rocket} title="Rollout" description="Feature flag, region rollout, Partner Portal sections and collab terms versions" />
+            <PageHeader icon={Rocket} title="Rollout" description="Feature flag, region rollout, Partner Portal sections, chat and collab terms versions" />
 
             <PanelState isLoading={flagsQuery.isLoading} error={flagsQuery.error} isEmpty={!flag} emptyIcon={Rocket} emptyText="Feature flag unavailable" onRetry={() => flagsQuery.refetch()}>
                 {flag && <FlagEditor key={`${flag.key}-${flag.updated_at ?? ""}`} flag={flag} />}
@@ -328,6 +408,19 @@ export function RolloutPage() {
                         key={`${portalQuery.data.updated_at ?? ""}-${portalQuery.data.default_plan}-${JSON.stringify(portalQuery.data.sections)}`}
                         settings={portalQuery.data}
                     />
+                )}
+            </PanelState>
+
+            <PanelState
+                isLoading={chatQuery.isLoading}
+                error={chatQuery.error}
+                isEmpty={!chatQuery.data}
+                emptyIcon={MessagesSquare}
+                emptyText="Chat settings unavailable"
+                onRetry={() => chatQuery.refetch()}
+            >
+                {chatQuery.data && (
+                    <ChatEditor key={`${chatQuery.data.updated_at ?? ""}-${JSON.stringify(chatQuery.data.audiences)}`} settings={chatQuery.data} />
                 )}
             </PanelState>
 

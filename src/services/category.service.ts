@@ -5,6 +5,8 @@ export interface Category {
     name: string;
     sub_categories: string[];
     is_active?: boolean;
+    /** Map pin image URL: the pin on the Explore map for this category's places. */
+    cdn_frame?: string | null;
 }
 
 export const categoryService = {

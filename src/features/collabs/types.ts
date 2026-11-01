@@ -643,6 +643,26 @@ export interface UpdatePartnerPortalPayload {
     reason?: string;
 }
 
+// ── Platform config: chat ──────────────────────────────────
+
+/** `admin` is the SeekKrr team (this portal's Chat page). */
+export type ChatAudience = "users" | "creators" | "businesses" | "admin";
+
+export type ChatAudiences = Record<ChatAudience, boolean>;
+
+/** Who gets the chat (one platform-wide document; every group starts off). */
+export interface ChatSettings {
+    audiences: ChatAudiences;
+    /** False when the server has no AI model set up — the chat then works without AI. */
+    ai_ready: boolean;
+    updated_at: string | null;
+}
+
+export interface UpdateChatSettingsPayload {
+    audiences?: Partial<ChatAudiences>;
+    reason?: string;
+}
+
 // ── Experiences (admin) ────────────────────────────────────
 
 export type ExperienceStatus = "draft" | "published" | "paused" | "archived";

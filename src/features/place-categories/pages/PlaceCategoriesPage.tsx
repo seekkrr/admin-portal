@@ -29,7 +29,7 @@ function Swatch({ color }: { color: string | null }) {
     );
 }
 
-/** Place categories (Places and map): the categories places pick, with sub-categories, colour and pin frame. */
+/** Place categories (Places and map): the categories places pick, with sub-categories, colour and map pin. */
 export function PlaceCategoriesPage() {
     const queryClient = useQueryClient();
     const { state, set, reset } = useUrlState({ q: "", status: "" });
@@ -110,7 +110,7 @@ export function PlaceCategoriesPage() {
         { id: "icon", header: "Icon", defaultHidden: true, sortValue: (c) => c.icon ?? "", cell: (c) => <span className="text-ink-muted">{c.icon ?? "—"}</span> },
         {
             id: "frame",
-            header: "Pin frame",
+            header: "Map pin",
             csv: (c) => c.cdn_frame,
             cell: (c) =>
                 c.cdn_frame ? <img src={c.cdn_frame} alt="" className="h-8 w-8 rounded-md border border-line bg-surface-muted object-contain p-0.5" /> : <span className="text-ink-faint">—</span>,

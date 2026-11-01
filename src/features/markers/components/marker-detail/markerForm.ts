@@ -1,6 +1,18 @@
-import type { Marker, MarkerStatus } from "@/types";
+import type { Marker, MarkerPinStyle, MarkerStatus } from "@/types";
 
 export type SubscriptionFlag = "NA" | "Virtual" | "Physical" | "Both";
+/** The Explore map pin; "auto" is the category's default (null on the server). */
+export type PinStyle = MarkerPinStyle | "auto";
+
+export const PIN_STYLE_OPTIONS: { value: PinStyle; label: string; hint?: string }[] = [
+    { value: "auto", label: "Category default" },
+    { value: "image", label: "Place photo", hint: "Uses the first photo; places without photos show the category pin." },
+    { value: "icon", label: "Category pin" },
+];
+
+export function pinStyleOf(m: Pick<Marker, "pin_style">): PinStyle {
+    return m.pin_style === "image" || m.pin_style === "icon" ? m.pin_style : "auto";
+}
 
 /** Editable copy of a place's details (not location or photos). */
 export interface MarkerDetailsForm {
@@ -23,6 +35,7 @@ export interface MarkerDetailsForm {
     things_to_do_text: string;
     things_to_do_image_url: string;
     subscription_flag: SubscriptionFlag;
+    pin_style: PinStyle;
 }
 
 /** The server sends hours as an ISO datetime; the form edits HH:MM. */
@@ -53,6 +66,7 @@ export function detailsFormOf(m: Marker): MarkerDetailsForm {
         things_to_do_text: m.things_to_do_text ?? "",
         things_to_do_image_url: m.things_to_do_image_url ?? "",
         subscription_flag: m.subscription_flag ?? "NA",
+        pin_style: pinStyleOf(m),
     };
 }
 
@@ -85,6 +99,7 @@ export function detailsChanges(f: MarkerDetailsForm, base: MarkerDetailsForm): R
     if (f.status !== base.status) out.status = f.status;
     if (f.hidden !== base.hidden) out.hidden = f.hidden;
     if (f.subscription_flag !== base.subscription_flag) out.subscription_flag = f.subscription_flag;
+    if (f.pin_style !== base.pin_style) out.pin_style = f.pin_style;
     if (f.region_id !== base.region_id) out.region_id = f.region_id;
     if (f.opens_at !== base.opens_at && f.opens_at) out.opens_at = f.opens_at;
     if (f.closes_at !== base.closes_at && f.closes_at) out.closes_at = f.closes_at;

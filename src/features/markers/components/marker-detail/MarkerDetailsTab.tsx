@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Clock, IndianRupee, Info, ListChecks, Tags } from "lucide-react";
+import { Clock, ImageOff, IndianRupee, Info, ListChecks, MapPin, Tags } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import { Checkbox, Field, SelectInput, TextArea, TextInput } from "@/components/ui/Field";
 import { SaveBar } from "@/components/detail/SaveBar";
@@ -13,7 +13,7 @@ import { categoryService } from "@/services/category.service";
 import { placeDetailApi } from "@/services/admin-detail.service";
 import { cx } from "@/utils/cx";
 import type { Marker, MarkerStatus } from "@/types";
-import { detailsChanges, detailsErrors, detailsFormOf, type MarkerDetailsForm, type SubscriptionFlag } from "./markerForm";
+import { PIN_STYLE_OPTIONS, detailsChanges, detailsErrors, detailsFormOf, type MarkerDetailsForm, type SubscriptionFlag } from "./markerForm";
 
 const STATUS_OPTIONS: { value: MarkerStatus; label: string }[] = [
     { value: "approved", label: "Approved" },
@@ -68,6 +68,17 @@ function ChoiceChips({
     );
 }
 
+/** A small picture of what the map shows: the photo, else the category's pin. */
+function PinPreview({ photo, pin }: { photo?: string; pin?: string }) {
+    if (photo) return <img src={photo} alt="" className="h-10 w-10 shrink-0 rounded-md border border-line object-cover" />;
+    if (pin) return <img src={pin} alt="" className="h-10 w-10 shrink-0 rounded-md border border-line bg-surface-muted object-contain p-0.5" />;
+    return (
+        <span title="Nothing to show yet" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-dashed border-line-strong text-ink-faint">
+            <ImageOff className="h-4 w-4" aria-hidden />
+        </span>
+    );
+}
+
 /** Every editable field of a place except its location and photos. */
 export function MarkerDetailsTab({ marker, canEdit, onSaved }: { marker: Marker; canEdit: boolean; onSaved: () => void }) {
     const base = useMemo(() => detailsFormOf(marker), [marker]);
@@ -81,6 +92,9 @@ export function MarkerDetailsTab({ marker, canEdit, onSaved }: { marker: Marker;
     const categories = useQuery({ queryKey: ["categories"], queryFn: () => categoryService.getCategories(), staleTime: 5 * 60_000 });
     const catNames = (categories.data ?? []).map((c) => c.name);
     const subOptions = Array.from(new Set((categories.data ?? []).filter((c) => form.categories.includes(c.name)).flatMap((c) => c.sub_categories)));
+    // Map pin previews: the first photo and the first category's pin.
+    const photo = marker.media?.[0] || undefined;
+    const pin = (categories.data ?? []).find((c) => c.name === form.categories[0])?.cdn_frame || undefined;
 
     const save = useMutation({
         mutationFn: () => placeDetailApi.update(marker.id, changes),
@@ -152,6 +166,35 @@ export function MarkerDetailsTab({ marker, canEdit, onSaved }: { marker: Marker;
                     <Field label="Tags" hint="Press Enter after each tag.">
                         <ChipsInput value={form.tags} onChange={(v) => set("tags", v)} maxLength={100} disabled={disabled} />
                     </Field>
+                </div>
+            </Panel>
+
+            <Panel title="Map pin" icon={MapPin} description="What the Explore map shows for this place.">
+                <div role="radiogroup" aria-label="Map pin" className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    {PIN_STYLE_OPTIONS.map((o) => {
+                        const on = form.pin_style === o.value;
+                        return (
+                            <button
+                                key={o.value}
+                                type="button"
+                                role="radio"
+                                aria-checked={on}
+                                disabled={disabled}
+                                onClick={() => set("pin_style", o.value)}
+                                className={cx(
+                                    "flex items-start justify-between gap-3 rounded-control border px-4 py-3 text-left transition-colors disabled:cursor-not-allowed",
+                                    on ? "border-accent-300 bg-accent-50" : "border-line hover:border-accent-300 hover:bg-accent-50/50 disabled:opacity-60"
+                                )}
+                            >
+                                <span className="min-w-0">
+                                    <span className="block text-sm font-medium text-ink">{o.label}</span>
+                                    {o.hint && <span className="mt-0.5 block text-xs text-ink-muted">{o.hint}</span>}
+                                </span>
+                                {o.value === "image" && <PinPreview photo={photo} pin={pin} />}
+                                {o.value === "icon" && <PinPreview pin={pin} />}
+                            </button>
+                        );
+                    })}
                 </div>
             </Panel>
 

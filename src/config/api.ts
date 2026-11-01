@@ -296,6 +296,8 @@ export const API_ENDPOINTS = {
         TERMS_BY_DOC: (doc: string) => `/api/v2/terms/${doc}`,
         // GET: any signed-in user; PUT: admin|super_admin.
         PARTNER_PORTAL: "/api/v2/config/partner-portal",
+        // Who gets the chat (users, creators, businesses, admin). GET: public; PUT: admin|super_admin.
+        CHAT: "/api/v2/config/chat",
     },
     // Admin search across users, businesses, places, quests, experiences, regions
     // (header search, Ctrl/Cmd+K) and the change history (admin audit log).

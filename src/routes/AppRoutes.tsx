@@ -6,6 +6,7 @@ import { LoginPage } from "@/features/auth/pages/LoginPage";
 import { AccessDeniedPage } from "@/features/auth/pages/AccessDeniedPage";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { RequireRole } from "./RequireRole";
+import { RequireChat } from "./RequireChat";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { NotFoundPage } from "@/components/shell/NotFoundPage";
 import { ADMIN_NAV_ROLES, FINANCE_ROLES } from "@/config/navigation";
@@ -120,7 +121,16 @@ export const AppRoutes = () => {
             >
                 <Route index element={<Navigate to="/today" replace />} />
                 <Route path="today" element={page(<TodayPage />, "Loading today...")} />
-                <Route path="chat" element={page(<CommandChatPage />, "Loading chat...")} />
+                {/* Only while the chat is on for the SeekKrr team (Rollout → Chat) */}
+                <Route
+                    path="chat"
+                    element={page(
+                        <RequireChat>
+                            <CommandChatPage />
+                        </RequireChat>,
+                        "Loading chat..."
+                    )}
+                />
                 <Route path="dashboard" element={page(<DashboardPage />, "Loading dashboard...")} />
                 {/* Legacy /stats page removed (depended on V1-only interest endpoint); redirect to dashboard */}
                 <Route path="stats" element={<Navigate to="/dashboard" replace />} />

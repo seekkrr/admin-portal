@@ -25,6 +25,7 @@ export type * from "./commands.types";
 const C = API_ENDPOINTS.COMMANDS;
 
 export const COMMANDS_UNAVAILABLE_MESSAGE = "The command chat isn't available on this server yet.";
+const CHAT_OFF_MESSAGE = "The chat is off for the SeekKrr team. Turn it on in Settings.";
 const NETWORK_MESSAGE = "Couldn't reach the server. Check your connection and try again.";
 const SERVER_MESSAGE = "Something went wrong on the server. Try again in a moment.";
 const EXPIRED_MESSAGE = "This preview expired. Send the command again.";
@@ -111,6 +112,12 @@ function messageOf(data: unknown): string | null {
     return null;
 }
 
+/** The backend's machine-readable code: {"error": "CHAT_DISABLED", "message": …}. */
+function codeOf(data: unknown): string | null {
+    const v = data && typeof data === "object" ? (data as Record<string, unknown>).error : null;
+    return typeof v === "string" ? v : null;
+}
+
 type CallKind = "read" | "understand" | "run";
 
 function errorFor(status: number, data: unknown, call: CallKind): CommandsApiError {
@@ -123,6 +130,7 @@ function errorFor(status: number, data: unknown, call: CallKind): CommandsApiErr
         return new CommandsApiError("server", msg || "Too many requests. Wait a moment and try again.", status);
     }
     if (status >= 500) return new CommandsApiError("server", SERVER_MESSAGE, status);
+    if (status === 403 && codeOf(data) === "CHAT_DISABLED") return new CommandsApiError("disabled", CHAT_OFF_MESSAGE, status);
     if (status === 403) return new CommandsApiError("forbidden", msg || FORBIDDEN_MESSAGE, status);
     if (status === 400 && call === "run" && (!msg || /expir|token/i.test(msg))) {
         return new CommandsApiError("expired", msg || EXPIRED_MESSAGE, status);
