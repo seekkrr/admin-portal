@@ -5,6 +5,7 @@ import { LogOut, Menu as MenuIcon, MessagesSquare, Search, Sun, X } from "lucide
 import { findNavMatch, navGroupsForRoles } from "@/config/navigation";
 import { useAuthStore } from "@/store/auth.store";
 import { useOverlay } from "@/hooks/useOverlay";
+import { useAdminChatOn } from "@/features/command-chat/hooks/useChatSettings";
 import { cx } from "@/utils/cx";
 import { NavList } from "./NavList";
 import { initialsOf, primaryRoleLabel } from "./roleLabel";
@@ -23,8 +24,9 @@ export function MobileNavDrawer({ open, onClose, onLogout, closedGroups, onToggl
     const ref = useRef<HTMLDivElement>(null);
     const roles = useAuthStore((s) => s.user?.role);
     const user = useAuthStore((s) => s.user);
+    const chatOn = useAdminChatOn();
     const { pathname } = useLocation();
-    const groups = useMemo(() => navGroupsForRoles(roles), [roles]);
+    const groups = useMemo(() => navGroupsForRoles(roles, { chat: chatOn }), [roles, chatOn]);
     const activeTo = findNavMatch(pathname)?.item.to ?? null;
     useOverlay(open, ref, { onClose });
 
@@ -101,9 +103,10 @@ interface BottomBarProps {
     todayCount?: number;
 }
 
-/** Phone bottom bar: Today, Search, Chat, Menu. */
+/** Phone bottom bar: Today, Search, Chat (while it's on for the team), Menu. */
 export function BottomBar({ onOpenSearch, onOpenMenu, menuOpen, todayCount }: BottomBarProps) {
     const { pathname } = useLocation();
+    const chatOn = useAdminChatOn();
     const item = "flex flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[11px] font-medium transition-colors focus:outline-none focus-visible:bg-brand-50";
     const on = "text-brand-900";
     const off = "text-ink-faint hover:text-ink-muted";
@@ -124,10 +127,12 @@ export function BottomBar({ onOpenSearch, onOpenMenu, menuOpen, todayCount }: Bo
                     <Search className="h-5 w-5" aria-hidden />
                     Search
                 </button>
-                <Link to="/chat" aria-current={isChat ? "page" : undefined} className={cx(item, isChat ? on : off)}>
-                    <MessagesSquare className="h-5 w-5" aria-hidden />
-                    Chat
-                </Link>
+                {chatOn && (
+                    <Link to="/chat" aria-current={isChat ? "page" : undefined} className={cx(item, isChat ? on : off)}>
+                        <MessagesSquare className="h-5 w-5" aria-hidden />
+                        Chat
+                    </Link>
+                )}
                 <button type="button" onClick={onOpenMenu} aria-expanded={menuOpen} aria-haspopup="dialog" className={cx(item, menuOpen ? on : off)}>
                     <MenuIcon className="h-5 w-5" aria-hidden />
                     Menu

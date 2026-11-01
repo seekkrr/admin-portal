@@ -11,8 +11,10 @@ import type { CommandAttachment } from "@/services/commands.types";
 import { describeEntry } from "../chatModel";
 import { useCommandChat } from "../hooks/useCommandChat";
 import { useCommandCatalog, useCommandHistory } from "../hooks/useCommandQueries";
+import { CHAT_SETTINGS_KEY } from "../hooks/useChatSettings";
 import { useSessionDraft } from "../hooks/useSessionDraft";
 import { CatalogPanel, CatalogSheet } from "../components/CatalogPanel";
+import { ChatOff } from "../components/ChatOff";
 import { Composer } from "../components/Composer";
 import { HistorySection } from "../components/HistorySection";
 import { MessageItem, type MessageHandlers } from "../components/MessageItem";
@@ -38,10 +40,11 @@ function isTouch(): boolean {
 export default function CommandChatPage() {
     const queryClient = useQueryClient();
     const [serverMissing, setServerMissing] = useState(false);
+    const [turnedOff, setTurnedOff] = useState(false);
     const [mockOn, setMockOn] = useState(isCommandsMockEnabled);
     const catalog = useCommandCatalog(SURFACE);
     const history = useCommandHistory();
-    const chat = useCommandChat({ surface: SURFACE, onUnavailable: () => setServerMissing(true) });
+    const chat = useCommandChat({ surface: SURFACE, onUnavailable: () => setServerMissing(true), onDisabled: () => setTurnedOff(true) });
     const [draft, setDraft] = useSessionDraft();
     const [lastSent, setLastSent] = useState<string | null>(null);
     const [sheetOpen, setSheetOpen] = useState(false);
@@ -53,6 +56,13 @@ export default function CommandChatPage() {
 
     const unavailable =
         serverMissing || (isCommandsApiError(catalog.error) && catalog.error.kind === "unavailable");
+    // 403 CHAT_DISABLED: an admin turned the chat off for the team since the menu last checked.
+    const chatOff = turnedOff || (isCommandsApiError(catalog.error) && catalog.error.kind === "disabled");
+
+    // Re-read the switch so the menu and header drop Chat too.
+    useEffect(() => {
+        if (chatOff) void queryClient.invalidateQueries({ queryKey: CHAT_SETTINGS_KEY });
+    }, [chatOff, queryClient]);
 
     const { entries, busy, event, startedAt } = chat;
     // Confirming shows its own spinner on the preview's button — no typing dots then.
@@ -166,6 +176,8 @@ export default function CommandChatPage() {
     };
 
     const closeSheet = useCallback(() => setSheetOpen(false), []);
+    if (chatOff) return <ChatOff />;
+
     const catalogPanel = (
         <CatalogPanel
             commands={catalog.data}
