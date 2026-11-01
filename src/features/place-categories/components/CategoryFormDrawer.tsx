@@ -128,7 +128,7 @@ export function CategoryFormDrawer({ open, category, onClose }: { open: boolean;
             onClose={onClose}
             dismissible={!save.isPending}
             title={category ? `Edit ${category.name}` : "New category"}
-            subtitle="Places pick one of these; the app uses the colour and pin frame on the map."
+            subtitle="Places pick one of these; the Explore map shows their colour and map pin."
             footer={
                 <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                     <Button onClick={onClose} disabled={save.isPending}>
@@ -170,7 +170,11 @@ export function CategoryFormDrawer({ open, category, onClose }: { open: boolean;
                         <TextInput value={form.icon ?? ""} maxLength={100} onChange={(e) => patch({ icon: e.target.value })} />
                     </Field>
                 </div>
-                <Field label="Map pin frame" htmlFor="cat-frame" hint="Optional image URL used around the map pin.">
+                <Field
+                    label="Map pin"
+                    htmlFor="cat-frame"
+                    hint="Optional. The pin shown on the Explore map for this category's places. Use a square PNG with a transparent background, about 160×160."
+                >
                     <div className="space-y-2">
                         <div className="flex flex-col gap-2 sm:flex-row">
                             <TextInput id="cat-frame" value={form.cdn_frame ?? ""} maxLength={1000} onChange={(e) => patch({ cdn_frame: e.target.value })} placeholder="https://img.seekkrr.com/…" />
@@ -179,10 +183,10 @@ export function CategoryFormDrawer({ open, category, onClose }: { open: boolean;
                                 <Button icon={ImagePlus} loading={uploading} onClick={() => fileRef.current?.click()}>
                                     Upload
                                 </Button>
-                                {form.cdn_frame && <IconButton icon={X} label="Remove pin frame" onClick={() => patch({ cdn_frame: null })} />}
+                                {form.cdn_frame && <IconButton icon={X} label="Remove map pin" onClick={() => patch({ cdn_frame: null })} />}
                             </div>
                         </div>
-                        {form.cdn_frame && <img src={form.cdn_frame} alt="Pin frame preview" className="h-16 w-16 rounded-control border border-line bg-surface-muted object-contain p-1" />}
+                        {form.cdn_frame && <img src={form.cdn_frame} alt="Map pin preview" className="h-16 w-16 rounded-control border border-line bg-surface-muted object-contain p-1" />}
                     </div>
                 </Field>
                 <Switch checked={form.is_active} onChange={(is_active) => patch({ is_active })} label="Active" description="Inactive categories are hidden from the app and from new places." />

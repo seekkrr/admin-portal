@@ -8,7 +8,7 @@ export interface PlaceCategory {
     is_active: boolean;
     color: string | null;
     icon: string | null;
-    /** Map pin frame image URL. */
+    /** Map pin image URL: the pin on the Explore map for this category's places. */
     cdn_frame: string | null;
 }
 
