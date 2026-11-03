@@ -1,13 +1,13 @@
 import type { Marker, MarkerPinStyle, MarkerStatus } from "@/types";
 
 export type SubscriptionFlag = "NA" | "Virtual" | "Physical" | "Both";
-/** The Explore map pin; "auto" is the category's default (null on the server). */
+/** The Explore map pin; "auto" (null on the server) = the place's photo if it has one, otherwise the category icon. */
 export type PinStyle = MarkerPinStyle | "auto";
 
-export const PIN_STYLE_OPTIONS: { value: PinStyle; label: string; hint?: string }[] = [
-    { value: "auto", label: "Category default" },
-    { value: "image", label: "Place photo", hint: "Uses the first photo; places without photos show the category pin." },
-    { value: "icon", label: "Category pin" },
+export const PIN_STYLE_OPTIONS: { value: PinStyle; label: string; hint: string }[] = [
+    { value: "auto", label: "Automatic", hint: "Place photo if it has one, otherwise the category icon." },
+    { value: "image", label: "Place photo", hint: "Uses the first photo; places without photos show the category icon." },
+    { value: "icon", label: "Category icon", hint: "Always the category icon, even when the place has photos." },
 ];
 
 export function pinStyleOf(m: Pick<Marker, "pin_style">): PinStyle {
