@@ -68,10 +68,17 @@ function ChoiceChips({
     );
 }
 
-/** A small picture of what the map shows: the photo, else the category's pin. */
-function PinPreview({ photo, pin }: { photo?: string; pin?: string }) {
+/** A small picture of what the map shows: the photo, else the category's icon (filling the box when it's a photo). */
+function PinPreview({ photo, pin, pinFills }: { photo?: string; pin?: string; pinFills?: boolean }) {
     if (photo) return <img src={photo} alt="" className="h-10 w-10 shrink-0 rounded-md border border-line object-cover" />;
-    if (pin) return <img src={pin} alt="" className="h-10 w-10 shrink-0 rounded-md border border-line bg-surface-muted object-contain p-0.5" />;
+    if (pin)
+        return (
+            <img
+                src={pin}
+                alt=""
+                className={cx("h-10 w-10 shrink-0 rounded-md border border-line", pinFills ? "object-cover" : "bg-surface-muted object-contain p-0.5")}
+            />
+        );
     return (
         <span title="Nothing to show yet" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-dashed border-line-strong text-ink-faint">
             <ImageOff className="h-4 w-4" aria-hidden />
@@ -92,9 +99,11 @@ export function MarkerDetailsTab({ marker, canEdit, onSaved }: { marker: Marker;
     const categories = useQuery({ queryKey: ["categories"], queryFn: () => categoryService.getCategories(), staleTime: 5 * 60_000 });
     const catNames = (categories.data ?? []).map((c) => c.name);
     const subOptions = Array.from(new Set((categories.data ?? []).filter((c) => form.categories.includes(c.name)).flatMap((c) => c.sub_categories)));
-    // Map pin previews: the first photo and the first category's pin.
+    // Map pin previews: the first photo and the first category's icon.
     const photo = marker.media?.[0] || undefined;
-    const pin = (categories.data ?? []).find((c) => c.name === form.categories[0])?.cdn_frame || undefined;
+    const firstCategory = (categories.data ?? []).find((c) => c.name === form.categories[0]);
+    const pin = firstCategory?.cdn_frame || undefined;
+    const pinFills = firstCategory?.cdn_frame_kind === "photo";
 
     const save = useMutation({
         mutationFn: () => placeDetailApi.update(marker.id, changes),
@@ -188,10 +197,9 @@ export function MarkerDetailsTab({ marker, canEdit, onSaved }: { marker: Marker;
                             >
                                 <span className="min-w-0">
                                     <span className="block text-sm font-medium text-ink">{o.label}</span>
-                                    {o.hint && <span className="mt-0.5 block text-xs text-ink-muted">{o.hint}</span>}
+                                    <span className="mt-0.5 block text-xs text-ink-muted">{o.hint}</span>
                                 </span>
-                                {o.value === "image" && <PinPreview photo={photo} pin={pin} />}
-                                {o.value === "icon" && <PinPreview pin={pin} />}
+                                <PinPreview photo={o.value === "icon" ? undefined : photo} pin={pin} pinFills={pinFills} />
                             </button>
                         );
                     })}
