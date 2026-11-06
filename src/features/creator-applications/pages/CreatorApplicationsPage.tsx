@@ -74,9 +74,23 @@ export function CreatorApplicationsPage() {
         {
             id: "email",
             header: "Email",
-            sortValue: (a) => a.email ?? "",
+            sortValue: (a) => a.email ?? a.contact_email ?? "",
+            csv: (a) => a.email ?? a.contact_email ?? "",
             className: "max-w-[240px]",
-            cell: (a) => <span className="block truncate text-ink-muted">{a.email || (a.source === "app" ? "From the app (no email)" : "—")}</span>,
+            cell: (a) => (
+                <span className="block truncate text-ink-muted">
+                    {a.email ||
+                        (a.contact_email ? (
+                            <>
+                                {a.contact_email} <span className="text-xs">· not verified</span>
+                            </>
+                        ) : a.source === "app" ? (
+                            "From the app (no email)"
+                        ) : (
+                            "—"
+                        ))}
+                </span>
+            ),
         },
         { id: "phone", header: "Phone", csv: (a) => a.phone ?? "", cell: (a) => <span className="text-ink-muted">{a.phone || "—"}</span>, defaultHidden: true },
         {
@@ -142,7 +156,7 @@ export function CreatorApplicationsPage() {
                 summary={pagination ? `${applications.length} of ${pagination.total.toLocaleString("en-IN")}` : undefined}
                 card={{
                     title: (a) => a.name,
-                    subtitle: (a) => a.email || (a.source === "app" ? "From the app" : ""),
+                    subtitle: (a) => a.email || a.contact_email || (a.source === "app" ? "From the app" : ""),
                     fields: ["status", "applied", "links"],
                 }}
                 footer={
