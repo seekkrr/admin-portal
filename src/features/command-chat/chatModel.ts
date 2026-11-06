@@ -1,7 +1,10 @@
 import type {
     CommandAttachment,
     CommandsErrorKind,
+    CommandSurface,
+    CommandTurn,
     DoneResult,
+    NeedResult,
     UnderstandRequest,
     UnderstandResult,
 } from "@/services/commands.types";
@@ -124,6 +127,112 @@ export function newId(prefix = "m"): string {
 
 export const nowIso = () => new Date().toISOString();
 
+// ── Requests ───────────────────────────────────────────────
+
+/** The understand request for a typed message: the text, the surface, any photos, and the chat so far (see chatHistory). */
+export function buildRequest(
+    text: string,
+    surface: CommandSurface,
+    attachments: CommandAttachment[] = [],
+    history: CommandTurn[] = []
+): UnderstandRequest {
+    const request: UnderstandRequest = { text: text.trim(), surface };
+    if (attachments.length) request.attachments = attachments;
+    if (history.length) request.history = history;
+    return request;
+}
+
+/**
+ * The conversation entry for a server result. Every kind becomes a "result"
+ * entry; only a preview carries a lifecycle (it starts "open").
+ */
+export function entryForResult(request: UnderstandRequest, result: UnderstandResult, id = newId("r"), at = nowIso()): ResultEntry {
+    const entry: ResultEntry = { id, at, type: "result", request, result };
+    if (result.kind === "preview") entry.status = "open";
+    return entry;
+}
+
+// ── Conversation history ───────────────────────────────────
+
+/** How many earlier messages go with each newly typed one, so the chat can follow along. */
+export const HISTORY_TURNS = 8;
+
+function spoken(result: UnderstandResult | DoneResult): string | null {
+    switch (result.kind) {
+        case "answer":
+            return result.text?.trim() || result.title;
+        case "preview":
+            return [result.lead, result.title]
+                .filter((s): s is string => Boolean(s && s.trim()))
+                .map((s) => s.trim())
+                .join(" ");
+        case "need":
+        case "choose":
+            return result.prompt;
+        case "denied":
+        case "unknown":
+        case "done":
+            return result.message;
+    }
+}
+
+/**
+ * What the chat said in a reply, as plain words (null: nothing to remember).
+ * answer: its text (the title when there's none); preview: lead + title;
+ * need/choose: the question; denied/unknown/done: the message.
+ */
+export function replyWords(result: UnderstandResult | DoneResult): string | null {
+    const said = spoken(result)?.trim();
+    return said ? said : null;
+}
+
+/**
+ * The chat so far as plain words, oldest first, the last `max` turns: every
+ * user message's text and every reply's words. Errors and notes are left out.
+ */
+export function chatHistory(entries: ChatEntry[], max = HISTORY_TURNS): CommandTurn[] {
+    const turns: CommandTurn[] = [];
+    for (const e of entries) {
+        if (e.type === "user") {
+            if (e.text.trim()) turns.push({ role: "user", text: e.text.trim() });
+        } else if (e.type === "result" || e.type === "done") {
+            const said = replyWords(e.result);
+            if (said) turns.push({ role: "assistant", text: said });
+        }
+    }
+    return max > 0 ? turns.slice(-max) : [];
+}
+
+// ── Questions the message box answers ──────────────────────
+
+export type OpenNeedEntry = ResultEntry & { result: NeedResult };
+
+/**
+ * The chat's last message when it's a question the message box answers (a
+ * name, a number, a day, a time) and nobody answered it yet. Photos are picked
+ * in the bubble instead.
+ */
+export function openQuestion(entries: ChatEntry[]): OpenNeedEntry | null {
+    const last = entries[entries.length - 1];
+    if (!last || last.type !== "result" || last.result.kind !== "need") return null;
+    if (last.result.input === "images" || last.answered || last.superseded) return null;
+    return last as OpenNeedEntry;
+}
+
+/** The need's request again with the typed value appended (the engine reads it as the rest of the command). */
+export function answerRequest(request: UnderstandRequest, value: string): UnderstandRequest {
+    const clean = value.trim();
+    return clean ? { ...request, text: `${request.text.trim()} ${clean}` } : request;
+}
+
+export const MESSAGE_PLACEHOLDER = "Message SeekKrr";
+
+/** The message box hint: the open question's placeholder, else the usual one. */
+export function composerPlaceholder(question: OpenNeedEntry | null): string {
+    if (!question) return MESSAGE_PLACEHOLDER;
+    return question.result.placeholder?.trim() || "Type your answer";
+}
+
 // ── Session persistence ────────────────────────────────────
 
 const STORAGE_KEY = "seekkrr_admin_command_chat_v1";
@@ -155,6 +264,12 @@ export function saveChatState(state: ChatState): void {
 
 // ── Display helpers ────────────────────────────────────────
 
+/** The chat's first message: what it can help the team with. */
+export const CHAT_GREETING =
+    "Hi! I can help with places, quests, people, bookings and payouts. Just tell me what you need, and I'll check with you before changing anything.";
+
+const sentence = (s: string) => (!s.trim() || /[.!?]$/.test(s.trim()) ? s.trim() : `${s.trim()}.`);
+
 /** One plain sentence for screen readers when a bot entry arrives. */
 export function describeEntry(entry: ChatEntry): string {
     switch (entry.type) {
@@ -175,12 +290,17 @@ export function describeEntry(entry: ChatEntry): string {
                 case "need":
                     return r.prompt;
                 case "preview":
-                    return `${r.title}. ${r.summary} Confirm or cancel.`;
-                case "answer":
-                    return [r.title, r.text, r.items.length ? `${r.items.length} item${r.items.length === 1 ? "" : "s"}` : ""]
+                    return [r.lead, r.title, r.summary, "Confirm, or Not now."]
                         .filter((s): s is string => Boolean(s && s.trim()))
-                        .map((s) => (/[.!?]$/.test(s.trim()) ? s.trim() : `${s.trim()}.`))
+                        .map(sentence)
                         .join(" ");
+                case "answer": {
+                    const n = Math.min(r.items.length, MAX_ANSWER_ITEMS);
+                    return [r.text?.trim() || r.title, n ? `${n} item${n === 1 ? "" : "s"}` : ""]
+                        .filter((s): s is string => Boolean(s && s.trim()))
+                        .map(sentence)
+                        .join(" ");
+                }
                 case "denied":
                 case "unknown":
                     return r.message;
@@ -202,6 +322,20 @@ export function formatNeedValue(input: string, value: string): string {
         return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
     }
     return value;
+}
+
+/** Most record rows shown under an answer (each opens its screen). */
+export const MAX_ANSWER_ITEMS = 8;
+
+/**
+ * Screens an answer's link may open: admin portal routes only, i.e. a path in
+ * this app ("/markers/…", "/collabs/reports"). Not a full or protocol-relative
+ * URL, and not a Partner Portal area (/business, /creator).
+ */
+export function isAdminPath(path: string | null | undefined): path is string {
+    if (typeof path !== "string") return false;
+    const p = path.trim();
+    return /^\/(?![/\\])\S*$/.test(p) && !/^\/(business|creator)(?=$|[/?#])/i.test(p);
 }
 
 /** Media category for photos picked for a command (quests have their own bucket). */
