@@ -104,7 +104,18 @@ export function ApplicationDetailModal({ open, application, onClose }: Applicati
                         <DetailRow label="Name" value={application.name} />
                         <DetailRow
                             label="Email"
-                            value={application.email ? <CopyText value={application.email} title="Copy email" /> : "Not shared"}
+                            value={
+                                application.email ? (
+                                    <CopyText value={application.email} title="Copy email" />
+                                ) : application.contact_email ? (
+                                    <span className="inline-flex flex-wrap items-center gap-2">
+                                        <CopyText value={application.contact_email} title="Copy email" />
+                                        <span className="text-xs text-ink-muted">Typed in by the applicant, not verified</span>
+                                    </span>
+                                ) : (
+                                    "Not shared"
+                                )
+                            }
                         />
                         <DetailRow label="Source" value={application.source === "app" ? "SeekKrr app (Become a Creator)" : "Website"} />
                         {application.applicant_user_id && (
