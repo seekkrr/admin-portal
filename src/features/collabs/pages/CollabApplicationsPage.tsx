@@ -338,7 +338,7 @@ export function CollabApplicationsPage() {
                 title="Force transition?"
                 description={
                     selected
-                        ? `Move this application from “${humanize(selected.status)}” to a new state, bypassing the normal rules. Slots and quota are NOT adjusted.`
+                        ? `Move this application from “${humanize(selected.status)}” to a new state, bypassing the normal rules. Slots and quota are NOT adjusted. Moving it to requested, invited or approved keeps it open for a month (visit dates that have passed are dropped). Forced moves never notify the creator or the business.`
                         : ""
                 }
                 confirmLabel="Force"

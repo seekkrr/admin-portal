@@ -20,11 +20,11 @@ import { businessesService } from "../services/businesses.service";
 import { featuresOf, partnerPortalUrl } from "../utils";
 import { ExperienceContentTab } from "../components/experience-detail/ExperienceContentTab";
 import { ExperiencePricingTab } from "../components/experience-detail/ExperiencePricingTab";
-import { ExperienceSlotsTab } from "../components/experience-detail/ExperienceSlotsTab";
+import { ExperienceScheduleTab } from "../components/experience-detail/ExperienceScheduleTab";
 import { ExperienceBookingsTab } from "../components/experience-detail/ExperienceBookingsTab";
 import { ExperienceStatusTab } from "../components/experience-detail/ExperienceStatusTab";
 
-const TABS = ["content", "pricing", "slots", "bookings", "status", "history"] as const;
+const TABS = ["content", "pricing", "schedule", "bookings", "status", "history"] as const;
 type Tab = (typeof TABS)[number];
 
 /** One experience, edited with the business's own routes (admins pass the role check). */
@@ -124,7 +124,7 @@ export function ExperienceAdminDetailPage() {
                 tabs={[
                     { value: "content", label: "Content" },
                     { value: "pricing", label: "Pricing" },
-                    { value: "slots", label: "Slots" },
+                    { value: "schedule", label: "Schedule" },
                     { value: "bookings", label: "Bookings" },
                     { value: "status", label: "Status" },
                     { value: "history", label: "Change history" },
@@ -134,7 +134,7 @@ export function ExperienceAdminDetailPage() {
             <div role="tabpanel" id={`experience-panel-${tab}`} aria-labelledby={`experience-tab-${tab}`}>
                 {tab === "content" && <ExperienceContentTab experience={exp} canEdit={isAdmin} onSaved={saved} />}
                 {tab === "pricing" && <ExperiencePricingTab experience={exp} canEdit={isAdmin} onSaved={saved} />}
-                {tab === "slots" && <ExperienceSlotsTab experience={exp} canEdit={isAdmin} />}
+                {tab === "schedule" && <ExperienceScheduleTab experience={exp} canEdit={isAdmin} />}
                 {tab === "bookings" && <ExperienceBookingsTab experience={exp} canEdit={isAdmin} />}
                 {tab === "status" && <ExperienceStatusTab experience={exp} canEdit={isAdmin} onChanged={saved} />}
                 {tab === "history" && <ChangeHistoryPanel entityType="experience" entityId={exp.id} />}

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { BadgePercent, Info, Store, ToggleRight, UserCheck } from "lucide-react";
 import { Panel, DetailList, DetailRow } from "@/components/ui/Panel";
 import { StatusPill, Tag } from "@/components/ui/StatusPill";
-import { Switch, Field, TextInput } from "@/components/ui/Field";
+import { Checkbox, Switch, Field, TextInput } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { CopyText } from "@/components/ui/CopyText";
 import { Notice } from "@/components/detail/DetailStates";
@@ -133,15 +133,17 @@ function CommissionCard({ business, canEdit }: { business: AdminBusiness; canEdi
 function OwnerCard({ business, canEdit }: { business: AdminBusiness; canEdit: boolean }) {
     const queryClient = useQueryClient();
     const [ref, setRef] = useState("");
+    const [keepPrevious, setKeepPrevious] = useState(false);
     const hasOwner = !!business.owner_user_id;
     const assign = useMutation({
-        mutationFn: () => businessesService.setOwner(business.id, ref.trim()),
+        mutationFn: () => businessesService.setOwner(business.id, ref.trim(), hasOwner && keepPrevious),
         onSuccess: (updated) => {
             toast.success(hasOwner ? "Owner changed" : "Owner assigned — the business is live");
             queryClient.setQueryData(["collabs-business", business.id], updated);
             queryClient.invalidateQueries({ queryKey: ["collabs-businesses"] });
             queryClient.invalidateQueries({ queryKey: ["admin-audit", "business", business.id] });
             setRef("");
+            setKeepPrevious(false);
         },
         onError: (e: Error) => toast.error(e.message || "Couldn't set the owner"),
     });
@@ -173,7 +175,11 @@ function OwnerCard({ business, canEdit }: { business: AdminBusiness; canEdit: bo
                     >
                         <Field
                             label={hasOwner ? "Change owner" : "Assign owner"}
-                            hint={hasOwner ? "The current owner stays on the team as a manager." : "User ID or the email they sign in with."}
+                            hint={
+                                hasOwner
+                                    ? "User ID or email. The current owner loses access to this business unless you keep them on below."
+                                    : "User ID or the email they sign in with."
+                            }
                             className="flex-1"
                         >
                             <TextInput value={ref} onChange={(e) => setRef(e.target.value)} placeholder="User ID or email" maxLength={255} />
@@ -182,6 +188,13 @@ function OwnerCard({ business, canEdit }: { business: AdminBusiness; canEdit: bo
                             {hasOwner ? "Change owner" : "Make owner"}
                         </Button>
                     </form>
+                )}
+                {canEdit && hasOwner && (
+                    <Checkbox
+                        checked={keepPrevious}
+                        onChange={setKeepPrevious}
+                        label="Keep the current owner on the team as a manager"
+                    />
                 )}
             </div>
         </Panel>

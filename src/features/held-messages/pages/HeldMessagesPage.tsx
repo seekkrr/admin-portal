@@ -15,29 +15,8 @@ import { shortIdOf } from "@/utils/entity";
 import { errorMessage } from "@/utils/errors";
 import { cx } from "@/utils/cx";
 import { heldMessagesService, type ChatMessage, type HeldDecision } from "../services/held-messages.service";
-
-const SIDE_LABEL: Record<string, string> = { creator: "Creator", business: "Business", system: "SeekKrr" };
-
-function sideLabel(side: string | null): string {
-    return (side && SIDE_LABEL[side]) || "Member";
-}
-
-function MessageBody({ m, clamp }: { m: ChatMessage; clamp?: boolean }) {
-    return (
-        <div className="min-w-0 space-y-1.5">
-            {m.body ? (
-                <p className={cx("whitespace-pre-wrap break-words text-ink", clamp && "line-clamp-3")}>{m.body}</p>
-            ) : (
-                !m.media_url && <p className="italic text-ink-faint">{m.type === "location" ? "Shared a location" : "No text"}</p>
-            )}
-            {m.media_url && (
-                <a href={m.media_url} target="_blank" rel="noreferrer" className="block w-fit">
-                    <img src={m.media_url} alt="Attached photo" className="h-20 w-20 rounded-lg border border-line object-cover" />
-                </a>
-            )}
-        </div>
-    );
-}
+import { ChatMessageBody as MessageBody } from "../components/ChatMessageBody";
+import { sideLabel } from "../components/sideLabel";
 
 /** One collab chat (opened from a held message). */
 function ThreadDrawer({ threadId, focusId, onClose }: { threadId: string | null; focusId: string | null; onClose: () => void }) {

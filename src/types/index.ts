@@ -655,6 +655,9 @@ export interface GeoPolygon {
 export type MarkerStatus = "approved" | "pending" | "rejected";
 export type MarkerApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
 export type MarkerCategory = string;
+export type MarkerPinStyle = "image" | "icon";
+/** What a category's map pin image (cdn_frame) is: "icon" sits inside the pin, "photo" fills it. */
+export type CategoryPinKind = "icon" | "photo";
 
 // Canonical marker categories — mirrors VALID_MARKER_CATEGORIES in
 // backend/v2/models/marker.py. The V2 marker service rejects any other value,
@@ -692,6 +695,9 @@ export interface Marker {
     region_id: string | null;
     status: MarkerStatus;
     hidden: boolean;
+    /** Explore map pin: "image" = the place's first photo, "icon" = its category's icon,
+     *  null = automatic (the place's photo if it has one, otherwise the category's icon). */
+    pin_style?: MarkerPinStyle | null;
     source: string | null;
     created_by: string | null;
     usage_count: number;
@@ -795,6 +801,8 @@ export interface CreateMarkerPayload {
 
 export type UpdateMarkerPayload = Partial<Omit<CreateMarkerPayload, "location">> & {
     status?: MarkerStatus;
+    /** Staff only. "auto" clears it back to automatic. */
+    pin_style?: MarkerPinStyle | "auto";
 };
 
 // ───────────────────────────────────────────────────────────────────────────

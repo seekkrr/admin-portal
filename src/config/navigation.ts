@@ -26,6 +26,7 @@ import {
     Megaphone,
     MessageSquare,
     MessageSquareWarning,
+    MessageCircle,
     MessagesSquare,
     ReceiptText,
     Rocket,
@@ -60,7 +61,13 @@ export interface NavItem {
     keywords?: string[];
     /** Name of one record on a detail page under this item (breadcrumb), e.g. "Place". */
     detailLabel?: string;
+    /** If set, item is only shown while this server switch is on. */
+    onlyWhen?: NavSwitch;
 }
+
+/** Server switches a menu item can depend on: `chat` = the chat is on for the SeekKrr team. */
+export type NavSwitch = "chat";
+export type NavSwitches = Partial<Record<NavSwitch, boolean>>;
 
 // Roles that may access the financial suite (transactions, refunds, payouts,
 // payout accounts, payment events). Moderators are intentionally excluded —
@@ -88,7 +95,7 @@ export const NAV_GROUPS: NavGroup[] = [
         group: "Today",
         items: [
             { icon: Sun, label: "Today", to: "/today", keywords: ["inbox", "to-do", "pending", "what needs me"] },
-            { icon: MessagesSquare, label: "Chat", to: "/chat", keywords: ["command", "commands"] },
+            { icon: MessagesSquare, label: "Chat", to: "/chat", onlyWhen: "chat", keywords: ["command", "commands"] },
             { icon: LayoutDashboard, label: "Dashboard", to: "/dashboard", keywords: ["overview", "home"] },
             { icon: BarChart3, label: "Analytics", to: "/analytics", keywords: ["stats", "reports", "charts"] },
         ],
@@ -148,6 +155,7 @@ export const NAV_GROUPS: NavGroup[] = [
             { icon: Flag, label: "Reports", to: "/collabs/reports", roles: [...COLLAB_STAFF_NAV_ROLES] },
             { icon: Siren, label: "Fraud flags", to: "/collabs/fraud-flags", roles: [...COLLAB_STAFF_NAV_ROLES] },
             { icon: MessageSquareWarning, label: "Held messages", to: "/held-messages", roles: [...COLLAB_STAFF_NAV_ROLES], keywords: ["chat", "held chat messages", "collab chat"] },
+            { icon: MessageCircle, label: "Conversations", to: "/conversations", roles: [...ADMIN_NAV_ROLES], keywords: ["chats", "collab chat", "business creator chat", "messages"] },
             { icon: History, label: "Change history", to: "/change-history", roles: [...COLLAB_STAFF_NAV_ROLES], keywords: ["audit", "audit log", "who changed what"] },
         ],
     },
@@ -180,7 +188,7 @@ export const NAV_GROUPS: NavGroup[] = [
         items: [
             { icon: Megaphone, label: "Push messages", to: "/push-messages", roles: [...ADMIN_NAV_ROLES], keywords: ["broadcast", "push", "notifications", "scheduled pushes"] },
             { icon: Mail, label: "Email templates", to: "/email-templates", roles: [...ADMIN_NAV_ROLES], detailLabel: "Template" },
-            { icon: Rocket, label: "Rollout", to: "/collabs/rollout", roles: [...ADMIN_NAV_ROLES], keywords: ["partner portal sections", "terms", "feature flags"] },
+            { icon: Rocket, label: "Rollout", to: "/collabs/rollout", roles: [...ADMIN_NAV_ROLES], keywords: ["partner portal sections", "terms", "feature flags", "chat", "ai chat"] },
             { icon: SlidersHorizontal, label: "Match tuning", to: "/collabs/match", roles: [...ADMIN_NAV_ROLES], keywords: ["algorithm"] },
         ],
     },
@@ -188,13 +196,14 @@ export const NAV_GROUPS: NavGroup[] = [
 
 export const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
 
-export function canSeeNavItem(item: NavItem, roles: readonly string[] | undefined): boolean {
+export function canSeeNavItem(item: NavItem, roles: readonly string[] | undefined, switches: NavSwitches = {}): boolean {
+    if (item.onlyWhen && switches[item.onlyWhen] !== true) return false;
     return !item.roles || item.roles.some((r) => roles?.includes(r));
 }
 
 /** Menu groups and items this user may open (empty groups dropped). */
-export function navGroupsForRoles(roles: readonly string[] | undefined): NavGroup[] {
-    return NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => canSeeNavItem(i, roles)) })).filter((g) => g.items.length > 0);
+export function navGroupsForRoles(roles: readonly string[] | undefined, switches: NavSwitches = {}): NavGroup[] {
+    return NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => canSeeNavItem(i, roles, switches)) })).filter((g) => g.items.length > 0);
 }
 
 export interface NavMatch {

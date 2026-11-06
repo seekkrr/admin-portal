@@ -3,7 +3,7 @@ import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { BookOpen, CircleHelp, Image as ImageIcon, ListChecks, MapPin, Route, ShieldX, Sparkles, Tags, UserRound, Layers } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
-import { Field, SelectInput, TextArea, TextInput } from "@/components/ui/Field";
+import { Field, SelectInput, Switch, TextArea, TextInput } from "@/components/ui/Field";
 import { SaveBar } from "@/components/detail/SaveBar";
 import { ChipsInput } from "@/components/detail/ChipsInput";
 import { PhotoListEditor } from "@/components/detail/PhotoListEditor";
@@ -248,6 +248,25 @@ export function ExperienceContentTab({
                         { key: "description", label: "Description", kind: "textarea", maxLength: 500 },
                     ]}
                 />
+            </Panel>
+
+            <Panel title="How bookings work" icon={Layers} description="Leave both off for group sessions where every slot has its own spots.">
+                <div className="space-y-4">
+                    <Switch
+                        checked={form.shared_space}
+                        onChange={(v) => set("shared_space", v)}
+                        disabled={disabled}
+                        label="Options share one space"
+                        description="Only one session runs at a time (e.g. go-karting on one track). Once a time is booked, overlapping times of every option close; more people can still join the booked session."
+                    />
+                    <Switch
+                        checked={form.private_slots}
+                        onChange={(v) => set("private_slots", v)}
+                        disabled={disabled}
+                        label="One group per slot"
+                        description="The first booking takes the whole slot (e.g. a private boat ride)."
+                    />
+                </div>
             </Panel>
 
             <Panel title="More photos" icon={Tags} description="Extra photo strips shown further down the experience page.">

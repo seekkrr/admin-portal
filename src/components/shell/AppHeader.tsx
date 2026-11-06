@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { LogOut, MessagesSquare, Search } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 import { ButtonLink, IconButton } from "@/components/ui/Button";
+import { useAdminChatOn } from "@/features/command-chat/hooks/useChatSettings";
 import { initialsOf, primaryRoleLabel } from "./roleLabel";
 
 interface AppHeaderProps {
@@ -12,9 +13,10 @@ interface AppHeaderProps {
 
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
-/** Top bar: logo, search (Ctrl/Cmd+K), Chat, who's signed in, logout. */
+/** Top bar: logo, search (Ctrl/Cmd+K), Chat (while it's on for the team), who's signed in, logout. */
 export function AppHeader({ onOpenSearch, onOpenMenu, onLogout }: AppHeaderProps) {
     const user = useAuthStore((s) => s.user);
+    const chatOn = useAdminChatOn();
     const { pathname } = useLocation();
     const name = user ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() || user.email || "Signed in" : "";
     const role = primaryRoleLabel(user?.role);
@@ -47,11 +49,13 @@ export function AppHeader({ onOpenSearch, onOpenMenu, onLogout }: AppHeaderProps
                 </button>
 
                 <div className="ml-auto flex items-center gap-2">
-                    <div className="hidden md:block">
-                        <ButtonLink to="/chat" size="sm" variant={onChat ? "primary" : "secondary"} icon={MessagesSquare} aria-current={onChat ? "page" : undefined}>
-                            Chat
-                        </ButtonLink>
-                    </div>
+                    {chatOn && (
+                        <div className="hidden md:block">
+                            <ButtonLink to="/chat" size="sm" variant={onChat ? "primary" : "secondary"} icon={MessagesSquare} aria-current={onChat ? "page" : undefined}>
+                                Chat
+                            </ButtonLink>
+                        </div>
+                    )}
 
                     {user && (
                         <div className="hidden items-center gap-2.5 border-l border-line pl-3 md:flex">

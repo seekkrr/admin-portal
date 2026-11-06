@@ -296,6 +296,8 @@ export const API_ENDPOINTS = {
         TERMS_BY_DOC: (doc: string) => `/api/v2/terms/${doc}`,
         // GET: any signed-in user; PUT: admin|super_admin.
         PARTNER_PORTAL: "/api/v2/config/partner-portal",
+        // Who gets the chat (users, creators, businesses, admin). GET: public; PUT: admin|super_admin.
+        CHAT: "/api/v2/config/chat",
     },
     // Admin search across users, businesses, places, quests, experiences, regions
     // (header search, Ctrl/Cmd+K) and the change history (admin audit log).
@@ -323,6 +325,9 @@ export const API_ENDPOINTS = {
         HELD_MESSAGES: "/api/v2/admin/chat/held",
         HELD_REVIEW: (messageId: string) => `/api/v2/admin/chat/held/${messageId}`,
         THREAD: (threadId: string) => `/api/v2/admin/chat/threads/${threadId}`,
+        /** Every business–creator chat (admins only; ?q=&before=&limit=). */
+        CONVERSATIONS: "/api/v2/admin/conversations",
+        CONVERSATION: (threadId: string) => `/api/v2/admin/conversations/${threadId}`,
     },
     // Quest bookings (admin list: ?quest_id=&user_id=&status=&page=&page_size=).
     BOOKINGS: {

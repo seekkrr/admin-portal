@@ -27,16 +27,21 @@ export interface ChatEvent {
 function entryError(err: CommandsApiError, fallback: ErrorAction): EntryError {
     let action: ErrorAction = fallback;
     if (err.retryable) action = "retry";
-    else if (err.kind === "unavailable") action = null;
+    else if (err.kind === "unavailable" || err.kind === "disabled") action = null;
     return { kind: err.kind, message: err.message, action };
 }
 
 /**
  * Conversation state + the four moves: send text, pick an option, give a
  * missing value (text or photos), confirm/cancel a preview. One request at a
- * time; everything else is ignored while `busy`.
+ * time; everything else is ignored while `busy`. `onDisabled` fires when the
+ * server says the chat is turned off for this group (403 CHAT_DISABLED).
  */
-export function useCommandChat({ surface = "admin" as CommandSurface, onUnavailable }: { surface?: CommandSurface; onUnavailable?: () => void } = {}) {
+export function useCommandChat({
+    surface = "admin" as CommandSurface,
+    onUnavailable,
+    onDisabled,
+}: { surface?: CommandSurface; onUnavailable?: () => void; onDisabled?: () => void } = {}) {
     const [state, dispatch] = useReducer(chatReducer, undefined, loadChatState);
     const [busy, setBusy] = useState(false);
     const [event, setEvent] = useState<ChatEvent | null>(null);
@@ -46,6 +51,8 @@ export function useCommandChat({ surface = "admin" as CommandSurface, onUnavaila
     entriesRef.current = state.entries;
     const onUnavailableRef = useRef(onUnavailable);
     onUnavailableRef.current = onUnavailable;
+    const onDisabledRef = useRef(onDisabled);
+    onDisabledRef.current = onDisabled;
 
     useEffect(() => {
         saveChatState(state);
@@ -92,6 +99,7 @@ export function useCommandChat({ surface = "admin" as CommandSurface, onUnavaila
             } catch (e) {
                 const err = toCommandsError(e);
                 if (err.kind === "unavailable") onUnavailableRef.current?.();
+                else if (err.kind === "disabled") onDisabledRef.current?.();
                 addBot({
                     id: newId("e"),
                     at: nowIso(),
@@ -180,6 +188,7 @@ export function useCommandChat({ surface = "admin" as CommandSurface, onUnavaila
             } catch (e) {
                 const err = toCommandsError(e);
                 if (err.kind === "unavailable") onUnavailableRef.current?.();
+                else if (err.kind === "disabled") onDisabledRef.current?.();
                 dispatch({ type: "patch", id: entryId, patch: { status: "failed", error: entryError(err, "resend") } });
                 emit(entryId);
             } finally {

@@ -6,6 +6,7 @@ import { LoginPage } from "@/features/auth/pages/LoginPage";
 import { AccessDeniedPage } from "@/features/auth/pages/AccessDeniedPage";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { RequireRole } from "./RequireRole";
+import { RequireChat } from "./RequireChat";
 import { LoadingFallback } from "@components/LoadingFallback";
 import { NotFoundPage } from "@/components/shell/NotFoundPage";
 import { ADMIN_NAV_ROLES, FINANCE_ROLES } from "@/config/navigation";
@@ -71,6 +72,7 @@ const BusinessesPage = lazy(() => import("@/features/collabs/pages/BusinessesPag
 const BusinessDetailPage = lazy(() => import("@/features/collabs/pages/BusinessDetailPage").then(m => ({ default: m.BusinessDetailPage })));
 const CollabModerationPage = lazy(() => import("@/features/collabs/pages/ModerationPage").then(m => ({ default: m.ModerationPage })));
 const CollabReportsPage = lazy(() => import("@/features/collabs/pages/ReportsPage").then(m => ({ default: m.ReportsPage })));
+const ConversationsPage = lazy(() => import("@/features/conversations/pages/ConversationsPage").then(m => ({ default: m.ConversationsPage })));
 const FraudFlagsPage = lazy(() => import("@/features/collabs/pages/FraudFlagsPage").then(m => ({ default: m.FraudFlagsPage })));
 const CollabApplicationsPage = lazy(() => import("@/features/collabs/pages/CollabApplicationsPage").then(m => ({ default: m.CollabApplicationsPage })));
 const CollabCreatorsPage = lazy(() => import("@/features/collabs/pages/CollabCreatorsPage").then(m => ({ default: m.CollabCreatorsPage })));
@@ -119,7 +121,16 @@ export const AppRoutes = () => {
             >
                 <Route index element={<Navigate to="/today" replace />} />
                 <Route path="today" element={page(<TodayPage />, "Loading today...")} />
-                <Route path="chat" element={page(<CommandChatPage />, "Loading chat...")} />
+                {/* Only while the chat is on for the SeekKrr team (Rollout → Chat) */}
+                <Route
+                    path="chat"
+                    element={page(
+                        <RequireChat>
+                            <CommandChatPage />
+                        </RequireChat>,
+                        "Loading chat..."
+                    )}
+                />
                 <Route path="dashboard" element={page(<DashboardPage />, "Loading dashboard...")} />
                 {/* Legacy /stats page removed (depended on V1-only interest endpoint); redirect to dashboard */}
                 <Route path="stats" element={<Navigate to="/dashboard" replace />} />
@@ -198,6 +209,15 @@ export const AppRoutes = () => {
                 <Route path="collabs/reports" element={page(<CollabReportsPage />, "Loading reports...")} />
                 <Route path="collabs/fraud-flags" element={page(<FraudFlagsPage />, "Loading fraud flags...")} />
                 <Route path="held-messages" element={page(<HeldMessagesPage />, "Loading held messages...")} />
+                <Route
+                    path="conversations"
+                    element={page(
+                        <RequireRole roles={ADMIN_NAV_ROLES} message="Only admins can read chats.">
+                            <ConversationsPage />
+                        </RequireRole>,
+                        "Loading chats..."
+                    )}
+                />
                 <Route path="change-history" element={page(<ChangeHistoryPage />, "Loading change history...")} />
 
                 {/* Money (static before :id) */}

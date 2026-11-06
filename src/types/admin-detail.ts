@@ -225,6 +225,12 @@ export interface ExperienceLocation {
 
 export type ExperienceStatus = "draft" | "published" | "paused" | "archived";
 
+/** Whether slots block each other: one shared space (a go-kart track) or one group per slot. */
+export interface ExperienceScheduling {
+    shared_space: boolean;
+    private_slots: boolean;
+}
+
 export interface ExperienceDetail {
     id: string;
     business_id: string;
@@ -249,6 +255,7 @@ export interface ExperienceDetail {
     faqs: ExperienceFaq[];
     gallery: string[];
     options: ExperienceOption[];
+    scheduling?: ExperienceScheduling | null;
     /** Admin-set price per person (null = not set). Slot price = option price ?? this ?? free. */
     price_per_person?: number | null;
     gst?: ExperienceGst | null;
@@ -286,6 +293,7 @@ export interface ExperiencePatch {
     gallery?: string[];
     /** `price` is only echoed back unchanged (prices are set on the Pricing tab). */
     options?: Array<Omit<ExperienceOption, "id" | "price"> & { id?: string; price?: number | null }>;
+    scheduling?: Partial<ExperienceScheduling>;
 }
 
 export interface ExperienceSlot {
@@ -306,6 +314,45 @@ export interface ExperienceSlot {
     sold_out: boolean;
     status: "open" | "cancelled";
     cancelled_at: string | null;
+    /** Blocked by the business (e.g. sold offline): travellers see it as booked; its bookings stay. */
+    blocked?: boolean;
+    /** Shared space: the booked (or blocked) session holding this slot's time. */
+    taken_by?: SlotTakenBy | null;
+    /** Why travellers can't book it: "price_not_set" until SeekKrr prices its option. */
+    unavailable_reason?: "cancelled" | "blocked" | "price_not_set" | "time_taken" | "private_booked" | "full" | null;
+}
+
+export interface SlotTakenBy {
+    slot_id: string;
+    option_id: string | null;
+    option_name: string | null;
+    start_time: string;
+    end_time: string;
+    booked: number;
+    blocked: boolean;
+}
+
+/** One change to many slots (max 200 per call). */
+export interface BulkSlotChange {
+    slot_ids: string[];
+    action: "block" | "unblock" | "capacity" | "cancel";
+    capacity?: number;
+    /** Cancel: told to the guests. */
+    reason?: string;
+}
+
+export interface BulkSlotChangeResult {
+    changed: number;
+    skipped: Array<{ slot_id: string; reason: string }>;
+    cancelled_bookings: number;
+}
+
+/** A walk-in or phone booking recorded on a slot. */
+export interface OfflineBookingPayload {
+    people: number;
+    name?: string;
+    phone?: string;
+    note?: string;
 }
 
 export interface BulkSlotsPayload {
@@ -330,6 +377,7 @@ export interface SlotPatch {
     capacity?: number;
     start_time?: string;
     end_time?: string;
+    blocked?: boolean;
 }
 
 export type ExperienceBookingStatus = "pending_payment" | "confirmed" | "cancelled" | "checked_in" | "no_show" | "expired";

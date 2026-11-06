@@ -5,6 +5,7 @@ import { useAuthStore } from "@/store/auth.store";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/States";
+import { useAdminChatOn } from "@/features/command-chat/hooks/useChatSettings";
 import { cx } from "@/utils/cx";
 import { useTodayItems, type TodayItem } from "../useTodayItems";
 
@@ -60,6 +61,7 @@ export function TodayPage() {
     const queryClient = useQueryClient();
     const fetching = useIsFetching({ queryKey: ["today"] }) > 0;
     const items = useTodayItems();
+    const chatOn = useAdminChatOn();
 
     // A card whose call fails hides itself.
     const shown = items.filter((i) => !i.isError);
@@ -85,9 +87,11 @@ export function TodayPage() {
                         >
                             Refresh
                         </Button>
-                        <ButtonLink to="/chat" variant="primary" icon={MessagesSquare}>
-                            Open chat
-                        </ButtonLink>
+                        {chatOn && (
+                            <ButtonLink to="/chat" variant="primary" icon={MessagesSquare}>
+                                Open chat
+                            </ButtonLink>
+                        )}
                     </>
                 }
             />

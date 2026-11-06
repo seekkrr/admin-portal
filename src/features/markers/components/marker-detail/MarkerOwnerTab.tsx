@@ -24,6 +24,7 @@ export function MarkerOwnerTab({ marker, canEdit, onSaved }: { marker: Marker & 
     const { business, isLoading } = useMarkerBusiness(marker.id);
     const [newOwner, setNewOwner] = useState("");
     const [newAdder, setNewAdder] = useState("");
+    const adderValid = OBJECT_ID.test(newAdder.trim()) || /^\S+@\S+\.\S+$/.test(newAdder.trim());
     const [linkId, setLinkId] = useState("");
     const [code, setCode] = useState("");
     const [confirm, setConfirm] = useState<"clear-owner" | "unlink" | null>(null);
@@ -159,13 +160,17 @@ export function MarkerOwnerTab({ marker, canEdit, onSaved }: { marker: Marker & 
                             className="flex flex-col gap-3 sm:flex-row sm:items-end"
                             onSubmit={(e) => {
                                 e.preventDefault();
-                                if (OBJECT_ID.test(newAdder.trim())) setAdder.mutate(newAdder.trim());
+                                if (adderValid) setAdder.mutate(newAdder.trim());
                             }}
                         >
-                            <Field label='Change "Added by"' hint="A user ID. Shown as who added the place in the app, and they can edit it." className="flex-1">
-                                <TextInput value={newAdder} onChange={(e) => setNewAdder(e.target.value)} placeholder="24-character user ID" className="font-mono" maxLength={24} />
+                            <Field
+                                label='Change "Added by"'
+                                hint="A person, not a business: their user ID or the email they sign in with. Shown as who added the place in the app, and they can edit it."
+                                className="flex-1"
+                            >
+                                <TextInput value={newAdder} onChange={(e) => setNewAdder(e.target.value)} placeholder="User ID or email" maxLength={255} />
                             </Field>
-                            <Button type="submit" variant="secondary" disabled={!OBJECT_ID.test(newAdder.trim())} loading={setAdder.isPending}>
+                            <Button type="submit" variant="secondary" disabled={!adderValid} loading={setAdder.isPending}>
                                 Save "Added by"
                             </Button>
                         </form>

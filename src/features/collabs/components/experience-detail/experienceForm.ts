@@ -50,6 +50,8 @@ export interface ContentForm {
     itinerary: ItineraryForm[];
     faqs: FaqForm[];
     options: OptionForm[];
+    shared_space: boolean;
+    private_slots: boolean;
 }
 
 const s = (v: string | number | null | undefined) => (v === null || v === undefined ? "" : String(v));
@@ -94,6 +96,8 @@ export function formFrom(e: ExperienceDetail): ContentForm {
             duration_minutes: s(o.duration_minutes),
             price: s(o.price),
         })),
+        shared_space: e.scheduling?.shared_space ?? false,
+        private_slots: e.scheduling?.private_slots ?? false,
     };
 }
 
@@ -156,6 +160,7 @@ function payloadOf(f: ContentForm): Required<Omit<ExperiencePatch, "region_id" |
                     ...(price !== null ? { price } : {}),
                 };
             }),
+        scheduling: { shared_space: f.shared_space, private_slots: f.private_slots },
     };
 }
 

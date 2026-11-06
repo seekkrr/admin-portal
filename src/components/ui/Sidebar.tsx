@@ -4,6 +4,7 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { findNavMatch, navGroupsForRoles } from "@/config/navigation";
 import { useAuthStore } from "@/store/auth.store";
 import { NavList } from "@/components/shell/NavList";
+import { useAdminChatOn } from "@/features/command-chat/hooks/useChatSettings";
 import { cx } from "@/utils/cx";
 
 interface SidebarProps {
@@ -21,8 +22,9 @@ interface SidebarProps {
  */
 export function Sidebar({ collapsed, onToggle, closedGroups, onToggleGroup, counts }: SidebarProps) {
     const roles = useAuthStore((s) => s.user?.role);
+    const chatOn = useAdminChatOn();
     const { pathname } = useLocation();
-    const groups = useMemo(() => navGroupsForRoles(roles), [roles]);
+    const groups = useMemo(() => navGroupsForRoles(roles, { chat: chatOn }), [roles, chatOn]);
     const activeTo = findNavMatch(pathname)?.item.to ?? null;
 
     return (

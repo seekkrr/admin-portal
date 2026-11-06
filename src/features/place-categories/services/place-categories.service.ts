@@ -1,5 +1,6 @@
 import { api } from "@/services/api";
 import { API_ENDPOINTS } from "@/config/api";
+import type { CategoryPinKind } from "@/types";
 
 export interface PlaceCategory {
     id: string;
@@ -8,8 +9,10 @@ export interface PlaceCategory {
     is_active: boolean;
     color: string | null;
     icon: string | null;
-    /** Map pin frame image URL. */
+    /** Map pin image URL: the pin on the Explore map for this category's places. */
     cdn_frame: string | null;
+    /** What the map pin image is: "icon" sits inside the pin, "photo" fills it; null = the app decides. */
+    cdn_frame_kind: CategoryPinKind | null;
 }
 
 export interface PlaceCategoryInput {
@@ -19,6 +22,7 @@ export interface PlaceCategoryInput {
     color: string | null;
     icon: string | null;
     cdn_frame: string | null;
+    cdn_frame_kind: CategoryPinKind | null;
 }
 
 function normalise(raw: Partial<PlaceCategory> & { id: string }): PlaceCategory {
@@ -30,6 +34,7 @@ function normalise(raw: Partial<PlaceCategory> & { id: string }): PlaceCategory 
         color: raw.color ?? null,
         icon: raw.icon ?? null,
         cdn_frame: raw.cdn_frame ?? null,
+        cdn_frame_kind: raw.cdn_frame_kind === "icon" || raw.cdn_frame_kind === "photo" ? raw.cdn_frame_kind : null,
     };
 }
 
