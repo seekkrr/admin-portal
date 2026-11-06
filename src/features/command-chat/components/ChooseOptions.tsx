@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
 import { Check } from "lucide-react";
 import type { ChooseOption, ChooseResult } from "@/services/commands.types";
-import { focusRing, Thumb } from "./chatUi";
+import { botText, focusRing, Thumb } from "./chatUi";
 
-/** "Which one did you mean?" — tappable options; picking re-sends the command with that record. */
+/** "Which one did you mean?" — the question as a message, then tappable options; picking re-sends the message with that record. */
 export function ChooseOptions({
     result,
     pickedId,
@@ -28,7 +28,7 @@ export function ChooseOptions({
 
     return (
         <div>
-            <p className="text-sm text-neutral-800">{result.prompt}</p>
+            <p className={botText}>{result.prompt}</p>
             {result.options.length === 0 ? (
                 <p className="mt-2 text-sm text-neutral-500">Nothing matched.</p>
             ) : (

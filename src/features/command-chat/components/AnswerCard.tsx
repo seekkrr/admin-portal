@@ -1,17 +1,25 @@
-import { ChevronRight } from "lucide-react";
+import { ArrowRight, ChevronRight } from "lucide-react";
 import type { AnswerResult } from "@/services/commands.types";
-import { focusRing, PathLink, Thumb } from "./chatUi";
+import { isAdminPath, MAX_ANSWER_ITEMS } from "../chatModel";
+import { botText, btnPill, focusRing, PathLink, Thumb } from "./chatUi";
 
-/** Read-only answer ("what needs me", "show …"): title, text and a list with links. */
+/**
+ * The chat's answer: its words (the title only when there's no text), the
+ * records it found (up to eight rows, each opening its own screen), and one
+ * small button to the admin screen with the rest. The button only opens admin
+ * portal routes, in place (react-router).
+ */
 export function AnswerCard({ result }: { result: AnswerResult }) {
-    const hasThumbs = result.items.some((i) => i.image_url);
+    const said = result.text?.trim() || result.title.trim();
+    const items = result.items.slice(0, MAX_ANSWER_ITEMS);
+    const hasThumbs = items.some((i) => i.image_url);
+    const link = result.link && isAdminPath(result.link.url_path) ? result.link : null;
     return (
         <div>
-            {result.title && <h3 className="text-[15px] font-semibold text-neutral-900">{result.title}</h3>}
-            {result.text && <p className="mt-0.5 text-sm text-neutral-600 whitespace-pre-line">{result.text}</p>}
-            {result.items.length > 0 && (
-                <ul className="mt-3 -mx-1 divide-y divide-neutral-100">
-                    {result.items.map((item, i) => {
+            {said ? <p className={botText}>{said}</p> : !items.length && !link && <p className="text-sm text-neutral-500">Nothing to show.</p>}
+            {items.length > 0 && (
+                <ul className={`${said ? "mt-2.5" : ""} -mx-1 divide-y divide-neutral-100`}>
+                    {items.map((item, i) => {
                         const body = (
                             <>
                                 {hasThumbs && <Thumb src={item.image_url} size="sm" />}
@@ -39,7 +47,14 @@ export function AnswerCard({ result }: { result: AnswerResult }) {
                     })}
                 </ul>
             )}
-            {!result.text && result.items.length === 0 && <p className="mt-1 text-sm text-neutral-500">Nothing to show.</p>}
+            {link && (
+                <div className={said || items.length ? "mt-2.5" : ""}>
+                    <PathLink to={link.url_path.trim()} className={btnPill}>
+                        {link.label}
+                        <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                    </PathLink>
+                </div>
+            )}
         </div>
     );
 }

@@ -5,7 +5,8 @@
  *
  * Try: "add images to ema", "turn off experiences for ara", "make riya a creator",
  * "show bookings for sunrise", "what needs me", "delete emaho", "simulate expired",
- * "simulate network error".
+ * "simulate network error". Replies are worded like the real chat's: a lead above
+ * each confirm card, and a link to the screen with the rest of a list.
  */
 import { CommandsApiError } from "@/services/commands.service";
 import type {
@@ -13,7 +14,6 @@ import type {
     ChooseOption,
     CommandAttachment,
     CommandHistoryItem,
-    CommandSuggestion,
     DoneResult,
     UnderstandRequest,
     UnderstandResult,
@@ -90,7 +90,7 @@ function resolve(kind: SlotKind, raw: string | undefined, req: UnderstandRequest
     }
     if (!raw || !raw.trim()) {
         return {
-            result: { kind: "need", slot, prompt: `Which ${SLOT_WORD[kind]}?`, input: "text", placeholder: `Type a ${SLOT_WORD[kind]} name` },
+            result: { kind: "need", slot, prompt: `Sure! Which ${SLOT_WORD[kind]} is it?`, input: "text", placeholder: `Type a ${SLOT_WORD[kind]} name` },
         };
     }
     const matches = find(kind, raw);
@@ -100,7 +100,7 @@ function resolve(kind: SlotKind, raw: string | undefined, req: UnderstandRequest
             result: {
                 kind: "choose",
                 slot,
-                prompt: `Which ${SLOT_WORD[kind]} did you mean?`,
+                prompt: `I found ${matches.length}. Which ${SLOT_WORD[kind]} did you mean?`,
                 options: matches.map(({ id, label, sublabel, image_url }) => ({ id, label, sublabel, image_url })),
             },
         };
@@ -108,7 +108,7 @@ function resolve(kind: SlotKind, raw: string | undefined, req: UnderstandRequest
     return {
         result: {
             kind: "unknown",
-            message: `I couldn't find a ${SLOT_WORD[kind]} called “${raw.trim()}”.`,
+            message: `Sorry, I couldn't find a ${SLOT_WORD[kind]} called “${raw.trim()}”. Could you check the name?`,
             examples: POOLS[kind].slice(0, 2).map((r) => exampleFor(kind, r.label)),
         },
     };
@@ -159,6 +159,7 @@ function preview(
         confirm_label,
         danger,
         token: sign({ command, done: done.message, url: done.url }, ttlMs),
+        lead: danger ? "Here it is. This one's hard to undo, so check it first." : "Here it is, look right?",
     };
 }
 
@@ -183,14 +184,15 @@ export async function mockUnderstand(req: UnderstandRequest): Promise<Understand
     }
 
     if (/^(delete|remove) /.test(text)) {
-        return { kind: "denied", message: "Deleting isn't something the chat can do. Open the record and delete it there." };
+        return { kind: "denied", message: "I can't delete things from the chat, sorry. You can delete it from its page in the portal." };
     }
 
     if (text === "what needs me" || text === "what needs me?" || text === "today") {
         return {
             kind: "answer",
             title: "Waiting for you",
-            text: "Here's what's pending right now.",
+            text: "Three place requests are waiting, the oldest from 2 days ago, plus 2 business applications and a report that needs a decision.",
+            link: null,
             items: [
                 { label: "3 place requests", sublabel: "Oldest from 2 days ago", url_path: "/markers?tab=requests", image_url: null },
                 { label: "2 business applications", sublabel: "Ara cafe, Hill Brews", url_path: "/collabs/business-applications", image_url: null },
@@ -203,7 +205,7 @@ export async function mockUnderstand(req: UnderstandRequest): Promise<Understand
         const r = resolve("quest", m[1], req);
         if ("result" in r) return r.result;
         if (!req.attachments?.length) {
-            return { kind: "need", slot: "images", prompt: `Which photos should go on ${r.rec.label}?`, input: "images", placeholder: null };
+            return { kind: "need", slot: "images", prompt: `Sure! Which photos should I add to ${r.rec.label}?`, input: "images", placeholder: null };
         }
         const n = req.attachments.length;
         return preview("quest.add_images", `Add ${n} photo${n === 1 ? "" : "s"} to ${r.rec.label}`, "They'll appear after the quest's current photos.",
@@ -214,7 +216,7 @@ export async function mockUnderstand(req: UnderstandRequest): Promise<Understand
         const r = resolve("place", m[1], req);
         if ("result" in r) return r.result;
         if (!req.attachments?.length) {
-            return { kind: "need", slot: "images", prompt: `Which photos should go on ${r.rec.label}?`, input: "images", placeholder: null };
+            return { kind: "need", slot: "images", prompt: `Sure! Which photos should I add to ${r.rec.label}?`, input: "images", placeholder: null };
         }
         const n = req.attachments.length;
         return preview("place.add_images", `Add ${n} photo${n === 1 ? "" : "s"} to ${r.rec.label}`, `${r.rec.sublabel ?? ""} — they'll appear after its current photos.`,
@@ -225,7 +227,7 @@ export async function mockUnderstand(req: UnderstandRequest): Promise<Understand
         const r = resolve("place", m[1], req);
         if ("result" in r) return r.result;
         const category = m[2]?.trim();
-        if (!category) return { kind: "need", slot: "category", prompt: `What category should ${r.rec.label} be?`, input: "text", placeholder: "e.g. cafe, viewpoint, hostel" };
+        if (!category) return { kind: "need", slot: "category", prompt: `Sure, what category should ${r.rec.label} be in?`, input: "text", placeholder: "Cafe, viewpoint, hostel…" };
         const before = (r.rec.sublabel ?? "").split(" · ")[0] ?? null;
         return preview("place.set_category", `Change the category of ${r.rec.label}`, r.rec.sublabel ?? "",
             [{ label: "Category", before, after: category.replace(/^\w/, (c) => c.toUpperCase()) }], "Change category",
@@ -264,11 +266,12 @@ export async function mockUnderstand(req: UnderstandRequest): Promise<Understand
         const r = resolve("experience", m[1], req);
         if ("result" in r) return r.result;
         const when = m[2];
-        if (!when) return { kind: "need", slot: "date", prompt: `Bookings for which day?`, input: "date", placeholder: null };
+        if (!when) return { kind: "need", slot: "date", prompt: "Sure! Which day should I check?", input: "date", placeholder: "Today, tomorrow or a date" };
         return {
             kind: "answer",
             title: `${r.rec.label} · ${when}`,
-            text: "2 bookings, 5 guests.",
+            text: `${r.rec.label} has 2 bookings ${when}, 5 guests in all.`,
+            link: { url_path: r.rec.url, label: "Open the experience" },
             items: [
                 { label: "Riya Sharma · 2 guests", sublabel: "7:00 AM · paid", url_path: "/users?focus=us_riya", image_url: USERS[0]?.image_url ?? null },
                 { label: "Rohan Mehta · 3 guests", sublabel: "7:00 AM · pay at venue", url_path: "/users?focus=us_rohan", image_url: USERS[1]?.image_url ?? null },
@@ -282,7 +285,13 @@ export async function mockUnderstand(req: UnderstandRequest): Promise<Understand
             const user = find("user", m[2] ?? "");
             if (user.length === 1 && user[0]) {
                 const u = user[0];
-                return { kind: "answer", title: u.label, text: u.sublabel, items: [{ label: "Open their profile", sublabel: "Traveler · joined March", url_path: u.url, image_url: u.image_url }] };
+                return {
+                    kind: "answer",
+                    title: u.label,
+                    text: `${u.label} is a traveler who joined in March (${u.sublabel ?? "no email"}).`,
+                    items: [{ label: "Open their profile", sublabel: "Traveler · joined March", url_path: u.url, image_url: u.image_url }],
+                    link: null,
+                };
             }
         }
         const r = resolve("place", m[2], req);
@@ -294,10 +303,20 @@ export async function mockUnderstand(req: UnderstandRequest): Promise<Understand
     }
 
     if (text === "show reports") {
-        return { kind: "answer", title: "Open reports", text: null, items: [{ label: "Collab report #1042", sublabel: "Spam · 2 hours ago", url_path: "/collabs/reports", image_url: null }] };
+        return {
+            kind: "answer",
+            title: "Open reports",
+            text: "There's one open report, marked as spam 2 hours ago.",
+            items: [{ label: "Collab report #1042", sublabel: "Spam · 2 hours ago", url_path: "/collabs/reports", image_url: null }],
+            link: { url_path: "/collabs/reports", label: "Open reports" },
+        };
     }
 
-    return { kind: "unknown", message: "I don't know that one yet. Try one of these:", examples: EXAMPLES };
+    return {
+        kind: "unknown",
+        message: "Sorry, I can't help with that one yet. I can add photos to places and quests, change a place's category, turn Experiences or Collabs on or off, or show what's waiting for you.",
+        examples: EXAMPLES,
+    };
 }
 
 export async function mockRun(token: string): Promise<DoneResult> {
@@ -312,47 +331,6 @@ export async function mockRun(token: string): Promise<DoneResult> {
         throw new CommandsApiError("expired", "This preview expired. Send the command again.", 400);
     }
     return { kind: "done", message: body.done, url_path: body.url };
-}
-
-const TEMPLATES: { prefix: string; slot: SlotKind | null; suffix?: string; hint: string }[] = [
-    { prefix: "add images to ", slot: "place", hint: "Places" },
-    { prefix: "add images to quest ", slot: "quest", hint: "Quests" },
-    { prefix: "set category of ", slot: "place", suffix: " to ", hint: "Places" },
-    { prefix: "hide ", slot: "place", hint: "Places" },
-    { prefix: "turn on experiences for ", slot: "business", hint: "Businesses" },
-    { prefix: "turn off experiences for ", slot: "business", hint: "Businesses" },
-    { prefix: "turn on collabs for ", slot: "business", hint: "Businesses" },
-    { prefix: "turn off collabs for ", slot: "business", hint: "Businesses" },
-    { prefix: "make ", slot: "user", suffix: " a creator", hint: "People" },
-    { prefix: "suspend ", slot: "user", hint: "People" },
-    { prefix: "reactivate ", slot: "user", hint: "People" },
-    { prefix: "show bookings for ", slot: "experience", suffix: " today", hint: "Experiences" },
-    { prefix: "what needs me", slot: null, hint: "Today" },
-    { prefix: "show reports", slot: null, hint: "Today" },
-];
-
-export async function mockSuggest(q: string): Promise<CommandSuggestion[]> {
-    await delay(80);
-    const query = q.toLowerCase().replace(/\s+/g, " ").trimStart();
-    if (!query.trim()) return [];
-    const out: CommandSuggestion[] = [];
-    for (const t of TEMPLATES) {
-        if (t.slot && query.startsWith(t.prefix)) {
-            const partial = norm(query.slice(t.prefix.length));
-            for (const rec of POOLS[t.slot]) {
-                const name = norm(rec.label);
-                if (partial && !name.startsWith(partial) && !name.includes(partial)) continue;
-                out.push({ text: `${t.prefix}${rec.label}${t.suffix ?? ""}`, label: `${t.prefix}${rec.label}`, hint: rec.sublabel });
-            }
-        } else if (t.prefix.startsWith(query) && t.prefix.trim() !== query.trim()) {
-            out.push({
-                text: t.prefix,
-                label: t.slot ? `${t.prefix.trim()} … ${t.suffix?.trim() ?? ""}`.trim() : t.prefix,
-                hint: t.hint,
-            });
-        }
-    }
-    return out.slice(0, 8);
 }
 
 export async function mockHistory(): Promise<CommandHistoryItem[]> {
