@@ -1,6 +1,6 @@
 import { api } from "@/services/api";
 import { API_ENDPOINTS } from "@/config/api";
-import type { CreatorApplication } from "@/types";
+import type { CollabCreatorProfile, CreatorApplication } from "@/types";
 
 export interface CreatorApplicationsListResponse {
     applications: CreatorApplication[];
@@ -11,6 +11,12 @@ export interface CreatorApplicationsListResponse {
         total_pages: number;
     };
     pending_count: number;
+}
+
+export interface CreatorApplicationDetail {
+    application: CreatorApplication;
+    /** Null for a website application (no account behind it) and on a backend that predates this field. */
+    creator_profile: CollabCreatorProfile | null;
 }
 
 export interface ListCreatorApplicationsParams {
@@ -53,12 +59,17 @@ export const creatorApplicationsService = {
         };
     },
 
-    /** Fetch a single creator application by id */
-    getApplication: async (id: string): Promise<CreatorApplication> => {
-        const response = await api.get<{ success: boolean; application: CreatorApplication }>(
-            API_ENDPOINTS.CREATOR_APPLICATIONS.BY_ID(id)
-        );
-        return response.data.application;
+    /** Fetch a single creator application, with the applicant's creator profile when there is one */
+    getApplication: async (id: string): Promise<CreatorApplicationDetail> => {
+        const response = await api.get<{
+            success: boolean;
+            application: CreatorApplication;
+            creator_profile?: CollabCreatorProfile | null;
+        }>(API_ENDPOINTS.CREATOR_APPLICATIONS.BY_ID(id));
+        return {
+            application: response.data.application,
+            creator_profile: response.data.creator_profile ?? null,
+        };
     },
 
     /** Approve a creator application */

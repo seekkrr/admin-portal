@@ -77,6 +77,53 @@ export interface CreatorApplication {
     updated_at: string | null;
 }
 
+/** One handle on a creator's "Know Your Creator" profile. */
+export interface CollabSocialHandle {
+    platform: string;
+    handle: string;
+    verified: boolean;
+    verified_at: string | null;
+    verification_pending: boolean;
+    /** What the creator typed in. Nobody has checked it. */
+    followers_self_reported: number | null;
+}
+
+export interface CollabPortfolioItem {
+    url: string;
+    caption?: string | null;
+}
+
+/**
+ * What a creator filled in on the app's "Know Your Creator" form.
+ *
+ * The application record copies across only the display name, the handles as
+ * plain links and an email, so everything else -- bio, niches, travel styles,
+ * languages, portfolio, follower counts, the 18+ confirmation -- can only be
+ * read from here. Rides along with `GET /creator-applications/{id}`.
+ */
+export interface CollabCreatorProfile {
+    id: string | null;
+    display_name: string | null;
+    socials: CollabSocialHandle[];
+    travel_styles: string[];
+    niches: string[];
+    languages: string[];
+    bio: string | null;
+    portfolio: CollabPortfolioItem[];
+    public_slug: string | null;
+    open_to_collab: boolean;
+    tier: string | null;
+    is_adult_confirmed: boolean;
+    stats: {
+        redeemed?: number;
+        completed?: number;
+        no_shows?: number;
+        avg_rating?: number | null;
+        rating_count?: number;
+    };
+    updated_at: string | null;
+}
+
 export interface CreatorStats {
     _id: string;
     total_quests: number;

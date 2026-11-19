@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle, ExternalLink, Trash2, UserPlus, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
@@ -12,6 +12,7 @@ import { CopyText } from "@/components/ui/CopyText";
 import { IdLink } from "@/components/ui/IdLink";
 import { formatDateTime } from "@/utils/date";
 import { creatorApplicationsService } from "../services/creator-applications.service";
+import { CreatorProfileSection } from "./CreatorProfileSection";
 import type { CreatorApplication } from "@/types";
 
 interface ApplicationDetailModalProps {
@@ -49,6 +50,20 @@ export function ApplicationDetailModal({ open, application, onClose }: Applicati
         onSuccess: () => done("Application deleted"),
         onError: (err: Error) => toast.error(err.message || "Failed to delete application"),
     });
+
+    // The list row carries a name and some links. What the applicant actually
+    // filled in -- bio, niches, travel styles, languages, portfolio, follower
+    // counts -- only comes back from the detail endpoint, so fetch it when the
+    // modal opens. Null for a website application and on a backend that
+    // predates the field, and then the section simply doesn't render.
+    const appId = application?.id;
+    const { data: detail } = useQuery({
+        queryKey: ["admin-creator-application", appId],
+        queryFn: () => creatorApplicationsService.getApplication(appId ?? ""),
+        enabled: open && !!appId,
+        staleTime: 30_000,
+    });
+    const profile = detail?.creator_profile ?? null;
 
     if (!application) return null;
 
@@ -130,7 +145,7 @@ export function ApplicationDetailModal({ open, application, onClose }: Applicati
                     </DetailList>
                 </section>
 
-                {application.social_links?.length > 0 && (
+                {!profile && application.social_links?.length > 0 && (
                     <section className="space-y-3">
                         <SectionHeading>Social links ({application.social_links.length})</SectionHeading>
                         <ul className="space-y-2">
@@ -150,6 +165,8 @@ export function ApplicationDetailModal({ open, application, onClose }: Applicati
                         </ul>
                     </section>
                 )}
+
+                {profile && <CreatorProfileSection profile={profile} />}
             </Modal>
 
             <ConfirmDialog
