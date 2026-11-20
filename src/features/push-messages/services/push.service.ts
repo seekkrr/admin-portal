@@ -1,7 +1,7 @@
 import { api } from "@/services/api";
 import { API_ENDPOINTS } from "@/config/api";
 
-/** "all" (everyone), "region:<id>", "event:<id>" (people who RSVP'd). */
+/** "all" (everyone), "region:<id>", "event:<id>" (people who RSVP'd), "business:<id>" (its owner and team). */
 export type GroupKey = string;
 
 export interface BroadcastInput {
@@ -19,6 +19,11 @@ export interface BroadcastResult {
     scheduled?: boolean;
     id?: string;
     send_at?: string;
+    published?: boolean;
+    push_enabled?: boolean;
+    /** One business only: phones the push went to, and people on its team. */
+    sent?: number;
+    people?: number;
     [key: string]: unknown;
 }
 

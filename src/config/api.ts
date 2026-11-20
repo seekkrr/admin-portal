@@ -345,10 +345,10 @@ export const API_ENDPOINTS = {
     COLLABS_LIFECYCLE_SWEEP: "/api/v2/admin/collabs/lifecycle/sweep",
     // Check-in offers: admin edit / disable (PATCH {title, description, discount fields, active, expires_at}).
     OFFERS_ADMIN_BY_ID: (offerId: string) => `/api/v2/offers/admin/${offerId}`,
-    // Command chat (no AI): text → choose / need / preview / answer → run. Any signed-in user;
-    // what each may run depends on role. Owned by src/services/commands.service.ts.
+    // Command chat: a conversation (each message goes with the chat so far) → choose / need /
+    // preview / answer → run. Any signed-in user; what each may run depends on role.
+    // Owned by src/services/commands.service.ts.
     COMMANDS: {
-        SUGGEST: "/api/v2/commands/suggest",
         UNDERSTAND: "/api/v2/commands/understand",
         RUN: "/api/v2/commands/run",
         HISTORY: "/api/v2/commands/history",

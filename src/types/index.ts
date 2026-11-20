@@ -56,6 +56,8 @@ export interface CreatorApplication {
     name: string;
     /** Null for an app applicant without a real email (e.g. Apple "Hide my email"). */
     email: string | null;
+    /** What an app applicant with no real email typed in so we can reach them. Not verified. */
+    contact_email?: string | null;
     /** "app": filed from the app's Become a Creator form (approval opens the Collabs tab). */
     source?: "website" | "app" | null;
     /** The app account that applied; approving makes this user a creator. */
@@ -72,6 +74,53 @@ export interface CreatorApplication {
     used_at: string | null;
     used_by_user_id: string | null;
     created_at: string | null;
+    updated_at: string | null;
+}
+
+/** One handle on a creator's "Know Your Creator" profile. */
+export interface CollabSocialHandle {
+    platform: string;
+    handle: string;
+    verified: boolean;
+    verified_at: string | null;
+    verification_pending: boolean;
+    /** What the creator typed in. Nobody has checked it. */
+    followers_self_reported: number | null;
+}
+
+export interface CollabPortfolioItem {
+    url: string;
+    caption?: string | null;
+}
+
+/**
+ * What a creator filled in on the app's "Know Your Creator" form.
+ *
+ * The application record copies across only the display name, the handles as
+ * plain links and an email, so everything else -- bio, niches, travel styles,
+ * languages, portfolio, follower counts, the 18+ confirmation -- can only be
+ * read from here. Rides along with `GET /creator-applications/{id}`.
+ */
+export interface CollabCreatorProfile {
+    id: string | null;
+    display_name: string | null;
+    socials: CollabSocialHandle[];
+    travel_styles: string[];
+    niches: string[];
+    languages: string[];
+    bio: string | null;
+    portfolio: CollabPortfolioItem[];
+    public_slug: string | null;
+    open_to_collab: boolean;
+    tier: string | null;
+    is_adult_confirmed: boolean;
+    stats: {
+        redeemed?: number;
+        completed?: number;
+        no_shows?: number;
+        avg_rating?: number | null;
+        rating_count?: number;
+    };
     updated_at: string | null;
 }
 

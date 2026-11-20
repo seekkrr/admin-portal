@@ -1,13 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { ArrowUp, ImagePlus, Loader2 } from "lucide-react";
-import type { CommandAttachment, CommandSurface } from "@/services/commands.types";
-import { uploadCategoryFor } from "../chatModel";
-import { useCommandSuggestions } from "../hooks/useCommandQueries";
+import type { CommandAttachment } from "@/services/commands.types";
+import { MESSAGE_PLACEHOLDER, uploadCategoryFor } from "../chatModel";
 import { MAX_IMAGES, useImageUploads } from "../hooks/useImageUploads";
 import { ImageThumbs } from "./ImageThumbs";
 import { btnIconPrimary, focusRing } from "./chatUi";
 
-const LIST_ID = "command-chat-suggestions";
 const MAX_HEIGHT = 160;
 
 function fitHeight(el: HTMLTextAreaElement) {
@@ -17,10 +15,11 @@ function fitHeight(el: HTMLTextAreaElement) {
 }
 
 /**
- * Message box: Enter sends, Shift+Enter adds a line, ↑/↓ + Enter/Tab pick a
- * suggestion, Esc closes the list, ↑ in an empty box recalls the last command.
- * Photos upload as soon as they're picked and go with the next message.
- * While a request is in flight the box is read-only (focus stays put).
+ * Message box: Enter sends, Shift+Enter adds a line, ↑ in an empty box recalls
+ * the last message. It also answers the chat's open question (the hint then
+ * says what's asked). Photos upload as soon as they're picked and go with the
+ * next message. While a request is in flight the box is read-only (focus
+ * stays put).
  */
 export function Composer({
     value,
@@ -30,7 +29,7 @@ export function Composer({
     unavailable,
     inputRef,
     lastSent,
-    surface = "admin",
+    placeholder = MESSAGE_PLACEHOLDER,
 }: {
     value: string;
     onChange: (v: string) => void;
@@ -39,24 +38,14 @@ export function Composer({
     unavailable: boolean;
     inputRef: RefObject<HTMLTextAreaElement>;
     lastSent: string | null;
-    surface?: CommandSurface;
+    /** The hint in the empty box: "Message SeekKrr", or the open question's placeholder. */
+    placeholder?: string;
 }) {
     const fileRef = useRef<HTMLInputElement>(null);
     const valueRef = useRef(value);
     valueRef.current = value;
     const uploads = useImageUploads({ category: () => uploadCategoryFor(valueRef.current) });
     const [note, setNote] = useState<string | null>(null);
-
-    const [listOpen, setListOpen] = useState(false);
-    const [active, setActive] = useState(-1);
-    const { suggestions } = useCommandSuggestions(value, listOpen && !unavailable, surface);
-    const showList = listOpen && suggestions.length > 0;
-
-    // New suggestions → nothing highlighted until the user moves.
-    const suggestionKey = suggestions.map((s) => s.text).join("\n");
-    useEffect(() => {
-        setActive(-1);
-    }, [suggestionKey]);
 
     // Grow with the text, up to a limit — re-measured when the text or the box width changes.
     useLayoutEffect(() => {
@@ -84,53 +73,11 @@ export function Composer({
         if (onSend(value, uploads.attachments)) {
             uploads.clear();
             setNote(null);
-            setListOpen(false);
         }
-    };
-
-    const accept = (index: number) => {
-        const s = suggestions[index];
-        if (!s) return;
-        onChange(s.text);
-        setActive(-1);
-        // Keep the list open: accepting "add images to " should offer place names next.
-        setListOpen(true);
-        requestAnimationFrame(() => {
-            const el = inputRef.current;
-            if (el) el.setSelectionRange(el.value.length, el.value.length);
-        });
     };
 
     const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.nativeEvent.isComposing) return;
-        if (showList) {
-            const n = suggestions.length;
-            if (e.key === "ArrowDown") {
-                e.preventDefault();
-                setActive((a) => (a + 1) % n);
-                return;
-            }
-            if (e.key === "ArrowUp") {
-                e.preventDefault();
-                setActive((a) => (a <= 0 ? n - 1 : a - 1));
-                return;
-            }
-            if (e.key === "Tab" && !e.shiftKey) {
-                e.preventDefault();
-                accept(active >= 0 ? active : 0);
-                return;
-            }
-            if (e.key === "Enter" && !e.shiftKey && active >= 0) {
-                e.preventDefault();
-                accept(active);
-                return;
-            }
-            if (e.key === "Escape") {
-                e.preventDefault();
-                setListOpen(false);
-                return;
-            }
-        }
         if (e.key === "ArrowUp" && !value && lastSent) {
             e.preventDefault();
             onChange(lastSent);
@@ -142,39 +89,10 @@ export function Composer({
         }
     };
 
-    const activeId = showList && active >= 0 ? `${LIST_ID}-${active}` : undefined;
-    const placeholder = unavailable ? "Chat isn't available on this server yet" : "Type what you want to do…";
+    const hint = unavailable ? "Chat isn't available on this server yet" : placeholder;
 
     return (
         <div className="relative">
-            {showList && (
-                <div className="absolute bottom-full left-0 right-0 mb-2 z-20 rounded-2xl border border-neutral-200 bg-white shadow-lg overflow-hidden">
-                    <ul id={LIST_ID} role="listbox" aria-label="Suggestions" className="max-h-72 overflow-y-auto py-1">
-                        {suggestions.map((s, i) => (
-                            <li
-                                key={`${s.text}-${i}`}
-                                id={`${LIST_ID}-${i}`}
-                                role="option"
-                                aria-selected={i === active}
-                                // Keep focus in the textarea.
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => accept(i)}
-                                onMouseEnter={() => setActive(i)}
-                                className={`flex items-center gap-3 px-4 py-2 cursor-pointer text-sm ${
-                                    i === active ? "bg-[#00A49E]/10" : ""
-                                }`}
-                            >
-                                <span className="flex-1 min-w-0 truncate text-neutral-900">{s.label}</span>
-                                {s.hint && <span className="shrink-0 max-w-[45%] truncate text-xs text-neutral-500">{s.hint}</span>}
-                            </li>
-                        ))}
-                    </ul>
-                    <p className="hidden sm:block px-4 py-1.5 border-t border-neutral-100 text-[11px] text-neutral-400">
-                        ↑ ↓ to move · Tab or Enter to complete · Esc to close
-                    </p>
-                </div>
-            )}
-
             <div
                 className={`rounded-2xl border bg-white shadow-sm transition-colors ${
                     unavailable ? "border-neutral-200 bg-neutral-50" : "border-neutral-200 focus-within:border-[#00A49E] focus-within:ring-2 focus-within:ring-[#00A49E]/20"
@@ -215,29 +133,19 @@ export function Composer({
                         }}
                     />
                     <label htmlFor="command-chat-input" className="sr-only">
-                        Command
+                        Message
                     </label>
                     <textarea
                         ref={inputRef}
                         id="command-chat-input"
                         rows={1}
                         value={value}
-                        onChange={(e) => {
-                            onChange(e.target.value);
-                            setListOpen(true);
-                        }}
+                        onChange={(e) => onChange(e.target.value)}
                         onKeyDown={onKeyDown}
-                        onBlur={() => setListOpen(false)}
-                        onFocus={() => value && setListOpen(true)}
                         readOnly={disabled}
                         aria-disabled={disabled || undefined}
                         aria-busy={busy || undefined}
-                        placeholder={placeholder}
-                        role="combobox"
-                        aria-expanded={showList}
-                        aria-controls={showList ? LIST_ID : undefined}
-                        aria-autocomplete="list"
-                        aria-activedescendant={activeId}
+                        placeholder={hint}
                         aria-describedby="command-chat-hint"
                         enterKeyHint="send"
                         autoComplete="off"
@@ -247,8 +155,8 @@ export function Composer({
                         style={{ outline: "none" }}
                         className="flex-1 min-w-0 resize-none bg-transparent px-1.5 py-2.5 text-[15px] sm:text-sm leading-5 text-neutral-900 placeholder:text-neutral-400 read-only:cursor-default"
                     />
-                    <button type="button" onClick={submit} disabled={!canSend} aria-label={busy ? "Working…" : "Send"} className={btnIconPrimary}>
-                        {busy || uploads.uploading ? (
+                    <button type="button" onClick={submit} disabled={!canSend} aria-label="Send" className={btnIconPrimary}>
+                        {uploads.uploading ? (
                             <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                         ) : (
                             <ArrowUp className="w-4 h-4" aria-hidden="true" />

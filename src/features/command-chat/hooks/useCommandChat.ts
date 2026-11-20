@@ -7,10 +7,16 @@ import type {
     UnderstandRequest,
 } from "@/services/commands.types";
 import {
+    answerRequest,
+    buildRequest,
+    chatHistory,
     chatReducer,
+    entryForResult,
+    formatNeedValue,
     loadChatState,
     newId,
     nowIso,
+    openQuestion,
     saveChatState,
     type ChatEntry,
     type EntryError,
@@ -32,10 +38,11 @@ function entryError(err: CommandsApiError, fallback: ErrorAction): EntryError {
 }
 
 /**
- * Conversation state + the four moves: send text, pick an option, give a
- * missing value (text or photos), confirm/cancel a preview. One request at a
- * time; everything else is ignored while `busy`. `onDisabled` fires when the
- * server says the chat is turned off for this group (403 CHAT_DISABLED).
+ * Conversation state + the four moves: send a message, pick an option, give a
+ * missing value (typed in the message box, or photos), confirm/cancel a
+ * preview. One request at a time; everything else is ignored while `busy`.
+ * `onDisabled` fires when the server says the chat is turned off for this
+ * group (403 CHAT_DISABLED).
  */
 export function useCommandChat({
     surface = "admin" as CommandSurface,
@@ -93,9 +100,7 @@ export function useCommandChat({
         async (request: UnderstandRequest) => {
             try {
                 const result = await commandsService.understand(request);
-                const entry: ResultEntry = { id: newId("r"), at: nowIso(), type: "result", request, result };
-                if (result.kind === "preview") entry.status = "open";
-                addBot(entry);
+                addBot(entryForResult(request, result));
             } catch (e) {
                 const err = toCommandsError(e);
                 if (err.kind === "unavailable") onUnavailableRef.current?.();
@@ -114,18 +119,42 @@ export function useCommandChat({
         [addBot, end]
     );
 
+    /** need (text/number/date/time) → append the value to the text and send again. */
+    const provideValue = useCallback(
+        (entryId: string, value: string, display?: string) => {
+            const entry = findResult(entryId);
+            const clean = value.trim();
+            if (!entry || entry.result.kind !== "need" || entry.answered || entry.superseded || !clean || !begin()) return false;
+            dispatch({ type: "patch", id: entryId, patch: { answered: true } });
+            const shown = display?.trim() || formatNeedValue(entry.result.input, clean);
+            dispatch({ type: "add", entry: { id: newId("u"), at: nowIso(), type: "user", text: shown, attachments: [] } });
+            void understand(answerRequest(entry.request, clean));
+            return true;
+        },
+        [begin, findResult, understand]
+    );
+
+    /**
+     * A message from the message box. When the chat's last message is an open
+     * question (a name, number, day or time) and no photos go with it, the
+     * message answers that question; otherwise it's a new message, sent with
+     * the chat so far.
+     */
     const send = useCallback(
         (text: string, attachments: CommandAttachment[] = []) => {
             const clean = text.trim();
-            if (!clean || !begin()) return false;
+            if (!clean || busyRef.current) return false;
+            const question = attachments.length ? null : openQuestion(entriesRef.current);
+            if (question) return provideValue(question.id, clean);
+            if (!begin()) return false;
+            // The chat before this message (taken before it's added).
+            const history = chatHistory(entriesRef.current);
             dispatch({ type: "supersede" });
             dispatch({ type: "add", entry: { id: newId("u"), at: nowIso(), type: "user", text: clean, attachments } });
-            const request: UnderstandRequest = { text: clean, surface };
-            if (attachments.length) request.attachments = attachments;
-            void understand(request);
+            void understand(buildRequest(clean, surface, attachments, history));
             return true;
         },
-        [begin, surface, understand]
+        [begin, provideValue, surface, understand]
     );
 
     /** choose → re-send the same text with picks[slot] = option id. */
@@ -140,19 +169,6 @@ export function useCommandChat({
                 entry: { id: newId("u"), at: nowIso(), type: "user", text: option.sublabel ? `${option.label} · ${option.sublabel}` : option.label, attachments: [] },
             });
             void understand({ ...entry.request, picks: { ...(entry.request.picks ?? {}), [slot]: option.id } });
-        },
-        [begin, findResult, understand]
-    );
-
-    /** need (text/number/date/time) → append the value to the text and send again. */
-    const provideValue = useCallback(
-        (entryId: string, value: string, display: string) => {
-            const entry = findResult(entryId);
-            const clean = value.trim();
-            if (!entry || entry.result.kind !== "need" || entry.answered || entry.superseded || !clean || !begin()) return;
-            dispatch({ type: "patch", id: entryId, patch: { answered: true } });
-            dispatch({ type: "add", entry: { id: newId("u"), at: nowIso(), type: "user", text: display || clean, attachments: [] } });
-            void understand({ ...entry.request, text: `${entry.request.text.trim()} ${clean}` });
         },
         [begin, findResult, understand]
     );
@@ -204,7 +220,7 @@ export function useCommandChat({
             if (!entry || entry.result.kind !== "preview" || entry.status === "running" || entry.status === "confirmed") return;
             if (busyRef.current) return;
             dispatch({ type: "patch", id: entryId, patch: { status: "cancelled", error: undefined } });
-            addBot({ id: newId("n"), at: nowIso(), type: "note", text: "Okay, nothing was changed." });
+            addBot({ id: newId("n"), at: nowIso(), type: "note", text: "No problem, I've left it as it was." });
         },
         [addBot, findResult]
     );

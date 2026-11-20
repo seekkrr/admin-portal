@@ -13,12 +13,41 @@ import { IdLink } from "@/components/ui/IdLink";
 import { StatusPill, Tag } from "@/components/ui/StatusPill";
 import { regionsService } from "@/features/regions/services/regions.service";
 import { eventsService } from "@/features/events/services/events.service";
+import { businessesService } from "@/features/collabs/services/businesses.service";
 import { mediaService } from "@/services/media.service";
 import { formatDateTime, formatRelative } from "@/utils/date";
 import { errorMessage } from "@/utils/errors";
-import { pushService, type ScheduledPush } from "../services/push.service";
+import { pushService, type BroadcastResult, type ScheduledPush } from "../services/push.service";
 
-type Audience = "all" | "region" | "event";
+type Audience = "all" | "region" | "event" | "business";
+
+const AUDIENCE_TEXT: Record<Audience, string> = {
+    all: "everyone",
+    region: "people in this region",
+    event: "people going to this event",
+    business: "this business's owner and team",
+};
+
+const PICK_AUDIENCE: Record<Exclude<Audience, "all">, string> = {
+    region: "Choose a region.",
+    event: "Choose an event.",
+    business: "Choose a business.",
+};
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/** What happened to a push sent now, as a toast. */
+function sentToast(res: BroadcastResult, audience: Audience): { ok: boolean; text: string } {
+    if (audience === "business") {
+        if (res.push_enabled === false) return { ok: false, text: "Push isn't set up on this server. It's only in their activity list in the app." };
+        if (!res.sent)
+            return { ok: false, text: "Nobody at this business has notifications on in the app, so no push went out. It's in their activity list in the app." };
+        return { ok: true, text: `Push sent to ${plural(res.sent, "phone")}` };
+    }
+    if (res.push_enabled === false) return { ok: false, text: "Push isn't set up on this server, so nothing was sent." };
+    if (res.published === false) return { ok: false, text: "The push couldn't be sent. Nobody may be subscribed to this audience yet." };
+    return { ok: true, text: "Push sent" };
+}
 
 const TITLE_MAX = 200;
 const BODY_MAX = 2000;
@@ -39,7 +68,17 @@ function RegionLabel({ id }: { id: string }) {
     return <IdLink kind="region" id={id} label={q.data?.name} />;
 }
 
-/** "Everyone", a region link or an event link, from a group key. */
+function BusinessLabel({ id }: { id: string }) {
+    const q = useQuery({
+        queryKey: ["collabs-business", id],
+        queryFn: () => businessesService.getById(id),
+        staleTime: 5 * 60_000,
+        retry: false,
+    });
+    return <IdLink kind="business" id={id} label={q.data?.name} />;
+}
+
+/** "Everyone", or a region, event or business link, from a group key. */
 function AudienceLabel({ groupKey, eventTitles }: { groupKey: string; eventTitles: Map<string, string> }) {
     if (groupKey === "all") return <Tag tone="brand">Everyone</Tag>;
     const [kind, id] = groupKey.split(":", 2);
@@ -56,6 +95,14 @@ function AudienceLabel({ groupKey, eventTitles }: { groupKey: string; eventTitle
             <span className="inline-flex flex-wrap items-center gap-1.5">
                 <Tag>Event</Tag>
                 <IdLink kind="event" id={id} label={eventTitles.get(id)} />
+            </span>
+        );
+    }
+    if (kind === "business" && id) {
+        return (
+            <span className="inline-flex flex-wrap items-center gap-1.5">
+                <Tag>Business</Tag>
+                <BusinessLabel id={id} />
             </span>
         );
     }
@@ -87,8 +134,9 @@ function PhonePreview({ title, body, image }: { title: string; body: string; ima
 }
 
 /**
- * Push messages (Settings): send a push to everyone, one region or an event's
- * attendees, now or at a set time; see and cancel scheduled pushes.
+ * Push messages (Settings): send a push to everyone, one region, an event's
+ * attendees or one business's team, now or at a set time; see and cancel
+ * scheduled pushes.
  */
 export function PushMessagesPage() {
     const queryClient = useQueryClient();
@@ -96,6 +144,7 @@ export function PushMessagesPage() {
     const [audience, setAudience] = useState<Audience>("all");
     const [regionId, setRegionId] = useState("");
     const [eventId, setEventId] = useState("");
+    const [businessId, setBusinessId] = useState("");
     const [title, setTitle] = useState("");
     const [body, setBody] = useState("");
     const [longBody, setLongBody] = useState("");
@@ -121,10 +170,11 @@ export function PushMessagesPage() {
         retry: false,
     });
 
-    const groupKey = audience === "all" ? "all" : audience === "region" ? (regionId ? `region:${regionId}` : "") : eventId ? `event:${eventId}` : "";
+    const pickedId = audience === "region" ? regionId : audience === "event" ? eventId : audience === "business" ? businessId : "";
+    const groupKey = audience === "all" ? "all" : pickedId ? `${audience}:${pickedId}` : "";
     const sendAtDate = schedule ? new Date(sendAt) : null;
     const errors = {
-        audience: !groupKey ? (audience === "region" ? "Choose a region." : "Choose an event.") : undefined,
+        audience: !groupKey && audience !== "all" ? PICK_AUDIENCE[audience] : undefined,
         title: !title.trim() ? "Add a title." : undefined,
         body: !body.trim() ? "Add the message." : undefined,
         sendAt:
@@ -160,13 +210,18 @@ export function PushMessagesPage() {
                 toast.success(`Scheduled for ${formatDateTime(res.send_at ?? sendAtDate)}`);
                 queryClient.invalidateQueries({ queryKey: ["push-scheduled"] });
                 reset();
-            } else if (res.push_enabled === false) {
-                toast.error("Push isn't set up on this server, so nothing was sent.");
-            } else if (res.published === false) {
-                toast.error("The push couldn't be sent. Nobody may be subscribed to this audience yet.");
-            } else {
-                toast.success("Push sent");
+                return;
+            }
+            const { ok, text } = sentToast(res, audience);
+            if (ok) {
+                toast.success(text);
                 reset();
+            } else if (audience === "business") {
+                // It still reached their activity list, so don't invite a second send.
+                toast.warning(text);
+                reset();
+            } else {
+                toast.error(text);
             }
         },
         onError: (e) => {
@@ -209,7 +264,7 @@ export function PushMessagesPage() {
         if (valid) setConfirmSend(true);
     };
 
-    const audienceText = audience === "all" ? "everyone" : audience === "region" ? "people in this region" : "people going to this event";
+    const audienceText = AUDIENCE_TEXT[audience];
 
     const columns: DataColumn<ScheduledPush>[] = [
         {
@@ -252,7 +307,7 @@ export function PushMessagesPage() {
 
     return (
         <div className="space-y-5">
-            <PageHeader icon={Megaphone} title="Push messages" description="Send a push to everyone, a region or an event's guests — now or later" />
+            <PageHeader icon={Megaphone} title="Push messages" description="Send a push to everyone, a region, an event's guests or one business — now or later" />
 
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
                 <Panel title="New push message" icon={Send}>
@@ -263,6 +318,7 @@ export function PushMessagesPage() {
                                     <option value="all">Everyone</option>
                                     <option value="region">People in a region</option>
                                     <option value="event">People going to an event</option>
+                                    <option value="business">One business</option>
                                 </SelectInput>
                             </Field>
                             {audience === "region" && (
@@ -281,6 +337,24 @@ export function PushMessagesPage() {
                                             </option>
                                         ))}
                                     </SelectInput>
+                                </Field>
+                            )}
+                            {audience === "business" && (
+                                <Field
+                                    label="Business"
+                                    htmlFor="push-business"
+                                    required
+                                    error={show(errors.audience)}
+                                    hint="Goes to its owner and team on their phones, and into their activity list in the app."
+                                >
+                                    <EntityPicker
+                                        id="push-business"
+                                        type="business"
+                                        label="Business"
+                                        value={businessId}
+                                        onChange={(id) => setBusinessId(id)}
+                                        invalid={!!show(errors.audience)}
+                                    />
                                 </Field>
                             )}
                         </div>
