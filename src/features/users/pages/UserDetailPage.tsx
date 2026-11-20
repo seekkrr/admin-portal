@@ -19,8 +19,9 @@ import { UserProfileTab } from "../components/user-detail/UserProfileTab";
 import { UserAccessTab } from "../components/user-detail/UserAccessTab";
 import { UserActivityTab } from "../components/user-detail/UserActivityTab";
 import { ActAsCreatorButton } from "../components/ActAsCreatorButton";
+import { CreatorProfileSection } from "@/features/creator-applications/components/CreatorProfileSection";
 
-const TABS = ["overview", "profile", "access", "activity", "history"] as const;
+const TABS = ["overview", "profile", "creator", "access", "activity", "history"] as const;
 type Tab = (typeof TABS)[number];
 
 const ROLE_LABEL: Record<string, string> = {
@@ -59,6 +60,10 @@ export function UserDetailPage() {
 
     const { overview, full } = data;
     const visibleRoles = user.roles.filter((r) => r !== "user");
+    // Only creators who filled the app's "Know Your Creator" form have one.
+    const collabProfile = overview.creator?.collab_profile ?? null;
+    // A shared ?tab=creator link on someone without a profile lands on Overview.
+    const openTab = tab === "creator" && !collabProfile ? "overview" : tab;
 
     return (
         <div className="space-y-5">
@@ -118,23 +123,25 @@ export function UserDetailPage() {
             <Tabs<Tab>
                 label="User sections"
                 idPrefix="user"
-                value={tab}
+                value={openTab}
                 onChange={setTab}
                 tabs={[
                     { value: "overview", label: "Overview" },
                     { value: "profile", label: "Profile" },
+                    ...(collabProfile ? [{ value: "creator" as const, label: "Creator profile" }] : []),
                     { value: "access", label: "Access" },
                     { value: "activity", label: "Activity" },
                     { value: "history", label: "Change history" },
                 ]}
             />
 
-            <div role="tabpanel" id={`user-panel-${tab}`} aria-labelledby={`user-tab-${tab}`}>
-                {tab === "overview" && <UserOverviewTab data={overview} full={full} canEdit={isAdmin} onChanged={refresh} />}
-                {tab === "profile" && <UserProfileTab user={user} full={full} canEdit={isAdmin} onSaved={refresh} />}
-                {tab === "access" && <UserAccessTab user={user} canEdit={isAdmin} isSelf={me === user.id} onChanged={refresh} />}
-                {tab === "activity" && <UserActivityTab data={overview} full={full} />}
-                {tab === "history" && <ChangeHistoryPanel entityType="user" entityId={user.id} />}
+            <div role="tabpanel" id={`user-panel-${openTab}`} aria-labelledby={`user-tab-${openTab}`}>
+                {openTab === "overview" && <UserOverviewTab data={overview} full={full} canEdit={isAdmin} onChanged={refresh} />}
+                {openTab === "profile" && <UserProfileTab user={user} full={full} canEdit={isAdmin} onSaved={refresh} />}
+                {openTab === "creator" && collabProfile && <CreatorProfileSection profile={collabProfile} />}
+                {openTab === "access" && <UserAccessTab user={user} canEdit={isAdmin} isSelf={me === user.id} onChanged={refresh} />}
+                {openTab === "activity" && <UserActivityTab data={overview} full={full} />}
+                {openTab === "history" && <ChangeHistoryPanel entityType="user" entityId={user.id} />}
             </div>
         </div>
     );
