@@ -3,6 +3,8 @@
 // Endpoints live in src/services/admin-detail.service.ts.
 // ============================================================
 
+import type { CollabCreatorProfile } from "@/types";
+
 // ── Change history (GET /api/v2/admin/audit) ───────────────
 
 export type AuditEntityType = "user" | "business" | "place" | "quest" | "experience" | "event" | "region" | "collab";
@@ -50,6 +52,15 @@ export interface UserCreatorInfo {
     status: string | null;
     verified: boolean;
     handles: Array<string | { platform?: string | null; handle?: string | null; verified?: boolean | null }>;
+    tier?: string | null;
+    display_name?: string | null;
+    open_to_collab?: boolean;
+    /**
+     * The "Know Your Creator" form this person filled in, or null when they
+     * never filled one in. The application screen shows the same thing while
+     * the application is pending; this is how it stays readable afterwards.
+     */
+    collab_profile?: CollabCreatorProfile | null;
 }
 
 export interface UserBusinessLink {
